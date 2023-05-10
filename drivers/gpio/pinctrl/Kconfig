@@ -154,4 +154,13 @@ config AMLOGIC_PINCTRL_MESON_T5D
 	  when enable this config.
 	  T5D pinctrl can work.
 	  otherwise T5D pinctrl can't work
+
+config AMLOGIC_PINCTRL_MESON_TM2
+	tristate "Meson TM2 Soc pinctrl driver"
+	default n
+	help
+	  the chip of TM2 will be built
+	  when enable this config.
+	  T5M pinctrl can work.
+	  otherwise TM2 pinctrl can't work
 endif

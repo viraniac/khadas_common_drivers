@@ -77,3 +77,4 @@ dtb-y += t5d_t950d4_am301_1.5g.dtb
 dtb-y += t5d_t950d4_am301_1g.dtb
 dtb-y += t5d_t950x4_am311_1.5g.dtb
 dtb-y += t5d_t950x4_am311_1g.dtb
+dtb-y += tm2_t962e2_ab301.dtb
