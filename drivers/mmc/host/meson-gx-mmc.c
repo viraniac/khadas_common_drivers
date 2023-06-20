@@ -920,7 +920,7 @@ static int find_best_win(struct mmc_host *mmc,
 
 	sprintf(adj_print + len, ">\n");
 	if (num <= AML_FIXED_ADJ_MAX)
-		pr_debug("%s", host->adj_win);
+		pr_info("%s", host->adj_win);
 
 	/* last point is ok! */
 	if (curr_win_start >= 0) {
