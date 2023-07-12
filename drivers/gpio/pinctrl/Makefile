@@ -123,3 +123,10 @@ $(TM2_MODULE_NAME)-y += pinctrl/pinctrl-meson-tm2.o
 PR_FMT_TM2 = $(subst amlogic-,,$(TM2_MODULE_NAME))
 PR_FMT_DEFINE_TM2="-Dpr_fmt(fmt)= \"[$(PR_FMT_TM2)]: \" fmt"
 CFLAGS_pinctrl-meson-tm2.o += $(PR_FMT_DEFINE_TM2)
+
+S7_MODULE_NAME = amlogic-pinctrl-soc-s7
+obj-$(CONFIG_AMLOGIC_PINCTRL_MESON_S7) += $(S7_MODULE_NAME).o
+$(S7_MODULE_NAME)-y += pinctrl/pinctrl-meson-s7.o
+PR_FMT_S7 = $(subst amlogic-,,$(S7_MODULE_NAME))
+PR_FMT_DEFINE_S7="-Dpr_fmt(fmt)= \"[$(PR_FMT_S7)]: \" fmt"
+CFLAGS_pinctrl-meson-s7.o += $(PR_FMT_DEFINE_S7)
