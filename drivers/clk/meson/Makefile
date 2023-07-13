@@ -186,3 +186,10 @@ $(TM2_AO_MODULE_NAME)-y += tm2-aoclk.o
 PR_FMT_AO_TM2 = $(subst amlogic-,,$(TM2_AO_MODULE_NAME))
 PR_FMT_DEFINE_AO_TM2="-Dpr_fmt(fmt)= \"[$(PR_FMT_AO_TM2)]: \" fmt"
 CFLAGS_TM2-aoclk.o += $(PR_FMT_DEFINE_AO_TM2)
+
+S7_MODULE_NAME = amlogic-clk-soc-s7
+obj-$(CONFIG_AMLOGIC_COMMON_CLK_S7) += $(S7_MODULE_NAME).o
+$(S7_MODULE_NAME)-y = s7.o
+PR_FMT_S7 = $(subst amlogic-,,$(S7_MODULE_NAME))
+PR_FMT_DEFINE_S7="-Dpr_fmt(fmt)= \"[$(PR_FMT_S7)]: \" fmt"
+CFLAGS_s7.o += $(PR_FMT_DEFINE_S7)
