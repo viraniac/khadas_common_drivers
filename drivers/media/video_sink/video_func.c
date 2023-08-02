@@ -5043,6 +5043,7 @@ void post_vsync_process(void)
 	if (support_multi_core1())
 		amdolby_vision_proc(&vd_layer[0], vd_layer[0].cur_frame_par,
 			&vd_layer[1], vd_layer[1].cur_frame_par);
+	set_amdv_delay_work_flag();
 #endif
 
 	if (path_switch &&
