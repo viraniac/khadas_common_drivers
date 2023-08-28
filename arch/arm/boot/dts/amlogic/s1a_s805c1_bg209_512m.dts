@@ -11,8 +11,8 @@
 #include "meson-ir-map-linux.dtsi"
 
 / {
-	amlogic-dt-id = "s1a_bg209_256m";
-	compatible = "s1a_bg209_256m";
+	amlogic-dt-id = "s1a_bg209_512m";
+	compatible = "s1a_bg209_512m";
 	interrupt-parent = <&gic>;
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -30,7 +30,7 @@
 
 	memory@00000000 {
 		device_type = "memory";
-		linux,usable-memory = <0x0 0x10000000>;
+		linux,usable-memory = <0x0 0x20000000>;
 	};
 
 	reserved-memory {
@@ -82,7 +82,7 @@
 			compatible = "amlogic, meson-fb";
 			size = <0x400000>;
 			alignment = <0x400000>;
-			reg = <0x0fc00000 0x400000>;
+			reg = <0x1FC00000 0x400000>;
 		};
 
 		ion_cma_reserved:linux,ion-dev {
@@ -138,7 +138,7 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			/* ion_codec_mm max can alloc size 80M*/
-			size = <0x6000000>;
+			size = <0xB000000>;
 			alignment = <0x400000>;
 			linux,contiguous-region;
 		};

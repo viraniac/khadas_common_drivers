@@ -11,8 +11,8 @@
 #include "meson-ir-map-linux.dtsi"
 
 / {
-	amlogic-dt-id = "s1a_bg209_256m";
-	compatible = "s1a_bg209_256m";
+	amlogic-dt-id = "s1a_bg209_128m";
+	compatible = "s1a_bg209_128m";
 	interrupt-parent = <&gic>;
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -30,7 +30,7 @@
 
 	memory@00000000 {
 		device_type = "memory";
-		linux,usable-memory = <0x0 0x10000000>;
+		linux,usable-memory = <0x0 0x8000000>;
 	};
 
 	reserved-memory {
@@ -61,7 +61,7 @@
 
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
-			reg = <0x04f00000 0x00100000>;
+			reg = <0x02700000 0x00100000>;
 			io-size = <0x1b000>;
 			sched-size = <0x2000>;
 			irq-size = <0x1000>;
@@ -82,7 +82,7 @@
 			compatible = "amlogic, meson-fb";
 			size = <0x400000>;
 			alignment = <0x400000>;
-			reg = <0x0fc00000 0x400000>;
+			reg = <0x7c00000 0x400000>;
 		};
 
 		ion_cma_reserved:linux,ion-dev {
@@ -102,7 +102,7 @@
 		dmaheap_cma_reserved:heap-gfx {
 			compatible = "shared-dma-pool";
 			reusable;
-			size = <0x1000000>;
+			size = <0xC00000>;
 			alignment = <0x400000>;
 		};
 		dmaheap_fb_reserved:heap-fb {
@@ -136,9 +136,10 @@
 
 		codec_mm_cma:linux,codec_mm_cma {
 			compatible = "shared-dma-pool";
+			status = "disabled";
 			reusable;
 			/* ion_codec_mm max can alloc size 80M*/
-			size = <0x6000000>;
+			size = <0x5000000>;
 			alignment = <0x400000>;
 			linux,contiguous-region;
 		};
@@ -146,9 +147,9 @@
 		/* codec shared reserved */
 		codec_mm_reserved:linux,codec_mm_reserved {
 			compatible = "amlogic, codec-mm-reserved";
-			status = "disabled";
-			size = <0x0>;
+			size = <0x2800000>;
 			alignment = <0x100000>;
+			reg = <0x02800000 0x2800000>;
 			//no-map;
 		};
 
@@ -184,7 +185,7 @@
 	};
 	codec_mm {
 		compatible = "amlogic, codec, mm";
-		memory-region = <&codec_mm_cma &codec_mm_reserved>;
+		memory-region = <&codec_mm_reserved>;
 		dev_name = "codec_mm";
 		status = "okay";
 	};
@@ -1150,14 +1151,14 @@
 	status = "disabled";
 	display_size_default = <1280 720 1280 2160 32>;
 	mem_size = <0x00400000 0x00b00000 0x100000>;
-	logo_addr = "0x0fc00000";
+	logo_addr = "0x07c00000";
 	mem_alloc = <0>;
 	pxp_mode = <0>; /** 0:normal mode 1:pxp mode */
 };
 
 &drm_vpu {
 	status = "okay";
-	logo_addr = "0x0fc00000";
+	logo_addr = "0x07c00000";
 };
 
 &amhdmitx {

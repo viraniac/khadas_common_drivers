@@ -11,8 +11,8 @@
 #include "meson-ir-map-linux.dtsi"
 
 / {
-	amlogic-dt-id = "s1a_s805c1_bg201-256m";
-	compatible = "s1a_s805c1_bg201-256m";
+	amlogic-dt-id = "s1a_bg201_256m";
+	compatible = "s1a_bg201_256m";
 	interrupt-parent = <&gic>;
 	#address-cells = <1>;
 	#size-cells = <1>;
