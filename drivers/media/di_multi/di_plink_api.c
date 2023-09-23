@@ -38,7 +38,7 @@
 //#endif
 
 #define MAX_DI_HOLD_CTRL_CNT 20
-
+#define MAX_SCREEN_RATIO 400
 /* MAX_FIFO_SIZE */
 #define MAX_FIFO_SIZE_PVPP		(32)
 //#define AUTO_NR_DISABLE		(1)
@@ -9177,6 +9177,7 @@ int set_holdreg_by_in_out(struct vframe_s *vfm, struct pvpp_dis_para_in_s *in_pa
 	int out_frequency;
 	int ret = 0;
 	int ratio = 10;
+	int screen_ratio = 100;
 
 	static int cur_level;
 	int clk_need;
@@ -9196,6 +9197,19 @@ int set_holdreg_by_in_out(struct vframe_s *vfm, struct pvpp_dis_para_in_s *in_pa
 			ctrl->last_clk_level = -1;
 			dbg_plink1("4k no need set hold reg\n");
 		}
+		return ret;
+	}
+
+	if (in_para->vinfo.y_d_size == 0 || in_para->vinfo.x_d_size == 0 ||
+		in_para->vinfo.vtotal == 0 || in_para->vinfo.htotal == 0) {
+		return ret;
+	}
+
+	screen_ratio = in_para->vinfo.height * in_para->vinfo.width * 100 /
+			in_para->vinfo.y_d_size / in_para->vinfo.x_d_size;
+	if (screen_ratio < MAX_SCREEN_RATIO) {
+		op->wr(DI_PRE_HOLD, 0x0);
+		dbg_plink1("screen_ratio oversize no need set hold reg\n");
 		return ret;
 	}
 
@@ -9235,14 +9249,16 @@ int set_holdreg_by_in_out(struct vframe_s *vfm, struct pvpp_dis_para_in_s *in_pa
 		}
 	}
 
-	dbg_plink1("%s h-v <%d,%d> frequency:%d\n vfm_in h-w <%d,%d> x_d/y_d<%d %d> %ld\n"
+	dbg_plink1("%s total<%d,%d> vinfo <%d %d> %d\n vfm <%d,%d> x_d/y_d<%d %d> %ld\n"
 		"vfm_pixels %ld v_percentage*100 %ld clk_val:reg_val <%d %x> ratio:%d\n",
 		__func__,
 		in_para->vinfo.htotal,
 		in_para->vinfo.vtotal,
+		in_para->vinfo.height,
+		in_para->vinfo.width,
 		in_para->vinfo.frequency,
-		in_para->win.y_size,
 		in_para->win.x_size,
+		in_para->win.y_size,
 		in_para->vinfo.x_d_size,
 		in_para->vinfo.y_d_size,
 		display_time_us_per_frame,
