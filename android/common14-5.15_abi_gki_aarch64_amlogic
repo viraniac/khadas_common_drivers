@@ -26,3 +26,6 @@
   devm_led_classdev_register_ext
   gpiod_cansleep
   led_init_default_state_get
+
+# amlogic-usb.ko
+  extcon_get_state
