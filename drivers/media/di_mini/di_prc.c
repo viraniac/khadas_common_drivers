@@ -716,7 +716,7 @@ const struct di_mp_uit_s di_mp_ui_top[] = {
 	[edi_mp_pps_position]  = {"pps_position:uint:def:1",
 			edi_mp_pps_position, 1},
 	[edi_mp_pre_enable_mask]  = {"pre_enable_mask:bit0:ma;bit1:mc:def:3",
-			edi_mp_pre_enable_mask, 1},//3
+			edi_mp_pre_enable_mask, 3},//3
 	[edi_mp_post_refresh]  = {"post_refresh:bool",
 			edi_mp_post_refresh, 0},
 	[edi_mp_nrds_en]  = {"nrds_en:uint",
