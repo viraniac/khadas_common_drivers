@@ -6026,6 +6026,9 @@ int rx_debug_wr_reg(const char *buf, char *tmpbuf, int i, u8 port)
 		} else if (buf[2] == 'A') {
 			hdmirx_wr_amlphy_t3x(adr, value, port);
 			rx_pr("write %x to port%d [%x]\n", value, port, adr);
+		} else if (buf[2] == 'c') {
+			wr_reg_clk_ctl(adr, value);
+			rx_pr("write %x to [%x]\n", value, adr);
 		}
 	}
 	return 0;
@@ -6072,6 +6075,9 @@ int rx_debug_rd_reg(const char *buf, char *tmpbuf, u8 port)
 		} else if (buf[2] == 'A') {
 			value = hdmirx_rd_amlphy_t3x(adr, port);
 			rx_pr("port%d, amlphy [%x]=%x\n", port, adr, value);
+		} else if (buf[2] == 'c') {
+			value = rd_reg_clk_ctl(adr);
+			rx_pr("amlphy [%x]=%x\n", adr, value);
 		}
 	}
 	return 0;

@@ -770,6 +770,11 @@ struct emp_info_s {
 	u8 data_ver;
 };
 
+struct i2c_info_s {
+	phys_addr_t phy_addr;
+	struct page *pg_addr;
+};
+
 struct spkts_rcvd_sts {
 	u32 pkt_vsi_rcvd:1;
 	u32 pkt_drm_rcvd:1;
@@ -840,6 +845,7 @@ struct rx_info_s {
 	struct rx_aml_phy aml_phy_21;
 	struct emp_info_s emp_buff_a; //for vid0
 	struct emp_info_s emp_buff_b; //for vid1
+	struct i2c_info_s i2c_buff;
 	struct edid_capacity edid_cap;
 	bool suspend_flag;
 };

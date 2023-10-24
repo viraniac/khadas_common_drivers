@@ -8413,6 +8413,12 @@ int hdmirx_debug(const char *buf, int size)
 			rx_pr("phy_addr = 0x%x, size = 0x%x, maped:%px\n",
 				rx_reg_maps[i].phy_addr, size, rx_reg_maps[i].p);
 		}
+	} else if (strncmp(tmpbuf, "i2c_monitor", 10) == 0) {
+		rx_i2c_monitor(6 + port, E_FUNC_SAMPLE, E_SW_TRIGGER, E_DUMP_ALL);
+		rx_pr("i2c_monitor start\n");
+	} else if (strncmp(tmpbuf, "i2c_dump", 7) == 0) {
+		rx_pr("i2c_dump\n");
+		rx_i2c_dump();
 	}
 	return 0;
 }
@@ -8699,6 +8705,7 @@ void hdmirx_timer_handler(struct timer_list *t)
 	rx_clkmsr_monitor();
 	rx_hpd_monitor();
 	rx_edid_monitor();
+	rx_i2c_dbg_monitor();
 	if (rx_info.chip_id == CHIP_ID_T3X)
 		hdmirx_timer_t3x();
 	else
