@@ -4198,6 +4198,7 @@ void hdmi_in_delay_maxmin_old(struct vframe_s *vf)
 	struct vinfo_s *video_info;
 	u64 memc_delay = 0;
 	int vdin_keep_count = VDIN_KEEP_COUNT;
+	u32 sync_count_pre = 0;
 
 	if (vf->source_type != VFRAME_SOURCE_TYPE_HDMI &&
 		vf->source_type != VFRAME_SOURCE_TYPE_CVBS &&
@@ -4244,8 +4245,14 @@ void hdmi_in_delay_maxmin_old(struct vframe_s *vf)
 	if (debug_flag & DEBUG_FLAG_HDMI_AVSYNC_DEBUG)
 		pr_info("%s: vdin:count=%d vsync=%lld, di:count=%d vsync=%lld.\n",
 			__func__, vdin_keep_count, vdin_vsync, di_keep_count, vpp_vsync);
-	hdmin_delay_min = (vdin_keep_count + di_keep_count) * vdin_vsync
-			+ vpp_vsync * 2;
+
+	sync_count_pre = vdin_keep_count + di_keep_count;
+	if (sync_count_pre < 2) {
+		if (debug_flag & DEBUG_FLAG_HDMI_AVSYNC_DEBUG)
+			pr_info("%s: pre delay need at least 2 vsync.\n", __func__);
+		sync_count_pre = 2;
+	}
+	hdmin_delay_min = sync_count_pre * vdin_vsync + vpp_vsync * 2;
 	hdmin_delay_min_ms = div64_u64(hdmin_delay_min, 1000);
 	hdmin_delay_min_ms += memc_delay;
 
@@ -4283,6 +4290,8 @@ void hdmi_in_delay_maxmin_new(struct vframe_s *vf)
 	u32 dv_flag = 0;
 	bool di_backend_en = false;
 	int display_path_count = DIS_PATH_DELAY_COUNT;
+	u32 sync_count_pre = 0;
+
 	if (!tvin_delay_mode)
 		return;
 
@@ -4345,7 +4354,13 @@ void hdmi_in_delay_maxmin_new(struct vframe_s *vf)
 	 *if no di: count = (1 + 0) * vdin_vsync + 2* vpp_vsync;
 	 *vdin vsync before vpp vsync about 7ms
 	 */
-	hdmin_delay_min = (vdin_keep_count + di_keep_count) * vdin_vsync +
+	sync_count_pre = vdin_keep_count + di_keep_count;
+	if (sync_count_pre < 2) {
+		if (debug_flag & DEBUG_FLAG_HDMI_AVSYNC_DEBUG)
+			pr_info("%s: pre delay need at least 2 vsync.\n", __func__);
+		sync_count_pre = 2;
+	}
+	hdmin_delay_min = sync_count_pre * vdin_vsync +
 		display_path_count * vpp_vsync + ext_delay;
 	hdmin_delay_min_ms = div64_u64(hdmin_delay_min, 1000);
 	hdmin_delay_min_ms += memc_delay;
@@ -4410,6 +4425,7 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 	u32 vdin_buf_count = 0;
 	bool di_backend_en = false;
 	int display_path_count = DIS_PATH_DELAY_COUNT;
+	u32 sync_count_pre = 0;
 
 	if (!tvin_info->is_dv && tvin_info->width <= 3840 &&
 		tvin_info->cfmt == TVIN_YUV422) {
@@ -4458,7 +4474,13 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 	 *if no di: count = (1 + 0) * vdin_vsync + 2* vpp_vsync;
 	 *vdin vsync before vpp vsync about 7ms
 	 */
-	hdmin_delay_min = (vdin_keep_count + di_keep_count) * vdin_vsync +
+	sync_count_pre = vdin_keep_count + di_keep_count;
+	if (sync_count_pre < 2) {
+		if (debug_flag & DEBUG_FLAG_HDMI_AVSYNC_DEBUG)
+			pr_info("%s: pre delay need at least 2 vsync.\n", __func__);
+		sync_count_pre = 2;
+	}
+	hdmin_delay_min = sync_count_pre * vdin_vsync +
 		display_path_count * vpp_vsync + ext_delay;
 	hdmin_delay_min_ms = div64_u64(hdmin_delay_min, 1000);
 	hdmin_delay_min_ms += memc_delay;
