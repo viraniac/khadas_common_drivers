@@ -28,12 +28,6 @@
 #include "../lcd_reg.h"
 #include "../lcd_common.h"
 
-struct bl_pwm_init_config_s {
-	unsigned int *pwm_vs_reg;
-	unsigned int pwm_vs_reg_cnt;
-	unsigned int pwm_vs_flag;
-};
-
 static struct bl_pwm_init_config_s pwm_init_cfg = {
 	.pwm_vs_reg = NULL,
 	.pwm_vs_reg_cnt = 0,
@@ -422,7 +416,7 @@ static void bl_set_pwm(struct aml_bl_drv_s *bdrv, struct bl_pwm_config_s *bl_pwm
 		bl_pwm->pwm_duty_save = bl_pwm->pwm_duty;
 
 	if (bdrv->state & BL_STATE_BL_ON ||
-	    bdrv->state & BL_STATE_BL_INIT_ON) {
+	    bdrv->state & BL_STATE_BL_INIT_ON || bdrv->state & BL_STATE_PWM_SWITCH) {
 		bl_pwm_ctrl(bl_pwm, 1);
 	} else {
 		if (lcd_debug_print_flag & LCD_DBG_PR_BL_NORMAL)
@@ -503,75 +497,49 @@ void bl_pwm_set_duty(struct aml_bl_drv_s *bdrv, struct bl_pwm_config_s *bl_pwm)
 	bl_set_pwm(bdrv, bl_pwm);
 }
 
+void init_bl_pwm_mapping(struct bl_pwm_config_s *bl_pwm)
+{
+	if (bl_pwm) {
+		bl_pwm->pwm_mapping[0] = bl_pwm->level_min;
+		bl_pwm->pwm_mapping[1] = bl_pwm->level_min +
+			(bl_pwm->level_max - bl_pwm->level_min + 2) / 4;
+		bl_pwm->pwm_mapping[2] = bl_pwm->level_min +
+			2 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
+		bl_pwm->pwm_mapping[3] = bl_pwm->level_min +
+			3 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
+		bl_pwm->pwm_mapping[4] = bl_pwm->level_max;
+		bl_pwm->pwm_mapping[5] = bl_pwm->level_max;
+		bl_pwm->pwm_mapping[6] = bl_pwm->level_max;
+		bl_pwm->pwm_mapping[7] = 0;
+		if (lcd_debug_print_flag & LCD_DBG_PR_BL_NORMAL)
+			BLPR("pwm curve: %d  %d  %d  %d  %d tp:%d %d en:%d", bl_pwm->pwm_mapping[0],
+				bl_pwm->pwm_mapping[1], bl_pwm->pwm_mapping[2],
+				bl_pwm->pwm_mapping[3], bl_pwm->pwm_mapping[4],
+				bl_pwm->pwm_mapping[5], bl_pwm->pwm_mapping[6],
+				bl_pwm->pwm_mapping[7]);
+	} else {
+		BLERR("%s: invalid bl_pwm\n", __func__);
+	}
+}
+
 void bl_pwm_mapping_init(struct aml_bl_drv_s *bdrv)
 {
-	struct bl_pwm_config_s *bl_pwm;
-
 	switch (bdrv->bconf.method) {
 	case BL_CTRL_PWM:
-		bl_pwm = bdrv->bconf.bl_pwm;
-		if (bl_pwm) {
-			bl_pwm->pwm_mapping[0] = bl_pwm->level_min;
-			bl_pwm->pwm_mapping[1] = bl_pwm->level_min +
-				(bl_pwm->level_max - bl_pwm->level_min + 2) / 4;
-			bl_pwm->pwm_mapping[2] = bl_pwm->level_min +
-				2 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
-			bl_pwm->pwm_mapping[3] = bl_pwm->level_min +
-				3 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
-			bl_pwm->pwm_mapping[4] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[5] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[6] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[7] = 0;
-			BLPR("pwm curve: %d  %d  %d  %d  %d tp:%d %d en:%d", bl_pwm->pwm_mapping[0],
-				bl_pwm->pwm_mapping[1], bl_pwm->pwm_mapping[2],
-				bl_pwm->pwm_mapping[3], bl_pwm->pwm_mapping[4],
-				bl_pwm->pwm_mapping[5], bl_pwm->pwm_mapping[6],
-				bl_pwm->pwm_mapping[7]);
-		}
+		init_bl_pwm_mapping(bdrv->bconf.bl_pwm);
 		break;
 	case BL_CTRL_PWM_COMBO:
-		bl_pwm = bdrv->bconf.bl_pwm_combo0;
-		if (bl_pwm) {
-			bl_pwm->pwm_mapping[0] = bl_pwm->level_min;
-			bl_pwm->pwm_mapping[1] = bl_pwm->level_min +
-				(bl_pwm->level_max - bl_pwm->level_min + 2) / 4;
-			bl_pwm->pwm_mapping[2] = bl_pwm->level_min +
-				2 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
-			bl_pwm->pwm_mapping[3] = bl_pwm->level_min +
-				3 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
-			bl_pwm->pwm_mapping[4] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[5] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[6] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[7] = 0;
-			BLPR("pwm curve: %d  %d  %d  %d  %d tp:%d %d en:%d", bl_pwm->pwm_mapping[0],
-				bl_pwm->pwm_mapping[1], bl_pwm->pwm_mapping[2],
-				bl_pwm->pwm_mapping[3], bl_pwm->pwm_mapping[4],
-				bl_pwm->pwm_mapping[5], bl_pwm->pwm_mapping[6],
-				bl_pwm->pwm_mapping[7]);
-		}
-
-		bl_pwm = bdrv->bconf.bl_pwm_combo1;
-		if (bl_pwm) {
-			bl_pwm->pwm_mapping[0] = bl_pwm->level_min;
-			bl_pwm->pwm_mapping[1] = bl_pwm->level_min +
-				(bl_pwm->level_max - bl_pwm->level_min + 2) / 4;
-			bl_pwm->pwm_mapping[2] = bl_pwm->level_min +
-				2 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
-			bl_pwm->pwm_mapping[3] = bl_pwm->level_min +
-				3 * ((bl_pwm->level_max - bl_pwm->level_min + 2) / 4);
-			bl_pwm->pwm_mapping[4] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[5] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[6] = bl_pwm->level_max;
-			bl_pwm->pwm_mapping[7] = 0;
-			BLPR("pwm curve: %d  %d  %d  %d  %d tp:%d %d en:%d", bl_pwm->pwm_mapping[0],
-				bl_pwm->pwm_mapping[1], bl_pwm->pwm_mapping[2],
-				bl_pwm->pwm_mapping[3], bl_pwm->pwm_mapping[4],
-				bl_pwm->pwm_mapping[5], bl_pwm->pwm_mapping[6],
-				bl_pwm->pwm_mapping[7]);
-		}
+		init_bl_pwm_mapping(bdrv->bconf.bl_pwm_combo0);
+		init_bl_pwm_mapping(bdrv->bconf.bl_pwm_combo1);
 		break;
 	default:
 		break;
+	}
+
+	if (bdrv->bconf.bl_pwm_switch) {
+		if (lcd_debug_print_flag & LCD_DBG_PR_BL_NORMAL)
+			BLPR("pwm switch port %d mapping\n", bdrv->bconf.bl_pwm_switch_port);
+		init_bl_pwm_mapping(bdrv->bconf.bl_pwm_switch);
 	}
 }
 
@@ -876,4 +844,9 @@ int bl_pwm_init_config_probe(struct bl_data_s *bdata)
 	pwm_init_cfg.pwm_vs_flag = bdata->pwm_vs_flag;
 
 	return 0;
+}
+
+struct bl_pwm_init_config_s *get_pwm_init_cfg(void)
+{
+	return &pwm_init_cfg;
 }
