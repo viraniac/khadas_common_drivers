@@ -176,12 +176,12 @@ static struct clk_regmap t3x_sys1_pll_dco = {
 
 #ifdef CONFIG_ARM
 static const struct pll_params_table t3x_sys2_pll_params_table[] = {
-		PLL_PARAMS(71, 1, 1),
+		PLL_PARAMS(69, 1, 1), /* 828M */
 		{ /* sentinel */ }
 };
 #else
 static const struct pll_params_table t3x_sys2_pll_params_table[] = {
-		PLL_PARAMS(71, 1),
+		PLL_PARAMS(69, 1),
 		{ /* sentinel */ }
 };
 #endif
