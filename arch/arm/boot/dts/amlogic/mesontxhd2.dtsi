@@ -2170,6 +2170,12 @@
 		status = "okay";
 	};
 
+	di_process {
+		compatible = "amlogic, di_process";
+		dev_name = "di_process";
+		status = "okay";
+	};
+
 	vout: vout {
 		compatible = "amlogic, vout";
 		status = "okay";
