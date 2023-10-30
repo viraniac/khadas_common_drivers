@@ -148,7 +148,7 @@
 
 	aml_pm {
 		compatible = "amlogic, pm";
-		status = "disabled";
+		status = "okay";
 		device_name = "aml_pm";
 		reg = <0x0 0xff8000a8 0x0 0x4>, /*SYSCTRL_STATUS_REG2*/
 			<0x0 0xff80023c 0x0 0x4>; /*SYSCTRL_SEC_STATUS_REG31*/
