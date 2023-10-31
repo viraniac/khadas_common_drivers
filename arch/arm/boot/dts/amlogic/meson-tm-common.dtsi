@@ -1363,6 +1363,7 @@
 				fifosize = <64>;
 				xtal_tick_en = <2>;
 				status = "disabled";
+				support-sysrq = <1>;  /* 0 not support*/
 			};
 
 			uart_AO_B: serial@4000 {

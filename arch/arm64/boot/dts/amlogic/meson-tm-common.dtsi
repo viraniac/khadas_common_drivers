@@ -1414,13 +1414,12 @@
 				compatible = "amlogic,meson-uart";
 				reg = <0x0 0x3000 0x0 0x18>;
 				interrupts = <GIC_SPI 193 IRQ_TYPE_EDGE_RISING>;
-				//clocks = <&xtal>, <&clkc_AO CLKID_AO_UART>;
-				//clock-names = "clk_uart", "clk_gate";
 				clocks = <&xtal>;
 				clock-names = "clk_uart";
 				fifosize = <64>;
 				xtal_tick_en = <2>;
 				status = "disabled";
+				support-sysrq = <1>;  /* 0 not support*/
 			};
 
 			uart_AO_B: serial@4000 {
