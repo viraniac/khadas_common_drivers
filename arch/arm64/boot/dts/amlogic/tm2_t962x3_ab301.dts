@@ -471,7 +471,7 @@
 	aml_dtv_demod {
 		compatible = "amlogic, ddemod-tm2";
 		dev_name = "aml_dtv_demod";
-		status = "disabled";
+		status = "okay";
 
 		//pinctrl-names="dtvdemod_agc";
 		//pinctrl-0=<&dtvdemod_agc>;
@@ -485,7 +485,6 @@
 			   0x0 0xffd01000 0x0 0x1000	/*reset*/
 			>;
 
-		spectrum = <1>;
 		cma_mem_size = <8>; // MB
 
 		power-domains = <&pwrc PWRC_TM2_DEMOD_ID>;
@@ -493,7 +492,7 @@
 
 	atv-demod {
 		compatible = "amlogic, atv-demod";
-		status = "disabled";
+		status = "okay";
 		btsc_sap_mode = <1>;
 		interrupts = <0 236 1>;
 		/* pinctrl-names="atvdemod_agc_pins"; */
@@ -502,7 +501,6 @@
 				0x0 0xff63c000 0x0 0x2000 /* hiu reg */
 				0x0 0xff634000 0x0 0x2000 /* periphs reg */
 				0x0 0xff64a000 0x0 0x2000>; /* audio reg */
-		reg_23cf = <0x88188832>;
 		/*default:0x88188832;r840 on haier:0x48188832*/
 		power-domains = <&pwrc PWRC_TM2_ATVDEMOD_ID>;
 	};
@@ -510,18 +508,18 @@
 	dvb-extern {
 		compatible = "amlogic, dvb-extern";
 		dev_name = "dvb-extern";
-		status = "disabled";
+		status = "okay";
 
 		fe_num = <1>;
 		fe0_demod = "internal";
 
 		tuner_num = <1>; /* tuner number, multi tuner support */
-		tuner0_name = "si2151_tuner";
+		tuner0_name = "mxl661_tuner";
 		tuner0_i2c_adap = <&i2c0>;
 		tuner0_i2c_addr = <0x60>;
-		/* tuner0_xtal = <0>; */ /* unuse for si2151 */
-		/* tuner0_xtal_mode = <0>; */
-		/* tuner0_xtal_cap = <0>; */
+		tuner0_xtal = <1>; /* 0: 16MHz, 1: 24MHz */
+		tuner0_xtal_mode = <3>; /* NO_SHARE_XTAL(0), SLAVE_XTAL_SHARE(3) */
+		tuner0_xtal_cap = <25>;
 	};
 
 	dvb-demux {
@@ -1188,7 +1186,7 @@
 };
 
 &i2c0 {
-	status = "disabled";
+	status = "okay";
 	clock-frequency = <300000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c0_dv_pins>;
