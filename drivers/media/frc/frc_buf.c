@@ -661,7 +661,7 @@ int frc_buf_alloc(struct frc_dev_s *devp)
 	}
 
 	pr_frc(0, "cma paddr_start=0x%lx size:0x%x\n",
-		(ulong)devp->buf.cma_mem_paddr_start, devp->buf.cma_mem_size);
+		(ulong)devp->buf.cma_mem_paddr_start, frc_buf_size);
 
 	return 0;
 }
@@ -696,7 +696,7 @@ int frc_buf_calculate(struct frc_dev_s *devp)
 	u32 i;
 	u32 align_hsize, align_vsize;
 	u32 temp;
-	int log = 2;
+	int log = 0;
 	u32 ratio;
 	u8  info_factor;
 	u32 mcdw_h_ratio, mcdw_v_ratio;
@@ -857,9 +857,9 @@ int frc_buf_calculate(struct frc_dev_s *devp)
 	/*lossy mc data buffer*/
 	for (i = 0; i < FRC_TOTAL_BUF_NUM; i++) {
 		devp->buf.lossy_mc_y_data_buf_size[i] = ALIGN_4K * ratio +
-			(temp * align_vsize * devp->buf.mc_y_comprate) / 100;
+		(((temp * align_vsize * devp->buf.mc_y_comprate) / 100) * FRC_MC_MARGIN) / 100;
 		devp->buf.lossy_mc_c_data_buf_size[i] = ALIGN_4K * ratio +
-			(temp * align_vsize * devp->buf.mc_c_comprate) / 100;
+		(((temp * align_vsize * devp->buf.mc_c_comprate) / 100) * FRC_MC_MARGIN) / 100;
 		devp->buf.lossy_mc_v_data_buf_size[i] = 0;//ALIGN_4K * 4 +
 			//(temp * align_vsize * FRC_COMPRESS_RATE) / 100;
 		devp->buf.total_size += devp->buf.lossy_mc_y_data_buf_size[i];

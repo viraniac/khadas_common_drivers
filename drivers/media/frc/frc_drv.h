@@ -108,8 +108,9 @@
 // frc_20231018 dly frc enable in video window
 // frc_20231020 set disable stats when video mute enable
 // frc_20231102 fix frc fhd windows flash
+// frc_20231102 restore enable setting
 
-#define FRC_FW_VER			"2023-1102 restore enable setting"
+#define FRC_FW_VER			"20231031 frc compress mc memory usage size"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1
@@ -133,10 +134,10 @@ extern int frc_dbg_en;
 #define FRC_COMPRESS_RATE_50_SIZE       (180 * 1024 * 1024)    // Need 176.4MB  4MB Align
 #define FRC_COMPRESS_RATE_55_SIZE       (196 * 1024 * 1024)    // Need 192.7MB  4MB Align
 // mc-y 48%  mc-c 39%  me 60%
-#define FRC_COMPRESS_RATE_MC_Y		48
-#define FRC_COMPRESS_RATE_MC_C		39
-#define FRC_COMPRESS_RATE_MC_Y_T3X	80 // 48 // 100
-#define FRC_COMPRESS_RATE_MC_C_T3X	39 // 80 // 0
+#define FRC_COMPRESS_RATE_MC_Y		46
+#define FRC_COMPRESS_RATE_MC_C		36
+#define FRC_COMPRESS_RATE_MC_Y_T3X	78 // 48 // 100
+#define FRC_COMPRESS_RATE_MC_C_T3X	36 // 80 // 0
 
 #define FRC_COMPRESS_RATE_ME_T3		60
 #define FRC_COMPRESS_RATE_ME_T5M	100
@@ -152,6 +153,7 @@ extern int frc_dbg_en;
 #define FRC_MEMV_BUF_NUM		6
 #define FRC_MEMV2_BUF_NUM		7
 #define FRC_MEVP_BUF_NUM		2
+#define FRC_MC_MARGIN			102 //(1+0.02)*100
 
 #define FRC_SLICER_NUM			4
 
