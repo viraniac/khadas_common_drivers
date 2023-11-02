@@ -711,7 +711,7 @@
 
 	p_tsensor: p_tsensor@ff634800 {
 		compatible = "amlogic, r1p1-tsensor";
-		status = "disabled";
+		status = "okay";
 		reg = <0x0 0xff634800 0x0 0x50>,
 			<0x0 0xff800268 0x0 0x4>;
 		cal_type = <0x1>;
@@ -725,7 +725,7 @@
 
 	d_tsensor: d_tsensor@ff634c00 {
 		compatible = "amlogic, r1p1-tsensor";
-		status = "disabled";
+		status = "okay";
 		reg = <0x0 0xff634c00 0x0 0x50>,
 			<0x0 0xff800230 0x0 0x4>;
 		cal_type = <0x1>;
@@ -737,7 +737,7 @@
 		#thermal-sensor-cells = <1>;
 	};
 	meson_cooldev: meson-cooldev@0 {
-		status = "disabled";
+		status = "okay";
 		compatible = "amlogic, meson-cooldev";
 		cooling_devices {
 			cpucore_cool_cluster0 {
