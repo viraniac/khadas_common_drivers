@@ -1072,7 +1072,7 @@
 			ranges = <0x0 0x0 0x100>;
 
 			clkc_AO: clock-controller {
-				status = "disabled";
+				status = "okay";
 				compatible = "amlogic,meson-tm2-aoclkc";
 				#clock-cells = <1>;
 				clocks = <&xtal>, <&clkc CLKID_CLK81>;
