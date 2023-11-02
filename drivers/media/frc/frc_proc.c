@@ -421,20 +421,24 @@ void frc_change_to_state(enum frc_state_e state)
 	} else if (devp->frc_sts.state != state) {
 		devp->frc_sts.new_state = state;
 		devp->frc_sts.state_transing = true;
-		pr_frc(1, "%s %d->%d(frm=%d)\n", __func__, devp->frc_sts.state,
+		pr_frc(2, "%s %d->%d(frm=%d)\n", __func__, devp->frc_sts.state,
 				state, devp->frc_sts.frame_cnt);
 	}
 }
 
 static int frc_osd_window_en(struct st_frc_in_sts *cur_in_sts)
 {
+	struct frc_dev_s *devp = get_frc_devp();
 	if (get_chip_type() != ID_T3X)
 		return 0;
 
 	if ((cur_in_sts->in_hsize < 1500 && cur_in_sts->in_hsize > 900) ||
 		(cur_in_sts->in_vsize < 900 && cur_in_sts->in_vsize > 500))
 		return 1;
-
+	else if ((devp->out_sts.vout_width == WIDTH_2K && devp->out_sts.vout_height == HEIGHT_1K) &&
+			((cur_in_sts->in_hsize < 680 && cur_in_sts->in_hsize > 470) ||
+			(cur_in_sts->in_vsize < 390 && cur_in_sts->in_vsize > 260)))
+		return 1;
 	return 0;
 }
 
@@ -556,7 +560,7 @@ enum efrc_event frc_input_sts_check(struct frc_dev_s *devp,
 			devp->in_sts.in_hsize, cur_in_sts->in_hsize);
 		devp->in_sts.in_hsize = cur_in_sts->in_hsize;
 		if (devp->frc_sts.state == FRC_STATE_ENABLE) {
-			pr_frc(0, "%s start disable frc", __func__);
+			pr_frc(2, "%s start disable frc", __func__);
 			set_frc_enable(false);
 			frc_change_to_state(FRC_STATE_DISABLE);
 			frc_state_change_finish(devp);
@@ -581,7 +585,7 @@ enum efrc_event frc_input_sts_check(struct frc_dev_s *devp,
 			devp->in_sts.in_vsize, cur_in_sts->in_vsize);
 		devp->in_sts.in_vsize = cur_in_sts->in_vsize;
 		if (devp->frc_sts.state == FRC_STATE_ENABLE) {
-			pr_frc(0, "%s start disable frc", __func__);
+			pr_frc(2, "%s start disable frc", __func__);
 			set_frc_enable(false);
 			frc_change_to_state(FRC_STATE_DISABLE);
 			frc_state_change_finish(devp);

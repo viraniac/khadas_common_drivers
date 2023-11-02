@@ -186,7 +186,7 @@ void set_frc_clk_disable(struct frc_dev_s *frc_devp,  u8 disable)
 		else
 			clk_prepare_enable(frc_devp->clk_frc);
 		frc_devp->clk_state = FRC_CLOCK_NOR;
-		pr_frc(0, "en frc_clk\n");
+		pr_frc(2, "en frc_clk\n");
 	}
 }
 
@@ -2455,7 +2455,7 @@ void frc_cfg_mcdw_loss(u32 mcdw_loss_en)
 	else if (mcdw_loss_en == 0)
 		temp &= 0xFFFFFFEF;
 	WRITE_FRC_REG_BY_CPU(FRC_INP_MCDW_CTRL, temp);
-	pr_frc(0, "%s FRC_INP_MCDW_CTRL=0x%x\n", __func__,
+	pr_frc(2, "%s FRC_INP_MCDW_CTRL=0x%x\n", __func__,
 				READ_FRC_REG(FRC_INP_MCDW_CTRL));
 
 }
@@ -3544,7 +3544,7 @@ void t3x_eco_initial(void)
 {
 	enum chip_id chip;
 	u32  tmp_value;
-	int log = 0;
+	int log = 2;
 
 	chip = get_chip_type();
 	if (chip != ID_T3X)
@@ -3736,7 +3736,7 @@ void t3x_verB_set_cfg(u8 flag, struct frc_dev_s *frc_devp)
 		// tmp_value |= 0x20800000;
 		// WRITE_FRC_REG_BY_CPU(FRC_MC_H2V2_SETTING, tmp_value);
 		devp->ud_dbg.other1_err = 1;
-		pr_frc(0, "%s set:%d INP_MCDW_CTRL=0x%x, H2V2=0x%x, MCDW_CTRL=0x%x vs_cnt=%d\n",
+		pr_frc(2, "%s set:%d INP_MCDW_CTRL=0x%x, H2V2=0x%x, MCDW_CTRL=0x%x vs_cnt=%d\n",
 			__func__,
 			flag,
 			READ_FRC_REG(FRC_INP_MCDW_CTRL),
@@ -3761,7 +3761,7 @@ void t3x_verB_set_cfg(u8 flag, struct frc_dev_s *frc_devp)
 				// tmp_value = READ_FRC_REG(FRC_MC_H2V2_SETTING);
 				//  tmp_value &= 0xDF7FFFFF;
 				// WRITE_FRC_REG_BY_CPU(FRC_MC_H2V2_SETTING, tmp_value);
-				pr_frc(0, "%s set INP_MCDW=0x%x, H2V2_SET=0x%x,MCDW_CTRL=0x%x\n",
+				pr_frc(2, "%s set INP_MCDW=0x%x, H2V2_SET=0x%x,MCDW_CTRL=0x%x\n",
 				__func__,
 				READ_FRC_REG(FRC_INP_MCDW_CTRL),
 				READ_FRC_REG(FRC_MC_H2V2_SETTING),
