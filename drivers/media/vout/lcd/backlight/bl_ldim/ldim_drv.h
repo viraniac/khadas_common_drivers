@@ -25,7 +25,9 @@
 /*20230620: add t3x support */
 /*20230710: add power on/off state protect */
 /*20230915: add cus_fw set pq */
-#define LDIM_DRV_VER    "20230915"
+/*20231108: remove ldim_off_vs_brightness */
+
+#define LDIM_DRV_VER    "20231108"
 
 extern unsigned char ldim_debug_print;
 

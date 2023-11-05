@@ -139,7 +139,6 @@ struct aml_ldim_driver_s {
 	unsigned char static_pic_flag;
 	unsigned char vsync_change_flag;
 	unsigned char duty_update_flag;
-	unsigned char switch_ld_cnt;
 	unsigned char in_vsync_flag;
 	unsigned char spiout_mode;
 

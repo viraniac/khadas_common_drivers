@@ -577,27 +577,20 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 			ldim_debug_print = (unsigned char)val1;
 		}
 		pr_info("ldim_debug_print = %d\n", ldim_debug_print);
-	} else if (!strcmp(parm[0], "switch_ld_cnt")) {
-		if (parm[1]) {
-			if (kstrtoul(parm[1], 10, &val1) < 0)
-				goto ldim_attr_store_err;
-			ldim_drv->switch_ld_cnt = (unsigned char)val1;
-		}
-		pr_info("switch_ld_cnt = %d\n", ldim_drv->switch_ld_cnt);
 	} else if (!strcmp(parm[0], "level_idx")) {
 		if (parm[1]) {
 			if (kstrtoul(parm[1], 10, &val1) < 0)
 				goto ldim_attr_store_err;
 			ldim_drv->level_idx = (unsigned char)val1;
 
+			fw->fw_ctrl &= ~0xf;
+			fw->fw_ctrl |= ldim_drv->level_idx;
+
 			fw_pq = ldim_pq.pqdata[ldim_drv->level_idx];
 			if (ldim_drv->fw->fw_pq_set)
 				ldim_drv->fw->fw_pq_set(&fw_pq);
 
-			if (ldim_drv->level_idx)
-				ldim_drv->func_en = 1;
-			else
-				ldim_drv->func_en = 0;
+			ldim_drv->brightness_bypass = 0;
 		}
 		pr_info("level_idx = %d\n", ldim_drv->level_idx);
 	} else if (!strcmp(parm[0], "spiout_mode")) {
@@ -926,6 +919,11 @@ static ssize_t ldim_debug_store(struct class *class, struct class_attribute *att
 			if (kstrtouint(parm[2], 10, &temp) < 0)
 				goto ldim_debug_store_err;
 			ldim_drv->dev_smr_bypass = temp;
+		}
+		if (!strcmp(parm[1], "brightness")) {
+			if (kstrtouint(parm[2], 10, &temp) < 0)
+				goto ldim_debug_store_err;
+			ldim_drv->brightness_bypass = temp;
 		}
 	} else if (!strcmp(parm[0], "print")) {
 		if (parm[1]) {
