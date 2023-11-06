@@ -622,6 +622,20 @@
 	clock-frequency = <300000>;
 };
 
+&CPU0 {
+	operating-points-v2 = <&double_cpu_opp_table0>,
+		<&double_cpu_opp_table1>,
+		<&double_cpu_opp_table2>,
+		<&double_cpu_opp_table3>;
+};
+
+&CPU1 {
+	operating-points-v2 = <&double_cpu_opp_table0>,
+		<&double_cpu_opp_table1>,
+		<&double_cpu_opp_table2>,
+		<&double_cpu_opp_table3>;
+};
+
 &vddcpu0 {
 	status = "okay";
 };
