@@ -414,7 +414,7 @@
 
 	codec_dos_reset: reset-controller@ff620000 {
 		compatible = "amlogic, meson-tm2-dos-reset";
-		status = "disabled";
+		status = "okay";
 		reg = <0x0 0xff620000 0x0 0x10000>;
 		#reset-cells = <1>;
 	};
@@ -913,5 +913,5 @@
 };
 
 &pwrc {
-	compatible = "amlogic,meson-tm2-pwrc";
+	compatible = "amlogic,tm2-power-domain";
 };

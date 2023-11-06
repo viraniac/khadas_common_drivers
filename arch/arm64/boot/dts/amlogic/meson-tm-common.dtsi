@@ -856,7 +856,7 @@
 		};
 
 		pwrc: power-controller {
-			status = "disabled";
+			status = "okay";
 			compatible = "amlogic,meson-g12a-pwrc";
 			reg = <0x0 0xff62fcc0 0x0 0x40>;
 			reg-names = "dos";
@@ -864,7 +864,7 @@
 			amlogic,ao-sysctrl = <&rti>;
 			amlogic,hhi-sysctrl = <&hhi>;
 			vpu,reset = <&vpu_pd_rst>;
-			//nna,reset = <&nn_pd_rst>;
+			nna,reset = <&nn_pd_rst>;
 			usb,reset = <&usb_pd_rst>;
 			pciea,reset = <&pciea_pd_rst>;
 			ge2d,reset = <&ge2d_pd_rst>;
@@ -909,6 +909,11 @@
 						   <0>, /* Do Nothing */
 						   <0>,
 						   <0>; /* Do Nothing */
+		};
+
+		nn_pd_rst: nn_rst {
+			resets = <&reset RESET_VIPNANOG>;
+			reset-names = "vipanaog";
 		};
 
 		vpu_pd_rst: vpu_rst {
