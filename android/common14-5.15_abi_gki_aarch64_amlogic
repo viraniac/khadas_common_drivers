@@ -38,3 +38,8 @@
 # aml_media.ko
   __get_task_comm
   is_dma_buf_file
+
+# aml_cma.ko
+  si_swapinfo
+  __tracepoint_android_vh_calc_alloc_flags
+  __traceiter_android_vh_calc_alloc_flags
