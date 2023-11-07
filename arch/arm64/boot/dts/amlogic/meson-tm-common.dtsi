@@ -68,7 +68,7 @@
 
 	meson_uvm {
 		compatible = "amlogic, meson_uvm";
-		status = "disabled";
+		status = "okay";
 	};
 
 	audio_data: audio_data {

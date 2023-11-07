@@ -292,6 +292,7 @@
 			/* ion_codec_mm max can alloc size 80M*/
 			size = <0x1bc00000>;
 			alignment = <0x400000>;
+			alloc-ranges = <0x30000000 0x50000000>;
 			linux,contiguous-region;
 		};
 
@@ -339,9 +340,9 @@
 
 	codec_mm {
 		compatible = "amlogic, codec, mm";
-		//memory-region = <&codec_mm_cma &codec_mm_reserved>;
+		memory-region = <&codec_mm_cma &codec_mm_reserved>;
 		dev_name = "codec_mm";
-		status = "disabled";
+		status = "okay";
 	};
 
 	ppmgr {
