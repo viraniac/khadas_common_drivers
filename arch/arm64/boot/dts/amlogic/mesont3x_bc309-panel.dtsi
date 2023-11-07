@@ -115,7 +115,7 @@
 				5  20  0>; /*vs_width, vs_bp, vs_pol*/
 			clk_attr = <
 				4 /*fr_adj_type: 0=clk, 1=htotal, 2=vtotal, 3=auto, 4=hdmi */
-				0 /*clk_ss_level */
+				0 /*clk_ss: [0:7]:level, [8:11]:freq, [12:15]: mode*/
 				1 /*clk_auto_generate*/
 				0>; /*pixel_clk(unit in Hz)*/
 			lvds_attr = <
@@ -166,7 +166,7 @@
 			vbyone_intr_enable = <
 				1 /*vbyone_intr_enable */
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 
 			/* power step: type, index, value, delay(ms) */
@@ -209,7 +209,7 @@
 			vbyone_intr_enable = <
 				1   /*vbyone_intr_enable*/
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 
 			/* power step: type, index, value, delay(ms) */
@@ -252,7 +252,7 @@
 			vbyone_intr_enable = <
 				1 /*vbyone_intr_enable */
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 			/* power step: type, index, value, delay(ms) */
 			power_on_step = <
@@ -294,7 +294,7 @@
 			vbyone_intr_enable = <
 				1   /*vbyone_intr_enable*/
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 			/* power step: type, index, value, delay(ms) */
 			power_on_step = <
@@ -335,7 +335,7 @@
 			vbyone_intr_enable = <
 				1 /*vbyone_intr_enable */
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x8 0xf>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 			/* power step: type, index, value, delay(ms) */
 			power_on_step = <
@@ -377,7 +377,7 @@
 			vbyone_intr_enable = <
 				1   /*vbyone_intr_enable*/
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 
 			/* power step: type, index, value, delay(ms) */
@@ -420,7 +420,7 @@
 			vbyone_intr_enable = <
 				1   /*vbyone_intr_enable*/
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x8 5>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 
 			/* power step: type, index, value, delay(ms) */
@@ -931,7 +931,8 @@
 		mode = "tablet";
 		fr_auto_policy = <1>; /* 0=disable, 1=60/50hz, 2=60/50/48hz */
 		key_valid = <1>;
-
+		clocks = <&clkc CLKID_FCLK_DIV5>, <&clkc CLKID_CTS_TCON_PLL_CLK>;
+		clock-names = "fclk_div5", "clk_tcon";
 		reg = <0x0 0xfe380000 0x0 0xd000   /* tcon */
 			0x0 0xfe004000 0x0 0x70    /* periphs */
 			0x0 0xfe002000 0x0 0xa0  /* reset */
@@ -980,7 +981,7 @@
 			vbyone_intr_enable = <
 				1 /*vbyone_intr_enable */
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 
 			/* power step: type, index, value, delay(ms) */
@@ -1021,7 +1022,7 @@
 			vbyone_intr_enable = <
 				1   /*vbyone_intr_enable*/
 				3>; /*vbyone_vsync_intr_enable*/
-			phy_attr=<0x7 1>; /* vswing_level, preem_level */
+			phy_attr=<0x7 4>; /* vswing_level, preem_level */
 			hw_filter=<0 0>;  /* filter_time, filter_cnt*/
 
 			/* power step: type, index, value, delay(ms) */
