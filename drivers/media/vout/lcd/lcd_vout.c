@@ -2239,7 +2239,6 @@ static int lcd_probe(struct platform_device *pdev)
 	/*vpu dev register for lcd*/
 	pdrv->lcd_vpu_dev = vpu_dev_register(VPU_VENCL, LCD_CDEV_NAME);
 #endif
-
 	ret = lcd_ioremap(pdrv, pdev);
 	if (ret)
 		goto lcd_probe_err_1;
