@@ -1846,6 +1846,15 @@
 		status = "okay";
 	};
 
+	aml_mkl: aml_mkl {
+		compatible = "amlogic,aml_mkl";
+		reg = <0xff630000 0x180>;
+		kl_type = <0>;
+		kl_vid_type = <0>;
+		kl_offset = <0x80 0x100>;
+		status = "okay";
+	};
+
 	cpu_ver_name {
 		compatible = "amlogic, cpu-major-id-t5d";
 	};
