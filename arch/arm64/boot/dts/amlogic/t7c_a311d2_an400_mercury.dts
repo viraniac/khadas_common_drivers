@@ -1951,6 +1951,10 @@
 	enc_idx = <2>;
 };
 
+&aocec {
+	status = "disable";
+};
+
 &dummy_venc {
 	default_venc_index = <2>;
 };
