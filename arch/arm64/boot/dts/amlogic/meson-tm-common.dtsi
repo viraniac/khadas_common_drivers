@@ -823,7 +823,6 @@
 
 			eth_phy: mdio-multiplexer@4c000 {
 				compatible = "amlogic,g12a-mdio-mux";
-				status = "disabled";
 				reg = <0x0 0x4c000 0x0 0xa4>;
 				clocks = <&clkc CLKID_ETH_PHY>,
 					 <&xtal>,

@@ -222,7 +222,8 @@
 		};
 
 		ethmac: ethernet@ff3f0000 {
-			compatible = "amlogic, g12a-eth-dwmac","snps,dwmac-4.00";
+			compatible = "amlogic,meson-axg-dwmac",
+				     "snps,dwmac-4.00";
 			reg = <0xff3f0000 0x10000>,
 			      <0xff634540 0x8>;
 			interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>;
@@ -854,7 +855,6 @@
 			};
 
 			eth_phy: mdio-multiplexer@4c000 {
-				status = "disabled";
 				compatible = "amlogic,g12a-mdio-mux";
 				reg = <0x4c000 0xa4>;
 				clocks = <&clkc CLKID_ETH_PHY>,
