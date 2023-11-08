@@ -6,6 +6,7 @@
 #include "meson-tm-common.dtsi"
 #include <dt-bindings/clock/tm2-clkc.h>
 #include <dt-bindings/power/tm2-pd.h>
+#include <dt-bindings/mailbox/tm2-mbox.h>
 
 / {
 	compatible = "amlogic,tm2";
@@ -673,43 +674,79 @@
 		interrupt-names = "vsync";
 	};
 
-	mailbox: mhu@ff63c400 {
-		status = "disabled";
-		compatible = "amlogic, meson_mhu";
-		reg = <0xff63c400 0x4c>,   /* MHU registers */
-		      <0xfffdf000 0x800>;   /* Payload area */
-		interrupts = <GIC_SPI 209 IRQ_TYPE_EDGE_RISING>,
-			     <GIC_SPI 210 IRQ_TYPE_EDGE_RISING>;
+	mbox_pl0: mbox_pl0@ff63c400 {
+		status = "okay";
+		compatible = "amlogic, tm2-mbox-pl-old";
+		reg = <0xfffdf200 0x200>,   // aocpu tx buf low
+		      <0xfffdf000 0x200>,   // aocpu rx buf low
+		      <0xff63c434 0x4>,     // aocpu tx set addr low
+		      <0xff63c418 0x4>,     // aocpu rx clr addr low
+		      <0xff63c414 0x4>,     // aocpu rx sts addr low
+		      <0xfffdf600 0x200>,   // aocpu tx buf high
+		      <0xfffdf400 0x200>,   // aocpu rx buf high
+		      <0xff63c440 0x4>,     // aocpu tx set addr high
+		      <0xff63c424 0x4>,     // aocpu rx clr addr high
+		      <0xff63c420 0x4>;     // aocpu rx sts addr high
+		interrupts = <GIC_SPI 209 IRQ_TYPE_EDGE_RISING>,  // aocpu rx irq low
+			     <GIC_SPI 210 IRQ_TYPE_EDGE_RISING>;  // aocpu rx irq high
+		mbox-tx = "tx", "tx";
+		mbox-nums = <TM2_MBOX_PL0_NUMS>;
+		mboxids = <TM2_MBOX_REE2AO_LOW>,
+			  <TM2_MBOX_REE2AO_HIGH>;
 		#mbox-cells = <1>;
-		mbox-names = "cpu_to_scp_low", "cpu_to_scp_high";
-		mboxes = <&mailbox 0 &mailbox 1>;
 	};
 
-	mailbox_pl: mhu@ff680150 {
-		status = "disabled";
-		compatible = "amlogic, meson_mhu_pl";
-		reg = <0xff6801d0 0x4>,   /*from dsp sts registers */
-		      <0xff680154 0x4>,   /*to dsp set registers */
-		      <0xff680190 0x4>,   /*to dsp clr registers */
-		      <0xfffdc800 0x400>,   /*to dsp payload */
-		      <0xff6901d0 0x4>,   /*from ao sts registers */
-		      <0xff690154 0x4>,   /* to ao registers */
-		      <0xff690190 0x4>,   /* to ao registers */
-		      <0xfffdcc00 0x400>;   /*from ao payload */
-		interrupts = <GIC_SPI 242 IRQ_TYPE_EDGE_RISING>,  /* ap Rev se*/
-			     <GIC_SPI 244 IRQ_TYPE_EDGE_RISING>,  /* ap Send se*/
-			     <GIC_SPI 246 IRQ_TYPE_EDGE_RISING>,  /* ap Rev se */
-			     <GIC_SPI 248 IRQ_TYPE_EDGE_RISING>;  /* ap Send se*/
-		mbox-names = "dsp_dev",
-			     "ap_to_dspa",
-			     "dspb_dev",
-			     "ap_to_dspb";
+	mbox_pl1: mbox_pl1@0xff680100 {
+		status = "okay";
+		compatible = "amlogic, tm2-mbox-pl";
+		reg = <0xfffdca00 0x200>,    // dspa tx buf
+		      <0xff680154 0x4>,      // dspa tx set addr
+		      <0xff680194 0x4>,      // dspa tx clr addr
+		      <0xff6801d4 0x4>,      // dspa tx sts addr
+		      <0xfffdc800 0x200>,    // dspa rx buf
+		      <0xff680150 0x4>,      // dspa rx set addr
+		      <0xff680190 0x4>,      // dspa rx clr addr
+		      <0xff6801d0 0x4>,      // dspa rx sts addr
+		      <0xfffdce00 0x200>,    // dspb tx buf
+		      <0xff690154 0x4>,      // dspb tx set addr
+		      <0xff690194 0x4>,      // dspb tx clr addr
+		      <0xff6901d4 0x4>,      // dspb tx sts addr
+		      <0xfffdcc00 0x200>,    // dspb rx buf
+		      <0xff690150 0x4>,      // dspb rx set addr
+		      <0xff690190 0x4>,      // dspb rx clr addr
+		      <0xff6901d0 0x4>;      // dspb rx sts addr
+		interrupts = <GIC_SPI 244 IRQ_TYPE_EDGE_RISING>,  // dspa send irq
+			     <GIC_SPI 242 IRQ_TYPE_EDGE_RISING>,  // dspa rev irq
+			     <GIC_SPI 248 IRQ_TYPE_EDGE_RISING>,  // dspb send irq
+			     <GIC_SPI 246 IRQ_TYPE_EDGE_RISING>;  // dspb rev irq
+		mbox-tx = "tx", "rx", "tx", "rx";
+		mbox-nums = <TM2_MBOX_PL1_NUMS>;
+		mboxids = <TM2_MBOX_REE2DSPA>,
+			  <TM2_MBOX_DSPA2REE>,
+			  <TM2_MBOX_REE2DSPB>,
+			  <TM2_MBOX_DSPB2REE>;
 		#mbox-cells = <1>;
-		mboxes = <&mailbox_pl 0>,
-			 <&mailbox_pl 1>,
-			 <&mailbox_pl 2>,
-			 <&mailbox_pl 3>;
-		mbox-nums = <4>;
+	};
+
+	mbox_devfs {
+		status = "okay";
+		compatible = "amlogic, mbox-devfs";
+		mbox-nums = <5>;
+		mbox-names = "ree2aocpu",
+			     "dsp_dev",
+			     "dsp2ree",
+			     "dspb_dev",
+			     "dspb2ree";
+		mboxes = <&mbox_pl0 TM2_REE2AO_DEV>,
+			 <&mbox_pl1 TM2_REE2DSPA_DEV>,
+			 <&mbox_pl1 TM2_DSPA2REE_DEV>,
+			 <&mbox_pl1 TM2_REE2DSPB_DEV>,
+			 <&mbox_pl1 TM2_DSPB2REE_DEV>;
+		mbox-dests = <MAILBOX_AOCPU>,
+			     <MAILBOX_DSP>,
+			     <MAILBOX_DSP>,
+			     <MAILBOX_DSP>,
+			     <MAILBOX_DSP>;
 	};
 
 	efuse: efuse {
