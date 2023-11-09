@@ -327,8 +327,9 @@
 
 	 vrtc: rtc@0xfe010288 {
 		compatible = "amlogic,meson-vrtc";
-		reg = <0xff8000a8 0x4>;
-		status = "disabled";
+		reg = <0xff8000a8 0x4>;	/*AO_DEBUG_REG2*/
+		status = "okay";
+		mboxes = <&mbox_pl0 TM2_REE2AO_VRTC>;
 	};
 
 	reboot {
