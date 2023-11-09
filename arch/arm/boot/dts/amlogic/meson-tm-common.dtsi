@@ -276,7 +276,7 @@
 						reg = <0x40  0x4c>,
 						      <0xe8  0x18>,
 						      <0x120 0x18>,
-						      <0x2c0 0x40>,
+						      <0x2c0 0x3c>,
 						      <0x340 0x1c>;
 						reg-names = "gpio",
 							    "pull",
@@ -1519,6 +1519,22 @@
 				reg = <0x9000 0x48>;
 			};
 
+		};
+
+		pinctrl_testn: pinctrl@ff80035c {
+			compatible = "amlogic,meson-tm2-testn-pinctrl";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges;
+
+			testn: testn@ff80035c {
+				reg = <0xff6346fc 0x4>,
+				      <0xff80035c 0x4>;
+				reg-names = "mux", "gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				gpio-ranges = <&pinctrl_testn 0 0 1>;
+			};
 		};
 
 		arm_pmu {

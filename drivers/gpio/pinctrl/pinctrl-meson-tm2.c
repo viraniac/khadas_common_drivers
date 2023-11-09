@@ -118,6 +118,10 @@ static const struct pinctrl_pin_desc meson_tm2_aobus_pins[] = {
 	MESON_PIN(GPIOE_2),
 };
 
+static const struct pinctrl_pin_desc meson_tm2_testn_pins[] = {
+	MESON_PIN(GPIO_TEST_N),
+};
+
 /* emmc */
 static const unsigned int emmc_nand_d0_pins[] = {BOOT_0};
 static const unsigned int emmc_nand_d1_pins[] = {BOOT_1};
@@ -1013,6 +1017,10 @@ static struct meson_pmx_group meson_tm2_periphs_groups[] __initdata = {
 
 };
 
+static struct meson_pmx_group meson_tm2_testn_groups[] __initdata = {
+	GPIO_GROUP(GPIO_TEST_N),
+};
+
 /* uart_ao_a */
 static const unsigned int uart_ao_a_tx_pins[] = {GPIOAO_0};
 static const unsigned int uart_ao_a_rx_pins[] = {GPIOAO_1};
@@ -1633,6 +1641,10 @@ static const char * const tdmc_ao_groups[] = {
 	"tdmc_dout0_ao", "tdmc_fs_ao", "tdmc_dout1_ao", "tdmc_sclk_ao",
 };
 
+static const char * const gpio_testn_groups[] = {
+	"GPIO_TEST_N",
+};
+
 static struct meson_pmx_func meson_tm2_periphs_functions[] __initdata = {
 	FUNCTION(gpio_periphs),
 	FUNCTION(emmc),
@@ -1717,8 +1729,12 @@ static struct meson_pmx_func meson_tm2_aobus_functions[] __initdata = {
 	FUNCTION(tdmc_ao),
 };
 
+static struct meson_pmx_func meson_tm2_testn_functions[] __initdata = {
+	FUNCTION(gpio_testn),
+};
+
 static struct meson_bank meson_tm2_periphs_banks[] = {
-	/* name  first  last  irq  pullen  pull  dir  out  in ds*/
+	/* name  first  last  irq  pullen  pull  dir  out  in ds */
 	BANK_DS("Z",    GPIOZ_0,    GPIOZ_10, 12, 22,
 		1,  0,  1,  0,  3,  0,  4, 0,  5, 0,  1, 0),
 	BANK_DS("H",    GPIOH_0,    GPIOH_24, 23, 47,
@@ -1734,11 +1750,17 @@ static struct meson_bank meson_tm2_periphs_banks[] = {
 };
 
 static struct meson_bank meson_tm2_aobus_banks[] = {
-	/* name  first  last  irq  pullen  pull  dir  out  in  */
+	/* name  first  last  irq  pullen  pull  dir  out  in ds */
 	BANK_DS("AO",   GPIOAO_0,  GPIOAO_11,  0, 11,
 		3,  0,  2, 0,  0,  0,  4, 0,  1,  0, 0, 0),
 	BANK_DS("E",   GPIOE_0,  GPIOE_2,   101, 103,
 		3,  16,  2, 16,  0,  16,  4, 16,  1,  16, 1, 0),
+};
+
+static struct meson_bank meson_tm2_testn_banks[] = {
+	/* name  first  last  irq  pullen  pull  dir  out  in ds */
+	BANK_DS("TESTN",  GPIO_TEST_N,  GPIO_TEST_N,  -1, -1,
+		0,  5,  0,  4,  0,  6,  0, 31,  0,  30,  0, 2),
 };
 
 static struct meson_pmx_bank meson_tm2_periphs_pmx_banks[] = {
@@ -1765,6 +1787,15 @@ static struct meson_pmx_bank meson_tm2_aobus_pmx_banks[] = {
 static struct meson_axg_pmx_data meson_tm2_aobus_pmx_banks_data = {
 	.pmx_banks	= meson_tm2_aobus_pmx_banks,
 	.num_pmx_banks	= ARRAY_SIZE(meson_tm2_aobus_pmx_banks),
+};
+
+static struct meson_pmx_bank meson_tm2_testn_pmx_banks[] = {
+	BANK_PMX("TESTN", GPIO_TEST_N, GPIO_TEST_N, 0x0, 8),
+};
+
+static struct meson_axg_pmx_data meson_tm2_testn_pmx_banks_data = {
+	.pmx_banks	= meson_tm2_testn_pmx_banks,
+	.num_pmx_banks	= ARRAY_SIZE(meson_tm2_testn_pmx_banks),
 };
 
 static struct meson_pinctrl_data meson_tm2_periphs_pinctrl_data __refdata = {
@@ -1796,6 +1827,21 @@ static struct meson_pinctrl_data meson_tm2_aobus_pinctrl_data __refdata = {
 	.parse_dt	= meson_g12a_aobus_parse_dt_extra,
 };
 
+static struct meson_pinctrl_data meson_tm2_testn_pinctrl_data __refdata = {
+	.name		= "testn-banks",
+	.pins		= meson_tm2_testn_pins,
+	.groups		= meson_tm2_testn_groups,
+	.funcs		= meson_tm2_testn_functions,
+	.banks		= meson_tm2_testn_banks,
+	.num_pins	= ARRAY_SIZE(meson_tm2_testn_pins),
+	.num_groups	= ARRAY_SIZE(meson_tm2_testn_groups),
+	.num_funcs	= ARRAY_SIZE(meson_tm2_testn_functions),
+	.num_banks	= ARRAY_SIZE(meson_tm2_testn_banks),
+	.pmx_ops	= &meson_axg_pmx_ops,
+	.pmx_data	= &meson_tm2_testn_pmx_banks_data,
+	.parse_dt	= meson_a1_parse_dt_extra,
+};
+
 static const struct of_device_id meson_tm2_pinctrl_dt_match[] = {
 	{
 		.compatible = "amlogic,meson-tm2-periphs-pinctrl",
@@ -1804,6 +1850,10 @@ static const struct of_device_id meson_tm2_pinctrl_dt_match[] = {
 	{
 		.compatible = "amlogic,meson-tm2-aobus-pinctrl",
 		.data = &meson_tm2_aobus_pinctrl_data,
+	},
+	{
+		.compatible = "amlogic,meson-tm2-testn-pinctrl",
+		.data = &meson_tm2_testn_pinctrl_data,
 	},
 	{ },
 };
