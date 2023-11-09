@@ -1110,7 +1110,7 @@
 };
 
 &sd_emmc_b {
-	status = "disabled";
+	status = "okay";
 	pinctrl-0 = <&sdcard_pins>;
 	pinctrl-1 = <&sdcard_clk_gate_pins>;
 	pinctrl-names = "default", "clk-gate";
@@ -1129,7 +1129,7 @@
 	keep-power-in-suspend;
 	card_type = <3>;
 
-	power-domains = <&pwrc PWRC_TM2_EMMCB_ID>;
+//	power-domains = <&pwrc PWRC_TM2_EMMCB_ID>;
 //	mmc-pwrseq = <&sdio_pwrseq>;
 
 	vmmc-supply = <&vddao_3v3>;
@@ -1146,7 +1146,7 @@
 };
 
 &sd_emmc_c {
-	status = "disabled";
+	status = "okay";
 	pinctrl-0 = <&emmc_pins>, <&emmc_ds_pins>;
 	pinctrl-1 = <&emmc_clk_gate_pins>;
 	pinctrl-names = "default", "clk-gate";
@@ -1159,11 +1159,13 @@
 	max-frequency = <200000000>;
 	non-removable;
 	disable-wp;
-
-	power-domains = <&pwrc PWRC_TM2_EMMCC_ID>;
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+//	power-domains = <&pwrc PWRC_TM2_EMMCC_ID>;
 //	mmc-pwrseq = <&emmc_pwrseq>;
-	vmmc-supply = <&vddao_3v3>;
-	vqmmc-supply = <&vddao_1v8>;
+//	vmmc-supply = <&vddao_3v3>;
+//	vqmmc-supply = <&vddao_1v8>;
 };
 
 &audiobus {

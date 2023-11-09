@@ -1912,12 +1912,12 @@
 		};
 
 		sd_emmc_c: mmc@ffe07000 {
+			status = "disabled";
 			compatible = "amlogic,meson-axg-mmc";
 			reg = <0xffe07000 0x800>,
 				<0xff63c25c 0x4>,
 				<0xff6346c0 0x4>;
 			interrupts = <GIC_SPI 191 IRQ_TYPE_EDGE_RISING>;
-			status = "disabled";
 			clocks = <&clkc CLKID_SD_EMMC_C>,
 				<&clkc CLKID_SD_EMMC_C_CLK0_SEL>,
 				 <&clkc CLKID_SD_EMMC_C_CLK0>,
@@ -1927,8 +1927,14 @@
 			clock-names = "core", "mux0", "mux1",
 					"clkin0", "clkin1", "clkin2";
 			card_type = <1>;
+			tx_delay = <0x10>;
+			save_para = <0>;
+			compute_cmd_delay = <0>;
+			compute_coef = <0>;
 			mmc_debug_flag;
 		//	resets = <&reset RESET_SD_EMMC_C>;
+			no-sdio;
+			no-sd;
 		};
 
 		sd_emmc_b: sdio@ffe05000 {
