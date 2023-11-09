@@ -24,8 +24,6 @@
 #include "meson-eeclk.h"
 #include "tm2.h"
 
-#define REMOVE_MOMENT				1
-
 static DEFINE_SPINLOCK(meson_clk_lock);
 
 static struct clk_regmap tm2_fixed_pll_dco = {
@@ -112,13 +110,15 @@ static const struct pll_params_table tm2_sys_pll_params_table[] = {
 	PLL_PARAMS(200, 1, 2), /*DCO=4800M OD=1200M*/
 	PLL_PARAMS(216, 1, 2), /*DCO=5184M OD=1296M*/
 	PLL_PARAMS(233, 1, 2), /*DCO=5592M OD=1398M*/
+	PLL_PARAMS(234, 1, 2), /*DCO=5616M OD=1404M*/
 	PLL_PARAMS(249, 1, 2), /*DCO=5976M OD=1494M*/
+	PLL_PARAMS(250, 1, 2), /*DCO=6000M OD=1500M*/
 	PLL_PARAMS(126, 1, 1), /*DCO=3024M OD=1512M*/
 	PLL_PARAMS(134, 1, 1), /*DCO=3216M OD=1608M*/
 	PLL_PARAMS(142, 1, 1), /*DCO=3408M OD=1704M*/
 	PLL_PARAMS(150, 1, 1), /*DCO=3600M OD=1800M*/
 	PLL_PARAMS(158, 1, 1), /*DCO=3792M OD=1896M*/
-	PLL_PARAMS(159, 1, 1), /*DCO=3816M OD=1908*/
+	PLL_PARAMS(159, 1, 1), /*DCO=3816M OD=1908M*/
 	PLL_PARAMS(160, 1, 1), /*DCO=3840M OD=1920M*/
 	PLL_PARAMS(168, 1, 1), /*DCO=4032M OD=2016M*/
 	{ /* sentinel */ },
@@ -142,14 +142,16 @@ static struct clk_regmap tm2_sys_pll_dco = {
 			.shift   = 10,
 			.width   = 5,
 		},
-#ifdef CONFIG_ARM
 		/* od for 32bit */
 		.od = {
 			.reg_off = HHI_SYS_PLL_CNTL0,
 			.shift	 = 16,
 			.width	 = 3,
 		},
+#ifdef CONFIG_ARM
 		.table = tm2_sys_pll_params_table,
+#else
+		.range = &tm2_sys_pll_mult_range,
 #endif
 		.l = {
 			.reg_off = HHI_SYS_PLL_CNTL0,
@@ -161,7 +163,6 @@ static struct clk_regmap tm2_sys_pll_dco = {
 			.shift   = 29,
 			.width   = 1,
 		},
-		.range = &tm2_sys_pll_mult_range,
 	},
 	.hw.init = &(struct clk_init_data){
 		.name = "sys_pll_dco",
@@ -3415,6 +3416,24 @@ static struct clk_regmap tm2_dsu_dyn_clk = {
 	},
 };
 
+static struct clk_regmap tm2_dsu_final_clk = {
+	.data = &(struct clk_regmap_mux_data){
+		.offset = HHI_SYS_CPU_CLK_CNTL5,
+		.mask = 0x1,
+		.shift = 11,
+	},
+	.hw.init = &(struct clk_init_data){
+		.name = "dsu_clk_final",
+		.ops = &clk_regmap_mux_ops,
+		.parent_hws = (const struct clk_hw *[]) {
+			&tm2_dsu_dyn_clk.hw,
+			&tm2_sys_pll.hw,
+		},
+		.num_parents = 2,
+		.flags = CLK_SET_RATE_PARENT | CLK_SET_RATE_NO_REPARENT,
+	},
+};
+
 static struct clk_regmap tm2_dsu_clk = {
 	.data = &(struct clk_regmap_mux_data){
 		.offset = HHI_SYS_CPU_CLK_CNTL6,
@@ -3426,7 +3445,7 @@ static struct clk_regmap tm2_dsu_clk = {
 		.ops = &clk_regmap_mux_ops,
 		.parent_hws = (const struct clk_hw *[]) {
 			&tm2_cpu_clk.hw,
-			&tm2_dsu_dyn_clk.hw,
+			&tm2_dsu_final_clk.hw,
 		},
 		.num_parents = 2,
 		.flags = CLK_SET_RATE_PARENT,
@@ -4886,6 +4905,7 @@ static struct clk_hw_onecell_data tm2_hw_onecell_data = {
 		[CLKID_VIPNANOQ_AXI_DIV]	= &tm2_vipnanoq_axi_div.hw,
 		[CLKID_VIPNANOQ_AXI_GATE]	= &tm2_vipnanoq_axi_gate.hw,
 		[CLKID_DSU_CLK_DYN]		= &tm2_dsu_dyn_clk.hw,
+		[CLKID_DSU_CLK_FINAL]		= &tm2_dsu_final_clk.hw,
 		[CLKID_DSU_CLK]			= &tm2_dsu_clk.hw,
 		[CLKID_VDIN_MEAS_MUX]		= &tm2_vdin_meas_mux.hw,
 		[CLKID_VDIN_MEAS_DIV]		= &tm2_vdin_meas_div.hw,
@@ -5183,6 +5203,7 @@ static struct clk_regmap *const tm2_clk_regmaps[] __initconst = {
 	&tm2_vipnanoq_axi_div,
 	&tm2_vipnanoq_axi_gate,
 	&tm2_dsu_dyn_clk,
+	&tm2_dsu_final_clk,
 	&tm2_dsu_clk,
 	&tm2_hdmirx_cfg_mux,
 	&tm2_hdmirx_cfg_div,
@@ -5211,70 +5232,11 @@ static const struct reg_sequence tm2_init_regs[] = {
 	{ .reg = HHI_MPLL_CNTL0,	.def = 0x00000543 },
 };
 
-#ifndef REMOVE_MOMENT
-static int meson_tm2_dvfs_setup_common(struct platform_device *pdev,
-					struct clk_hw **hws)
-{
-	struct clk *notifier_clk;
-	int ret;
-
-	/* Setup clock notifier for cpu_clk_postmux0 */
-	tm2_cpu_clk_postmux0_nb_data.fclk_div2 = &tm2_fclk_div2.hw;
-	notifier_clk = tm2_cpu_clk_postmux0.hw.clk;
-	ret = clk_notifier_register(notifier_clk,
-				    &tm2_cpu_clk_postmux0_nb_data.nb);
-	if (ret) {
-		dev_err(&pdev->dev, "failed to register the cpu_clk_postmux0 notifier\n");
-		return ret;
-	}
-
-	/* Setup clock notifier for cpu_clk_dyn mux */
-	notifier_clk = tm2_cpu_clk_dyn.hw.clk;
-	ret = clk_notifier_register(notifier_clk, &tm2_cpu_clk_mux_nb);
-	if (ret) {
-		dev_err(&pdev->dev, "failed to register the cpu_clk_dyn notifier\n");
-		return ret;
-	}
-
-	/* Setup clock notifier for dsu */
-	/* set tm2_dsu_clk_premux1 parent to fclk_div2 1G */
-	ret = clk_set_parent(tm2_dsu_clk_premux1.hw.clk,
-			     tm2_fclk_div2.hw.clk);
-	if (ret < 0) {
-		pr_err("%s: failed to set dsu parent\n", __func__);
-		return ret;
-	}
-
-	ret = clk_notifier_register(tm2_dsu_clk_postmux0.hw.clk,
-				    &tm2_dsu_clk_postmux0_nb_data.nb);
-	if (ret) {
-		dev_err(&pdev->dev, "failed to register dsu notifier\n");
-		return ret;
-	}
-
-	return 0;
-}
-#endif
-
 static int meson_tm2_dvfs_setup(struct platform_device *pdev)
 {
-	// struct clk_hw **hws = tm2_hw_onecell_data.hws;
 	struct clk *notifier_clk;
 	int ret;
 
-#ifndef REMOVE_MOMENT
-	ret = meson_tm2_dvfs_setup_common(pdev, hws);
-	if (ret)
-		return ret;
-
-	/* Setup clock notifier for cpu_clk mux */
-	notifier_clk = tm2_cpu_clk.hw.clk;
-	ret = clk_notifier_register(notifier_clk, &tm2_cpu_clk_mux_nb);
-	if (ret) {
-		dev_err(&pdev->dev, "failed to register the cpu_clk notifier\n");
-		return ret;
-	}
-#endif
 	/* Setup clock notifier for sys_pll */
 	notifier_clk = tm2_sys_pll.hw.clk;
 	ret = clk_notifier_register(notifier_clk, &tm2_sys_pll_nb_data.nb);
