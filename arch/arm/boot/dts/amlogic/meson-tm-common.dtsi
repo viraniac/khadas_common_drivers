@@ -1887,12 +1887,13 @@
 			maximum-speed = "high-speed";
 			snps,dis_u2_susphy_quirk;
 			snps,quirk-frame-length-adjustment = <0x20>;
+			snps,usb2-lpm-disable;
 			usb-phy = <&usb2_phy_v2>, <&usb3_phy_v2>;
 			clocks = <&clkc CLKID_USB_GENERAL>;
 			clock-names = "usb_general";
-			usb5v-supply = <&ao_5v>;
-			usb3v3-supply = <&vddao_3v3>;
-			usb1v8-supply = <&vddao_1v8>;
+			//usb5v-supply = <&ao_5v>;
+			//usb3v3-supply = <&vddao_3v3>;
+			//usb1v8-supply = <&vddao_1v8>;
 		};
 
 		sd_emmc_c: mmc@ffe07000 {
