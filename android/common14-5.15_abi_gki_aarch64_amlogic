@@ -38,6 +38,10 @@
 # aml_media.ko
   __get_task_comm
   is_dma_buf_file
+  argv_free
+  argv_split
+  seq_list_next
+  seq_list_start
 
 # aml_cma.ko
   si_swapinfo
