@@ -1669,6 +1669,39 @@
 				function = "hdmirx_c";
 			};
 		};
+	/*backlight*/
+	bl_pwm_vs_on_pins:bl_pwm_vs_on_pin {
+		mux {
+			groups = "pwm_vs_z5";
+			function = "pwm_vs";
+		};
+	};
+	bl_pwm_off_pins:bl_pwm_off_pin {
+		mux {
+			groups = "GPIOZ_5";
+			function = "gpio_periphs";
+			output-low;
+		};
+	};
+	bl_pwm_combo_0_vs_on_pins:bl_pwm_combo_0_vs_on_pin {
+		mux {
+			groups = "pwm_vs_z5";
+			function = "pwm_vs";
+		};
+	};
+	bl_pwm_combo_1_vs_on_pins:bl_pwm_combo_1_vs_on_pin {
+		mux {
+			groups = "pwm_vs_z6";
+			function = "pwm_vs";
+		};
+	};
+	bl_pwm_combo_off_pins:bl_pwm_combo_off_pin {
+		mux {
+			groups = "GPIOZ_5", "GPIOZ_6";
+			function = "gpio_periphs";
+			output-low;
+		};
+	};
 }; /* end of pinctrl_periphs */
 
 &audio_data{
