@@ -292,6 +292,22 @@
 			alignment = <0x400000>;
 		};
 
+		dmaheap_cma_reserved:heap-gfx {
+			compatible = "shared-dma-pool";
+			reusable;
+			/* 1080p TV androidT size 88M */
+			size = <0x5800000>;
+			alignment = <0x400000>;
+		};
+
+		dmaheap_fb_reserved:heap-fb {
+			compatible = "shared-dma-pool";
+			reusable;
+			/* 1080p TV androidT size 36M */
+			size = <0x2400000>;
+			alignment = <0x400000>;
+		};
+
 		codec_mm_cma:linux,codec_mm_cma {
 			compatible = "shared-dma-pool";
 			reusable;
