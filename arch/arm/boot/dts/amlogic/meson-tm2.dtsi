@@ -390,9 +390,10 @@
 	};//End provisionkey
 
 	ion_dev {
-		compatible = "amlogic, ion_dev";
 		status = "disabled";
-		//memory-region = <&ion_cma_reserved>;
+		compatible = "amlogic, ion_dev";
+		memory-region = <&ion_cma_reserved
+				&ion_fb_reserved>;
 	};
 
 	vpu {
