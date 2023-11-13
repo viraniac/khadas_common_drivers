@@ -9,6 +9,7 @@
 #include <dt-bindings/power/tm2-pd.h>
 #include <dt-bindings/mailbox/tm2-mbox.h>
 #include "mesong12a-bifrost.dtsi"
+#include <dt-bindings/firmware/amlogic,firmware.h>
 
 / {
 	compatible = "amlogic,tm2";
@@ -836,25 +837,38 @@
 		status = "disabled";
 	};
 
-	hifi4dsp: hifi4dsp {
-		compatible = "amlogic, hifi4dsp";
-		memory-region = <&dsp_fw_reserved>;
-		reg = <0 0xff680000 0 0x114>,   /*dspa base address*/
-			<0 0xff690000 0 0x114>;   /*dspb base address*/
-		reg-names = "dspa_top_reg", "dspb_top_reg";
-		clocks = <&clkc CLKID_DSPA_MUX>, <&clkc CLKID_DSPB_MUX>;
-		clock-names = "dspa_clk", "dspb_clk";
-		dsp-start-mode = <0>; /*0:scpi start mode,1:smc start mode*/
-		dsp-cnt = <2>;
-		dspaoffset = <0>;
-		dspboffset = <0x800000>;
-		bootlocation = <1>;   /*1: boot from DDR, 2: from sram, 3...*/
-		boot_sram_addr = <0xfff00000>;
-		boot_sram_size = <0x80000>;
-		power-domains = <&pwrc PWRC_TM2_DSPA_ID>,
-				<&pwrc PWRC_TM2_DSPB_ID>;
-		power-domain-names = "dspa", "dspb";
-		status = "disabled";
+	hifidsp0: hifidsp0 {
+		compatible = "amlogic, hifidsp0";
+		status = "okay";
+		startup-position = /bits/ 8 <PURE_DDR>; /*host dsp start mode : DDR*/
+		memory-region = <&dsp_fw_reserved0>;
+		reg-names = "base-reg",
+			    "ddrfw-region";
+		reg = <0x0 0xff680000 0x0 0x114>, /*host base reg address*/
+		      <0x0 0x0 0x0 0xa00000>; /*host ddrfw region [offset size]*/
+		clocks = <&clkc CLKID_DSPA_MUX>;
+		clock-names = "dspa_clk";
+		mbox-names = "init_dsp";
+		mboxes = <&mbox_pl0 TM2_REE2AO_HIFI4DSPA>;
+		power-domains = <&pwrc  PWRC_TM2_DSPA_ID>;
+		clkfreq-khz = <400000>;
+	};
+
+	hifidsp1: hifidsp1 {
+		compatible = "amlogic, hifidsp1";
+		status = "okay";
+		startup-position = /bits/ 8 <PURE_DDR>; /*host dsp start mode : DDR*/
+		memory-region = <&dsp_fw_reserved1>;
+		reg-names = "base-reg",
+			    "ddrfw-region";
+		reg = <0x0 0xff690000 0x0 0x114>, /*host base reg address*/
+		      <0x0 0x0 0x0 0x600000>; /*host ddrfw region [offset size]*/
+		clocks = <&clkc CLKID_DSPB_MUX>;
+		clock-names = "dspb_clk";
+		mbox-names = "init_dsp";
+		mboxes = <&mbox_pl0 TM2_REE2AO_HIFI4DSPB>;
+		power-domains = <&pwrc  PWRC_TM2_DSPB_ID>;
+		clkfreq-khz = <400000>;
 	};
 
 	lut_dma:lut_dma {
