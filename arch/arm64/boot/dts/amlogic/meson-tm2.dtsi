@@ -282,7 +282,7 @@
 
 	vout: vout {
 		compatible = "amlogic, vout";
-		status = "disabled";
+		status = "okay";
 
 		/* fr_policy:
 		 *    0: disable
@@ -658,7 +658,7 @@
 	meson-amvideom {
 		compatible = "amlogic, amvideom-tm2-revb";
 		dev_name = "amvideom";
-		status = "disabled";
+		status = "okay";
 		interrupts = <0 3 1>;
 		interrupt-names = "vsync";
 	};
