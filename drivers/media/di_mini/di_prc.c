@@ -5428,9 +5428,11 @@ void dip_init_pq_ops(void)
 
 	/* hw l1 ops*/
 	if (IS_IC_EF(ic_id, SC2)) {
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 		if (IS_IC_EF(ic_id, T7))
 			get_datal()->hop_l1 = &dim_ops_l1_v4;
 		else
+#endif
 			get_datal()->hop_l1 = &dim_ops_l1_v3;
 		di_attach_ops_v3(&get_datal()->hop_l2);
 	} else {

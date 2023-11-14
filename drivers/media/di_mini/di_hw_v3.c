@@ -545,6 +545,7 @@ void di_mif1_linear_rd_cfg(struct DI_SIM_MIF_S *mif,
 	dbg_ic("reg[0x%x] = 0x%x\n", BADDR, op->rd(BADDR));
 }
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 static void di_mif1_linear_wr_cfg(struct DI_SIM_MIF_S *mif,
 			   unsigned int STRIDE,
 			   unsigned int BADDR)
@@ -561,6 +562,7 @@ static void di_mif1_linear_wr_cfg(struct DI_SIM_MIF_S *mif,
 	dbg_ic("\treg[0x%x] = 0x%x\n", STRIDE, op->rd(STRIDE));
 	dbg_ic("\treg[0x%x] = 0x%x\n", BADDR, op->rd(BADDR));
 }
+#endif
 
 void di_mif1_linear_wr_cfgds(unsigned long addr, unsigned int STRIDE,
 			   unsigned int BADDR)
@@ -600,6 +602,7 @@ void di_mcmif_linear_rd_cfg(struct DI_MC_MIF_s *mif,
 	dbg_ic("reg[0x%x] = 0x%x\n", BADDR, op->rd(BADDR));
 }
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 static void di_mcmif_linear_wr_cfg(struct DI_MC_MIF_s *mif,
 			   unsigned int STRIDE,
 			   unsigned int BADDR)
@@ -756,6 +759,7 @@ static void pre_enable_mc_t7(struct DI_MC_MIF_s *mcinford_mif,
 	DIM_RDMA_WR_BITS(MCINFWR_CAN_SIZE, mcinfowr_mif->size_x, 16, 13);
 	di_mcmif_linear_wr_cfg(mcinfowr_mif, MCINFWR_STRIDE, MCINFWR_BADDR);
 }
+#endif
 
 /*************************************************/
 
@@ -5761,6 +5765,7 @@ const struct dim_hw_opsv_s dim_ops_l1_v3 = {
 	},
 };
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 const struct dim_hw_opsv_s dim_ops_l1_v4 = { //for t7
 	.info = {
 		.name = "l1_t7",
@@ -5822,6 +5827,7 @@ const struct dim_hw_opsv_s dim_ops_l1_v4 = { //for t7
 	.reg_mif_wr_bits_tab = &reg_bits_wr[0],
 	.rtab_contr_bits_tab = &rtab_sc2_contr_bits_tab[0],
 };
+#endif
 
 static const struct hw_ops_s dim_hw_v3_ops = {
 	.info	= {
