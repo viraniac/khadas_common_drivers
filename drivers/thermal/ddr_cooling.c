@@ -138,7 +138,7 @@ static int ddr_get_requested_power(struct thermal_cooling_device *cdev,
 	mutex_lock(&cdev->lock);
 	list_for_each_entry(instance, &cdev->thermal_instances, cdev_node) {
 		tz = instance->tz;
-		if (cdev->ops && cdev->ops->set_cur_state && instance->trip == THERMAL_TRIP_HOT)
+		if (cdev->ops && cdev->ops->set_cur_state)
 			*power = (u32)cdev_calc_next_state_by_temp(instance, tz->temperature);
 	}
 	mutex_unlock(&cdev->lock);

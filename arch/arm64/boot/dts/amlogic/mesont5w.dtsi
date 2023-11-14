@@ -1980,13 +1980,15 @@
 			compatible = "amlogic, meson-cooldev";
 			cooling_devices {
 				ddr_cool {
-					ddr_reg = <0xff6384b4>;
-					ddr_status = <3>;
-					ddr_bits = <8 15>;
-					ddr_data = <0x4c 0x26 0x13>;
-					node_name = "ddr_cool0";
-					device_type = "ddr";
-				};
+				ddr_reg = <0xff6384b4 0xff638648>;
+				ddr_status = <13>;
+				ddr_bits = <8 15>, <0 8>;
+				ddr_data = <152 152 152 120 94 76 76 60 60 46 46 38 18>;
+				gpu_data = <0x33 0x33 0x33 0x33 0x33 0x33 0x33 0x33 0x33
+					0x33 0x33 0x33 0x33>;
+				node_name = "ddr_cool0";
+				device_type = "ddr";
+			};
 				cpucore_cool_cluster0 {
 					cluster_id = <0>;
 					node_name = "cpucore0";
@@ -2024,8 +2026,8 @@
 						type = "passive";
 					};
 					pddr_change: trip-point@2 {
-						temperature = <90000>;
-						hysteresis = <10000>;
+						temperature = <55000>;
+						hysteresis = <5000>;
 						type = "hot";
 					};
 					pcritical: trip-point@3 {
