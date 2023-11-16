@@ -72,6 +72,7 @@ dtb-y += t3x_reva_t968d4_bc309.dtb
 dtb-y += t3x_reva_t968d4_bc302.dtb
 dtb-y += t3x_t968d4_bc309.dtb
 dtb-y += t3x_t968d4_bc302.dtb
+dtb-y += t3x_t968d4_bc302_multidisplay.dtb
 dtb-y += t7c_a311d2_an400_linux_drm_hdmitx_only_debian.dtb
 dtb-y += t7_a311d2_an400_drm_hdmitx_only_debian.dtb
 dtb-y += meson-c1-c308x-ae400.dtb
