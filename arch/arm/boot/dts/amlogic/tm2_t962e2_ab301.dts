@@ -563,9 +563,6 @@
 
 		avout_mute-gpios = <&gpio GPIODV_3 GPIO_ACTIVE_HIGH>;
 
-		interrupts = <GIC_SPI 235 IRQ_TYPE_EDGE_RISING>;
-		interrupt-names = "audio_exception64";
-
 		aml-audio-card,dai-link@0 {
 			format = "i2s";
 			mclk-fs = <256>;
@@ -594,8 +591,8 @@
 			};
 			tdmacodec: codec {
 				//sound-dai = <&dummy_codec>;
-				prefix-names = "AMP", "AMP1";
-				sound-dai = <&ad82584f &ad82584f1 &tl1_codec>;
+				prefix-names = "AMP";
+				sound-dai = <&tas5805 &tl1_codec>;
 			};
 		};
 
@@ -710,6 +707,7 @@
 			};
 		};
 
+#if 0
 		aml-audio-card,dai-link@7 {
 			mclk-fs = <256>;
 			suffix-name = "alsaPORT-earc";
@@ -721,6 +719,7 @@
 				sound-dai = <&dummy_codec>;
 			};
 		};
+#endif
 
 		aml-audio-card,dai-link@8 {
 			mclk-fs = <256>;
@@ -1207,7 +1206,7 @@
 		/* enable control gain */
 		ctrl_gain = <1>;
 
-		status = "disabled";
+		status = "okay";
 
 		/* !!!For --TV platform-- ONLY */
 		Channel_Mask {
@@ -1231,7 +1230,7 @@
 		/* enable control gain */
 		ctrl_gain = <1>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	tdmc:tdm@2 {
@@ -1252,7 +1251,7 @@
 		/* enable control gain */
 		ctrl_gain = <1>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	tdmlb:tdm@3 {
@@ -1301,7 +1300,7 @@
 		 */
 		lb-src-sel = <1>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	pdm:pdm {
@@ -1325,7 +1324,7 @@
 		/* mode 0~4, defalut:1 */
 		filter_mode = <1>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	spdifa:spdif@0 {
@@ -1347,8 +1346,9 @@
 
 		pinctrl-names = "spdif_pins",
 				"spdif_pins_mute";
-		pinctrl-0 = <&spdifin_a>;
-		//pinctrl-1 = <&spdifout_a_mute>;
+
+		pinctrl-0 = <&spdifout_a>;
+		pinctrl-1 = <&spdifout_a_mute>;
 
 		/*
 		 * whether do asrc for pcm and resample a or b
@@ -1367,7 +1367,7 @@
 
 		/*spdif clk tuning enable*/
 		clk_tuning_enable = <1>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	spdifb:spdif@1 {
@@ -1380,7 +1380,7 @@
 		clock-names = "sysclk",
 				"gate_spdifout", "clk_spdifout";
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	extn:extn {
@@ -1391,7 +1391,7 @@
 				<GIC_SPI 158 IRQ_TYPE_EDGE_RISING>;
 		interrupt-names = "irq_frhdmirx";
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	aed:effect {
@@ -1416,7 +1416,7 @@
 		/* max 0xff, each bit for one channel */
 		channel_mask = <0xff>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	asrca: resample@0 {
@@ -1442,7 +1442,7 @@
 		 */
 		resample_module = <8>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	asrcb: resample@1 {
@@ -1453,8 +1453,10 @@
 		clock-names = "resample_pll", "resample_src", "resample_clk";
 
 		/*this resample is only used for loopback_A.*/
+		/*only support 16000 or 48000Hz for capture*/
+		capture_sample_rate = <16000>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	vad:vad {
@@ -1490,7 +1492,7 @@
 		 */
 		level = <1>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	loopbacka:loopback@0 {
@@ -1545,7 +1547,7 @@
 		/* config which data pin as loopback */
 		datalb-lane-mask-in = <1 0 0 0>;
 
-		status = "disabled";
+		status = "okay";
 	};
 
 	loopbackb:loopback@1 {
@@ -1612,19 +1614,18 @@
 	/* audio pin mux */
 
 	tdma_mclk: tdma_mclk {
-		mux { /* GPIOH_4 */
-			groups = "mclk0_h";
+		mux { /* GPIOZ_0 */
+			groups = "mclk0_z";
 			function = "mclk0";
 			drive-strength = <1>;
 		};
 	};
 
 	tdmout_a: tdmout_a {
-		mux { /* GPIOH_5, GPIOH_6, GPIOH_7, GPIOH_8*/
-			groups = "tdma_fs_h",
-				"tdma_sclk_h",
-				"tdma_dout0_h",
-				"tdma_dout1_h";
+		mux { /* GPIOZ_1, GPIOZ_2, GPIOZ_3*/
+			groups = "tdma_sclk_z",
+				"tdma_fs_z",
+				"tdma_dout0_z";
 			function = "tdma_out";
 			drive-strength = <1>;
 			bias-pull-down;
@@ -1680,10 +1681,10 @@
 	};
 
 	pdmin: pdmin {
-		mux { /* GPIOZ_7, GPIOZ_8, GPIOZ_10 */
+		mux { /* GPIOZ_7, GPIOZ_8, pdm_din2_z4 */
 			groups = "pdm_dclk_z",
 				"pdm_din0_z",
-				"pdm_din2_z10";
+				"pdm_din2_z4";
 			function = "pdm";
 		};
 	};
@@ -1746,10 +1747,34 @@
 	};
 }; /* end of pinctrl_periphs */
 
+&ao_pinctrl {
+	spdifout: spdifout {
+		mux { /* gpiao_10 */
+			groups = "spdif_out_ao";
+			function = "spdif_out_ao";
+		};
+	};
+};  /* end of pinctrl_aobus */
 &audio_data{
-	status = "disabled";
+	status = "okay";
 };
 
+&i2c2 {
+	status = "okay";
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&i2c2_z_pins>;
+	pinctrl-1 = <&i2c2_z_pins_slp_input>;
+	clock-frequency = <400000>;
+
+	tas5805: tas5805@2e {
+		compatible = "ti,tas5805";
+		#sound-dai-cells = <0>;
+		codec_name = "tas5805";
+		reg = <0x2e>;
+		reset_pin = <&gpio_ao GPIOAO_6 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+};
 &i2c3 {
 	status = "disabled";
 	pinctrl-names="default";

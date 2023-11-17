@@ -75,21 +75,22 @@
 		compatible = "amlogic, audio_data";
 		mem_in_base_cmd = <0x82000020>;
 		query_licence_cmd = <0x82000050>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	dummy_codec:dummy {
 		#sound-dai-cells = <0>;
 		compatible = "amlogic, aml_dummy_codec";
-		status = "disabled";
+		status = "okay";
 	};
 
 	tl1_codec:codec {
 		#sound-dai-cells = <0>;
 		compatible = "amlogic, tm2_revb_acodec";
 		power-domains = <&pwrc PWRC_TM2_ACODEC_ID>;
-		status = "disabled";
+		status = "okay";
 		reg = <0x0 0xff632000 0x0 0x1c>;
+		lane_offset = <4>;
 		tdmout_index = <0>;
 		tdmin_index = <0>;
 		dat1_ch_sel = <1>;
@@ -214,7 +215,7 @@
 		/* Sound iomap */
 		aml_snd_iomap {
 			compatible = "amlogic, snd-iomap";
-			status = "disabled";
+			status = "okay";
 			#address-cells=<2>;
 			#size-cells=<2>;
 			ranges;
