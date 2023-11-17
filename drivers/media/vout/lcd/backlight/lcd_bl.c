@@ -722,27 +722,13 @@ static void aml_bl_set_level(struct aml_bl_drv_s *bdrv, unsigned int level)
 		pwm0 = bdrv->bconf.bl_pwm_combo0;
 		pwm1 = bdrv->bconf.bl_pwm_combo1;
 
-		if (level >= pwm0->level_max) {
-			bl_pwm_set_level(bdrv, pwm0, pwm0->level_max);
-		} else if ((level > pwm0->level_min) &&
-			(level < pwm0->level_max)) {
-			if (lcd_debug_print_flag & LCD_DBG_PR_BL_ADV)
-				BLPR("pwm0 region, level=%u\n", level);
-			bl_pwm_set_level(bdrv, pwm0, level);
-		} else {
-			bl_pwm_set_level(bdrv, pwm0, pwm0->level_min);
-		}
+		if (lcd_debug_print_flag & LCD_DBG_PR_BL_ADV)
+			BLPR("pwm0 region, level=%u\n", level);
+		bl_pwm_set_level(bdrv, pwm0, level);
 
-		if (level >= pwm1->level_max) {
-			bl_pwm_set_level(bdrv, pwm1, pwm1->level_max);
-		} else if ((level > pwm1->level_min) &&
-			(level < pwm1->level_max)) {
-			if (lcd_debug_print_flag & LCD_DBG_PR_BL_ADV)
-				BLPR("pwm1 region, level=%u,\n", level);
-			bl_pwm_set_level(bdrv, pwm1, level);
-		} else {
-			bl_pwm_set_level(bdrv, pwm1, pwm1->level_min);
-		}
+		if (lcd_debug_print_flag & LCD_DBG_PR_BL_ADV)
+			BLPR("pwm1 region, level=%u\n", level);
+		bl_pwm_set_level(bdrv, pwm1, level);
 		break;
 #ifdef CONFIG_AMLOGIC_BL_LDIM
 	case BL_CTRL_LOCAL_DIMMING:
@@ -1232,18 +1218,10 @@ static int bl_config_load_from_dts(struct aml_bl_drv_s *bdrv)
 			pwm_combo1->level_max = BL_LEVEL_MID;
 			pwm_combo1->level_min = BL_LEVEL_MIN;
 		} else {
-			if (bdrv->brightness_bypass) {
-				pwm_combo0->level_max = bconf->level_max;
-				pwm_combo0->level_min = bconf->level_min;
-				pwm_combo1->level_max = bconf->level_max;
-				pwm_combo1->level_min = bconf->level_min;
-
-			} else {
-				pwm_combo0->level_max = para[0];
-				pwm_combo0->level_min = para[1];
-				pwm_combo1->level_max = para[2];
-				pwm_combo1->level_min = para[3];
-			}
+			pwm_combo0->level_max = para[0];
+			pwm_combo0->level_min = para[1];
+			pwm_combo1->level_max = para[2];
+			pwm_combo1->level_min = para[3];
 		}
 		ret = of_property_read_u32_array(child, "bl_pwm_combo_attr", &para[0], 8);
 		if (ret) {
@@ -1599,21 +1577,15 @@ static int bl_config_load_from_unifykey(struct aml_bl_drv_s *bdrv, char *key_nam
 		pwm_combo1->pwm_duty_max = *(p + LCD_UKEY_BL_PWM2_DUTY_MAX);
 		pwm_combo1->pwm_duty_min = *(p + LCD_UKEY_BL_PWM2_DUTY_MIN);
 
-		if (bdrv->brightness_bypass) {
-			pwm_combo0->level_max = bconf->level_max;
-			pwm_combo0->level_min = bconf->level_min;
-			pwm_combo1->level_max = bconf->level_max;
-			pwm_combo1->level_min = bconf->level_min;
-		} else {
-			pwm_combo0->level_max = (*(p + LCD_UKEY_BL_PWM_LEVEL_MAX) |
-				((*(p + LCD_UKEY_BL_PWM_LEVEL_MAX + 1)) << 8));
-			pwm_combo0->level_min = (*(p + LCD_UKEY_BL_PWM_LEVEL_MIN) |
-				((*(p + LCD_UKEY_BL_PWM_LEVEL_MIN + 1)) << 8));
-			pwm_combo1->level_max = (*(p + LCD_UKEY_BL_PWM2_LEVEL_MAX) |
-				((*(p + LCD_UKEY_BL_PWM2_LEVEL_MAX + 1)) << 8));
-			pwm_combo1->level_min = (*(p + LCD_UKEY_BL_PWM2_LEVEL_MIN) |
-				((*(p + LCD_UKEY_BL_PWM2_LEVEL_MIN + 1)) << 8));
-		}
+		pwm_combo0->level_max = (*(p + LCD_UKEY_BL_PWM_LEVEL_MAX) |
+			((*(p + LCD_UKEY_BL_PWM_LEVEL_MAX + 1)) << 8));
+		pwm_combo0->level_min = (*(p + LCD_UKEY_BL_PWM_LEVEL_MIN) |
+			((*(p + LCD_UKEY_BL_PWM_LEVEL_MIN + 1)) << 8));
+		pwm_combo1->level_max = (*(p + LCD_UKEY_BL_PWM2_LEVEL_MAX) |
+			((*(p + LCD_UKEY_BL_PWM2_LEVEL_MAX + 1)) << 8));
+		pwm_combo1->level_min = (*(p + LCD_UKEY_BL_PWM2_LEVEL_MIN) |
+			((*(p + LCD_UKEY_BL_PWM2_LEVEL_MIN + 1)) << 8));
+
 		pwm_combo0->pwm_duty = pwm_combo0->pwm_duty_min;
 		pwm_combo1->pwm_duty = pwm_combo1->pwm_duty_min;
 		bl_pwm_config_init(pwm_combo0);
