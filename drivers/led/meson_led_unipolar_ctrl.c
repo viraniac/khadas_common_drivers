@@ -15,7 +15,7 @@
 #include <linux/time.h>
 #include <linux/dma-mapping.h>
 #include <linux/leds.h>
-
+#include <linux/completion.h>
 // #define M_DEBUG
 
 #ifdef M_DEBUG
@@ -67,6 +67,7 @@ enum {
 #define RATIO_LOW_CODE_SET_MSK		GENMASK(10, 6)
 #define RATIO_CYCLE_SHIFT		0
 #define RATIO_CYCLE_MSK		GENMASK(5, 0)
+#define LED_TIMEOUT_MS		500
 
 struct meson_unipolar_ctrl {
 	struct device		*dev;
@@ -76,6 +77,7 @@ struct meson_unipolar_ctrl {
 	int irq;
 	uint led_num;
 	u8 *color_data;
+	struct completion	done;
 };
 
 #define MESON_UNIPOLAR_CTRL_CDEV_NAME		"unipolar_led"
@@ -91,18 +93,29 @@ static void meson_unipolar_ctrl_set_mask(struct meson_unipolar_ctrl *dcon_led, i
 	writel(data, dcon_led->regs + reg);
 }
 
-static void meson_unipolar_ctrl_xfer(struct meson_unipolar_ctrl *dcon_led)
+static int meson_unipolar_ctrl_xfer(struct meson_unipolar_ctrl *dcon_led)
 {
+	unsigned long time_left;
+
+	reinit_completion(&dcon_led->done);
 	meson_unipolar_ctrl_set_mask(dcon_led, LED_CONTROL_REG, CTRL_START, CTRL_START);
+	time_left = msecs_to_jiffies(LED_TIMEOUT_MS);
+	time_left = wait_for_completion_timeout(&dcon_led->done, time_left);
+
+	if (!time_left) {
+		dev_err(dcon_led->dev, "time out!\n");
+		return -ETIMEDOUT;
+	}
+
+	return 0;
 }
 
 static void meson_unipolar_ctrl_init(struct meson_unipolar_ctrl *dcon_led)
 {
-	/*disable interrupt*/
 	meson_unipolar_ctrl_set_mask(dcon_led,
 		LED_CONTROL_REG, CTRL_INTERRUPT_CLEAR, CTRL_INTERRUPT_CLEAR);
 	meson_unipolar_ctrl_set_mask(dcon_led,
-		LED_CONTROL_REG, CTRL_INTERRUPT_DISABLE, CTRL_INTERRUPT_DISABLE);
+		LED_CONTROL_REG, CTRL_INTERRUPT_CLEAR, 0);
 	/*set led num*/
 	meson_unipolar_ctrl_set_mask(dcon_led, LED_CONTROL_REG,
 		CTRL_LED_NUMS_MSK, (dcon_led->led_num - 1) << CTRL_LED_NUMS_SHIFT);
@@ -158,7 +171,7 @@ static void meson_unipolar_ctrl_put_data(struct meson_unipolar_ctrl *dcon_led)
 	spin_unlock(&dcon_led->lock);
 }
 
-static int meson_unipolar_ctrl_put_data_to_buffer(struct meson_unipolar_ctrl *dcon_led,
+static void meson_unipolar_ctrl_put_data_to_buffer(struct meson_unipolar_ctrl *dcon_led,
 			u8 buffer_id, u8 r_data, u8 g_data, u8 b_data)
 {
 	spin_lock(&dcon_led->lock);
@@ -172,13 +185,13 @@ static int meson_unipolar_ctrl_put_data_to_buffer(struct meson_unipolar_ctrl *dc
 	dcon_led->color_data[buffer_id + 2] = b_data;
 	spin_unlock(&dcon_led->lock);
 
-	return 0;
 }
 
 static int meson_unipolar_ctrl_set_singlecolors(u32 ledid,
 			struct meson_unipolar_ctrl *dcon_led, u32 color)
 {
 	u8 r_data, g_data, b_data;
+	int ret;
 
 	if (ledid > dcon_led->led_num - 1) {
 		dev_err(dcon_led->dev, "valid led id\n");
@@ -193,18 +206,23 @@ static int meson_unipolar_ctrl_set_singlecolors(u32 ledid,
 	meson_unipolar_ctrl_put_data_to_buffer(dcon_led,
 					ledid * COLOR_CHANNEL_NUM, r_data, g_data, b_data);
 	meson_unipolar_ctrl_put_data(dcon_led);
-	meson_unipolar_ctrl_xfer(dcon_led);
+	ret = meson_unipolar_ctrl_xfer(dcon_led);
+	if (ret)
+		return ret;
 
 	return 0;
 }
 
 static int meson_unipolar_ctrl_clear_all_colors(struct meson_unipolar_ctrl *dcon_led)
 {
+	int ret;
+
 	LEDCON_DBG("%s\n", __func__);
 	memset(dcon_led->color_data, 0, dcon_led->led_num * COLOR_CHANNEL_NUM);
 	meson_unipolar_ctrl_put_data(dcon_led);
-	meson_unipolar_ctrl_xfer(dcon_led);
-
+	ret = meson_unipolar_ctrl_xfer(dcon_led);
+	if (ret)
+		return ret;
 	return 0;
 }
 
@@ -313,7 +331,11 @@ static ssize_t colors_store(struct device *child,
 					(id_start + i) * COLOR_CHANNEL_NUM, r_data, g_data, b_data);
 	}
 	meson_unipolar_ctrl_put_data(dcon_led);
-	meson_unipolar_ctrl_xfer(dcon_led);
+	ret = meson_unipolar_ctrl_xfer(dcon_led);
+	if (ret) {
+		kfree(str_buff_);
+		return ret;
+	}
 	kfree(str_buff_);
 
 	return size;
@@ -337,8 +359,13 @@ static irqreturn_t meson_unipolar_led_irq(int irqno, void *dev_id)
 	struct meson_unipolar_ctrl *dcon_led = dev_id;
 
 	LEDCON_DBG("interrupt\n");
-	meson_unipolar_ctrl_set_mask(dcon_led, LED_CONTROL_REG,
-				CTRL_INTERRUPT_CLEAR, CTRL_INTERRUPT_CLEAR);
+	spin_lock(&dcon_led->lock);
+	meson_unipolar_ctrl_set_mask(dcon_led,
+		LED_CONTROL_REG, CTRL_INTERRUPT_CLEAR, CTRL_INTERRUPT_CLEAR);
+	meson_unipolar_ctrl_set_mask(dcon_led,
+		LED_CONTROL_REG, CTRL_INTERRUPT_CLEAR, 0);
+	complete(&dcon_led->done);
+	spin_unlock(&dcon_led->lock);
 
 	return IRQ_HANDLED;
 }
@@ -348,6 +375,7 @@ void meson_unipolar_set_brightness(struct led_classdev *led_cdev,
 {
 	struct meson_unipolar_ctrl *dcon_led = container_of(led_cdev,
 			struct meson_unipolar_ctrl, cdev);
+
 	memset(dcon_led->color_data, brightness, dcon_led->led_num * COLOR_CHANNEL_NUM);
 	meson_unipolar_ctrl_put_data(dcon_led);
 	meson_unipolar_ctrl_xfer(dcon_led);
@@ -367,6 +395,7 @@ static int unipolar_ctrl_probe(struct platform_device *pdev)
 	dcon_led->dev = &pdev->dev;
 	platform_set_drvdata(pdev, dcon_led);
 	spin_lock_init(&dcon_led->lock);
+	init_completion(&dcon_led->done);
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	LEDCON_DBG("request mem start:0x%x, end:0x%x\n",
@@ -406,8 +435,6 @@ static int unipolar_ctrl_probe(struct platform_device *pdev)
 		dcon_led->led_num * COLOR_CHANNEL_NUM, GFP_KERNEL);
 	if (!dcon_led->color_data)
 		return -ENOMEM;
-	/* Disable the interrupt so that the system can enter low-power mode */
-	// disable_irq(dcon_led->irq);
 	meson_unipolar_ctrl_init(dcon_led);
 	dcon_led->cdev.name = MESON_UNIPOLAR_CTRL_CDEV_NAME;
 	dcon_led->cdev.brightness = 0;
