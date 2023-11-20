@@ -523,7 +523,7 @@
 	dvb-demux {
 		compatible = "amlogic, dvb-demux";
 		dev_name = "dvb-demux";
-		status = "disabled";
+		status = "okay";
 
 		dmx = <&demux>;
 		key_endia = <1>;
@@ -532,16 +532,16 @@
 		add_asyncfifo = <1>;
 
 		/*"parallel","serial","disable"*/
-		ts2 = "parallel";
-		ts2_control = <0>;
-		ts2_invert = <0>;
+		//ts2 = "parallel";
+		//ts2_control = <0>;
+		//ts2_invert = <0>;
 
 		clocks = <&clkc CLKID_DEMUX
 		&clkc CLKID_AHB_ARB0
 		&clkc CLKID_U_PARSER>;
 		clock-names = "demux", "ahbarb0", "parser_top";
-		pinctrl-names = "p_ts2";
-		pinctrl-0 = <&dvb_p_ts2_pins>;
+		//pinctrl-names = "p_ts2";
+		//pinctrl-0 = <&dvb_p_ts2_pins>;
 	};
 
 	tvafe_avin_detect {
