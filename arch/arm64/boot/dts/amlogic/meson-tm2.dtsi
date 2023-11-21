@@ -8,6 +8,7 @@
 #include <dt-bindings/clock/tm2-clkc.h>
 #include <dt-bindings/power/tm2-pd.h>
 #include <dt-bindings/mailbox/tm2-mbox.h>
+#include "mesong12a-bifrost.dtsi"
 
 / {
 	compatible = "amlogic,tm2";
@@ -1075,7 +1076,25 @@
 };
 
 &gpu{
-	operating-points-v2 = <&gpu_opp_table>;
+	status = "okay";
+	clocks = <&clkc CLKID_MALI>;
+	clock-names = "gpu_mux";
+
+	/*
+	 * Mali clocking is provided by two identical clock paths
+	 * MALI_0 and MALI_1 muxed to a single clock by a glitch
+	 * free mux to safely change frequency while running.
+	 */
+	assigned-clocks = <&clkc CLKID_MALI_0_SEL>,
+			  <&clkc CLKID_MALI_0>,
+			  <&clkc CLKID_MALI>; /* Glitch free mux */
+	assigned-clock-parents = <&clkc CLKID_FCLK_DIV4>,
+				 <0>, /* Do Nothing */
+				 <&clkc CLKID_MALI_0>;
+	assigned-clock-rates = <0>, /* Do Nothing */
+				   <500000000>,
+				   <0>; /* Do Nothing */
+
 	tbl =  <&dvfs285_cfg
 		&dvfs400_cfg
 		&dvfs500_cfg
