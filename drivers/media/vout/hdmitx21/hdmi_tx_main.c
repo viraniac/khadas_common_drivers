@@ -2611,6 +2611,12 @@ static ssize_t dsc_en_store(struct device *dev,
 	return count;
 }
 
+static ssize_t clkmsr_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
+{
+	return _show21_clkmsr(buf);
+}
+
 static ssize_t hdcp_ver_show(struct device *dev,
 			      struct device_attribute *attr, char *buf)
 {
@@ -2918,6 +2924,7 @@ static DEVICE_ATTR_RW(filter_hdcp_off_period);
 static DEVICE_ATTR_RW(not_restart_hdcp);
 static DEVICE_ATTR_RW(frl_rate);
 static DEVICE_ATTR_RW(dsc_en);
+static DEVICE_ATTR_RO(clkmsr);
 
 static int hdmitx21_pre_enable_mode(struct hdmitx_common *tx_comm, struct hdmi_format_para *para)
 {
@@ -3839,6 +3846,7 @@ static int amhdmitx_probe(struct platform_device *pdev)
 	ret = device_create_file(dev, &dev_attr_need_filter_hdcp_off);
 	ret = device_create_file(dev, &dev_attr_filter_hdcp_off_period);
 	ret = device_create_file(dev, &dev_attr_not_restart_hdcp);
+	ret = device_create_file(dev, &dev_attr_clkmsr);
 
 	/*platform related functions*/
 	tx_event_mgr = hdmitx_event_mgr_create(pdev, hdev->hdtx_dev);
@@ -4016,6 +4024,7 @@ static int amhdmitx_remove(struct platform_device *pdev)
 	device_remove_file(dev, &dev_attr_need_filter_hdcp_off);
 	device_remove_file(dev, &dev_attr_filter_hdcp_off_period);
 	device_remove_file(dev, &dev_attr_not_restart_hdcp);
+	device_remove_file(dev, &dev_attr_clkmsr);
 	cdev_del(&hdev->cdev);
 
 	device_destroy(hdmitx_class, hdev->hdmitx_id);
