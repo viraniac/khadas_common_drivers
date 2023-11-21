@@ -411,7 +411,7 @@
 		quality = /bits/ 16 <1000>;
 	};
 
-	ion_dev {
+	ion_dev: ion_dev {
 		status = "disabled";
 		compatible = "amlogic, ion_dev";
 		memory-region = <&ion_cma_reserved
