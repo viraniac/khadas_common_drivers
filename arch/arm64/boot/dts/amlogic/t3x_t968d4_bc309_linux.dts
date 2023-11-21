@@ -1749,6 +1749,13 @@
 		reg = <0x20>;
 		status = "okay";
 	};
+
+	lcd_extern_i2c3: lcd_extern_i2c@36 {
+		compatible = "lcd_ext, i2c";
+		dev_name = "i2c_CS603";
+		reg = <0x36>;
+		status = "okay";
+	};
 };
 
 /* SDIO */
