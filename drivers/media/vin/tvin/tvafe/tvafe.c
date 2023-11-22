@@ -1701,6 +1701,7 @@ static struct meson_tvafe_data meson_tm2_b_tvafe_data = {
 
 	.cvbs_pq_conf = NULL,
 	.rf_pq_conf = NULL,
+	.atv_dmd_sys_clk = HHI_ANA_CLK_BASE,
 };
 
 static struct meson_tvafe_data meson_t5_tvafe_data = {
@@ -1994,7 +1995,8 @@ static int tvafe_drv_probe(struct platform_device *pdev)
 	if (ret == 0)
 		tvafe_pr_info("find tvafe_function_sel: 0x%x\n", tdevp->tvafe_function_sel);
 
-	if ((tvafe_cpu_type() == TVAFE_CPU_TYPE_T5) ||
+	if ((tvafe_cpu_type() == TVAFE_CPU_TYPE_TM2) ||
+	    (tvafe_cpu_type() == TVAFE_CPU_TYPE_T5) ||
 	    (tvafe_cpu_type() == TVAFE_CPU_TYPE_T5D) ||
 	    (tvafe_cpu_type() == TVAFE_CPU_TYPE_T5W))
 		sys_clk_reg_base = HHI_ANA_CLK_BASE;
