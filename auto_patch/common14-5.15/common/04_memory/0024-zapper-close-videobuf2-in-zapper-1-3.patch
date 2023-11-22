@@ -1,0 +1,49 @@
+From de3edfa00d22cd6a3e843cc220e008895d647445 Mon Sep 17 00:00:00 2001
+From: Hao Shi <hao.shi@amlogic.com>
+Date: Mon, 4 Dec 2023 02:06:27 +0000
+Subject: [PATCH] zapper: close videobuf2 in zapper [1/3]
+
+PD#SWPL-147419
+
+Problem:
+Zapper optimization v4l2.
+
+Solution:
+close related VIDEOBUF2.
+
+Verify:
+BG201
+
+Change-Id: I525eb07d67b8d2c740a2786138764309101f46fa
+Signed-off-by: Hao Shi <hao.shi@amlogic.com>
+---
+ init/Kconfig.gki | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/init/Kconfig.gki b/init/Kconfig.gki
+index 8d53c862642a..7c59e28f999a 100644
+--- a/init/Kconfig.gki
++++ b/init/Kconfig.gki
+@@ -86,7 +86,7 @@ config GKI_HIDDEN_QCOM_CONFIGS
+ 
+ config GKI_HIDDEN_MEDIA_CONFIGS
+ 	bool "Hidden Media configs needed for GKI"
+-	select VIDEOBUF2_CORE
++	select VIDEOBUF2_CORE if ! AMLOGIC_ZAPPER_CUT
+ 	select V4L2_MEM2MEM_DEV if ! AMLOGIC_ZAPPER_CUT
+ 	select MEDIA_CONTROLLER
+ 	select MEDIA_CONTROLLER_REQUEST_API
+@@ -95,8 +95,8 @@ config GKI_HIDDEN_MEDIA_CONFIGS
+ 	select CEC_CORE if !AMLOGIC_ZAPPER_CUT
+ 	select CEC_NOTIFIER if !AMLOGIC_ZAPPER_CUT
+ 	select CEC_PIN if !AMLOGIC_ZAPPER_CUT
+-	select VIDEOBUF2_DMA_CONTIG
+-	select VIDEOBUF2_DMA_SG
++	select VIDEOBUF2_DMA_CONTIG if ! AMLOGIC_ZAPPER_CUT
++	select VIDEOBUF2_DMA_SG if ! AMLOGIC_ZAPPER_CUT
+ 	help
+ 	  Dummy config option used to enable hidden media configs.
+ 	  These are normally selected implicitly when a module
+-- 
+2.25.1
+
