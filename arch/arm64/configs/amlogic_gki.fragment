@@ -109,6 +109,9 @@ CONFIG_AMLOGIC_COMMON_CLK_TM2=m
 # amlogic-aoclk-soc-ao-t5w.ko
 CONFIG_AMLOGIC_COMMON_AO_CLK_TM2=m
 
+# amlogic-clk-soc-s7d.ko
+CONFIG_AMLOGIC_COMMON_CLK_S7D=m
+
 # amlogic-pinctrl-soc-s4.ko
 CONFIG_AMLOGIC_PINCTRL_MESON_S4=m
 
