@@ -55,6 +55,7 @@
 		dmc_reserved:linux,dmc_monitor {
 			compatible = "amlogic,dmc_monitor-reserved";
 			reg = <0x0 0x0>;
+			status = "disabled";
 		};
 
 		debug_reserved:linux,iotrace {
@@ -85,12 +86,14 @@
 
 		ion_cma_reserved:linux,ion-dev {
 			compatible = "shared-dma-pool";
+			status = "disabled";
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
 		};
 		ion_fb_reserved:linux,ion-fb {
 			compatible = "shared-dma-pool";
+			status = "disabled";
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
@@ -103,6 +106,7 @@
 		};
 		dmaheap_fb_reserved:heap-fb {
 			compatible = "shared-dma-pool";
+			status = "disabled";
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
@@ -125,6 +129,7 @@
 		/*  POST PROCESS MANAGER */
 		ppmgr_reserved:linux,ppmgr {
 			compatible = "shared-dma-pool";
+			status = "disabled";
 			size = <0x0>;
 		};
 
@@ -140,6 +145,7 @@
 		/* codec shared reserved */
 		codec_mm_reserved:linux,codec_mm_reserved {
 			compatible = "amlogic, codec-mm-reserved";
+			status = "disabled";
 			size = <0x0>;
 			alignment = <0x100000>;
 			//no-map;
@@ -158,6 +164,7 @@
 		/*  vdin1 CMA pool */
 		vdin1_cma_reserved:linux,vdin1_cma {
 			compatible = "shared-dma-pool";
+			status = "disabled";
 			reusable;
 			/* 420 mode:1280x720x2x4=8MB */
 			/* 444 mode:1280x720x3x4=12MB */
