@@ -123,6 +123,7 @@ MODULE_AMLOG(LOG_LEVEL_ERROR, 0, LOG_DEFAULT_LEVEL_DESC, LOG_MASK_DESC);
 #include <linux/amlogic/media/amprime_sl/prime_sl.h>
 #endif
 #include <linux/amlogic/media/video_processor/video_pp_common.h>
+#include <linux/amlogic/media/video_processor/di_proc_buf_mgr.h>
 
 #include <linux/math64.h>
 #include "video_receiver.h"
@@ -4280,7 +4281,8 @@ void hdmi_in_delay_maxmin_new(struct vframe_s *vf)
 	u64 ext_delay = 0;
 	u32 vdin_buf_count = 0;
 	u32 dv_flag = 0;
-
+	bool di_backend_en = false;
+	int display_path_count = DIS_PATH_DELAY_COUNT;
 	if (!tvin_delay_mode)
 		return;
 
@@ -4308,6 +4310,13 @@ void hdmi_in_delay_maxmin_new(struct vframe_s *vf)
 #ifdef CONFIG_AMLOGIC_MEDIA_VDIN
 	vdin_keep_count += get_vdin_add_delay_num();
 #endif
+	di_backend_en = get_di_proc_enable();
+	if (di_backend_en) {
+		vdin_keep_count += 1;
+		di_keep_count = 0;
+		if (vf->type_original & VIDTYPE_INTERLACE)
+			display_path_count += 1;
+	}
 
 	vdin_vsync = vf->duration;
 	vdin_vsync = vdin_vsync * 1000;
@@ -4337,7 +4346,7 @@ void hdmi_in_delay_maxmin_new(struct vframe_s *vf)
 	 *vdin vsync before vpp vsync about 7ms
 	 */
 	hdmin_delay_min = (vdin_keep_count + di_keep_count) * vdin_vsync +
-		DIS_PATH_DELAY_COUNT * vpp_vsync + ext_delay;
+		display_path_count * vpp_vsync + ext_delay;
 	hdmin_delay_min_ms = div64_u64(hdmin_delay_min, 1000);
 	hdmin_delay_min_ms += memc_delay;
 
@@ -4363,13 +4372,12 @@ void hdmi_in_delay_maxmin_new(struct vframe_s *vf)
 		vdin_buf_count = VDIN_BUF_COUNT;
 	}
 #endif
-	if (di_has_vdin_vf || !do_di) {
-		vdin_count = vdin_buf_count - 3 - DIS_PATH_DELAY_COUNT - 1;
-		vpp_count = DIS_PATH_DELAY_COUNT + 1;
+	if (di_has_vdin_vf || !do_di || di_backend_en) {
+		vdin_count = vdin_buf_count - 3 - display_path_count - 1;
+		vpp_count = display_path_count + 1;
 	} else {
-		vdin_count = DI_MAX_OUT_COUNT - 2 +
-			vdin_buf_count - 2 - di_keep_count;
-		vpp_count = DIS_PATH_DELAY_COUNT + 1;
+		vdin_count = DI_MAX_OUT_COUNT - 2 + vdin_buf_count - 2 - di_keep_count;
+		vpp_count = display_path_count + 1;
 	}
 	hdmin_delay_max = vdin_count * vdin_vsync + vpp_count * vpp_vsync;
 	hdmin_delay_max_ms = div64_u64(hdmin_delay_max, 1000);
@@ -4378,6 +4386,9 @@ void hdmi_in_delay_maxmin_new(struct vframe_s *vf)
 	if (debug_flag & DEBUG_FLAG_HDMI_AVSYNC_DEBUG) {
 		pr_info("%s: di_has_vdin_vf=%d, do_di =%d.\n", __func__, di_has_vdin_vf, do_di);
 		pr_info("%s: range(%d, %d).\n", __func__, hdmin_delay_min_ms, hdmin_delay_max_ms);
+		pr_info("%s: vdin_keep_count=%d, di_keep_count=%d, display_path_count=%d.\n",
+			__func__, vdin_keep_count, di_keep_count, display_path_count);
+		pr_info("%s: vdin_count=%d, vpp_count=%d.\n", __func__, vdin_count, vpp_count);
 	}
 }
 
@@ -4397,6 +4408,8 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 	int vdin_keep_count = VDIN_KEEP_COUNT;
 	u64 ext_delay = 0;
 	u32 vdin_buf_count = 0;
+	bool di_backend_en = false;
+	int display_path_count = DIS_PATH_DELAY_COUNT;
 
 	if (!tvin_info->is_dv && tvin_info->width <= 3840 &&
 		tvin_info->cfmt == TVIN_YUV422) {
@@ -4414,6 +4427,13 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 #ifdef CONFIG_AMLOGIC_MEDIA_VDIN
 	vdin_keep_count += get_vdin_add_delay_num();
 #endif
+	di_backend_en = get_di_proc_enable();
+	if (di_backend_en) {
+		vdin_keep_count += 1;
+		di_keep_count = 0;
+		if (tvin_info->scan_mode == TVIN_SCAN_MODE_INTERLACED)
+			display_path_count += 1;
+	}
 
 	vdin_vsync = div64_u64(1000 * 1000, tvin_info->fps);
 
@@ -4439,7 +4459,7 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 	 *vdin vsync before vpp vsync about 7ms
 	 */
 	hdmin_delay_min = (vdin_keep_count + di_keep_count) * vdin_vsync +
-		DIS_PATH_DELAY_COUNT * vpp_vsync + ext_delay;
+		display_path_count * vpp_vsync + ext_delay;
 	hdmin_delay_min_ms = div64_u64(hdmin_delay_min, 1000);
 	hdmin_delay_min_ms += memc_delay;
 
@@ -4462,13 +4482,12 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 		pr_info("%s:Get count failed, use default value.\n", __func__);
 		vdin_buf_count = VDIN_BUF_COUNT;
 	}
-	if (di_has_vdin_vf || !do_di) {
-		vdin_count = vdin_buf_count - 3 - DIS_PATH_DELAY_COUNT - 1;
-		vpp_count = DIS_PATH_DELAY_COUNT + 1;
+	if (di_has_vdin_vf || !do_di || di_backend_en) {
+		vdin_count = vdin_buf_count - 3 - display_path_count - 1;
+		vpp_count = display_path_count + 1;
 	} else {
-		vdin_count = DI_MAX_OUT_COUNT - 2 +
-			vdin_buf_count - 2 - di_keep_count;
-		vpp_count = DIS_PATH_DELAY_COUNT + 1;
+		vdin_count = DI_MAX_OUT_COUNT - 2 + vdin_buf_count - 2 - di_keep_count;
+		vpp_count = display_path_count + 1;
 	}
 	hdmin_delay_max = vdin_count * vdin_vsync + vpp_count * vpp_vsync;
 	hdmin_delay_max_ms = div64_u64(hdmin_delay_max, 1000);
@@ -4483,6 +4502,9 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 	if (debug_flag & DEBUG_FLAG_HDMI_AVSYNC_DEBUG) {
 		pr_info("%s: di_has_vdin_vf=%d, do_di =%d.\n", __func__, di_has_vdin_vf, do_di);
 		pr_info("%s: range(%d, %d).\n", __func__, hdmin_delay_min_ms, hdmin_delay_max_ms);
+		pr_info("%s: vdin_keep_count=%d, di_keep_count=%d, display_path_count=%d.\n",
+			__func__, vdin_keep_count, di_keep_count, display_path_count);
+		pr_info("%s: vdin_count=%d, vpp_count=%d.\n", __func__, vdin_count, vpp_count);
 	}
 }
 
