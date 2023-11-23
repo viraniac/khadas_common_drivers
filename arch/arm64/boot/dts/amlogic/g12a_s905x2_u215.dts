@@ -387,10 +387,12 @@
 		tuner1_name = "av2018_tuner";
 	};
 
-	demux {
+	dvb-demux {
 		compatible = "amlogic, dvb-demux";
 		dev_name = "dvb-demux";
 		status = "okay";
+
+		dmx =<&demux>;
 
 		ts0 = "serial";
 		ts0_control = <0x800>;
@@ -400,20 +402,6 @@
 		ts1_control = <0x800>;
 		ts1_invert = <0>;
 
-		interrupts = <0 23 1
-		0 5 1
-		0 53 1
-		0 19 1
-		0 25 1
-		0 18 1
-		0 24 1>;
-		interrupt-names = "demux0_irq",
-		"demux1_irq",
-		"demux2_irq",
-		"dvr0_irq",
-		"dvr1_irq",
-		"dvrfill0_fill",
-		"dvrfill1_flush";
 		pinctrl-names = "s_ts0", "s_ts1";
 		pinctrl-0 = <&dvb_s_ts0_pins>;
 		pinctrl-1 = <&dvb_s_ts1_pins>;
@@ -1538,11 +1526,11 @@
 
 	dvb_s_ts0_pins: dvb_s_ts0_pins {
 		tsin_a {
-			groups = "tsin_a_sop_ao",
-			"tsin_a_valid_ao",
-			"tsin_a_clk_ao",
-			"tsin_a_din0_ao";
-			function = "tsin_a_ao";
+			groups = "tsin_ao_asop",
+			"tsin_ao_a_valid",
+			"tsin_ao_aclk",
+			"tsin_ao_adin0";
+			function = "tsin_ao_a";
 		};
 	};
 
