@@ -770,7 +770,7 @@ int frc_vd_notify_callback(struct notifier_block *block, unsigned long cmd, void
 			if (devp->frc_sts.state == FRC_STATE_ENABLE) {
 				pr_frc(0, "%s start disable frc", __func__);
 				set_frc_enable(false);
-				// set_frc_bypass(true);
+				set_frc_bypass(true);
 				frc_change_to_state(FRC_STATE_DISABLE);
 				//frc_change_to_state(FRC_STATE_BYPASS);
 				frc_state_change_finish(devp);

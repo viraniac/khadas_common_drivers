@@ -559,10 +559,12 @@ enum efrc_event frc_input_sts_check(struct frc_dev_s *devp,
 		pr_frc(1, "hsize change (%d - %d)\n",
 			devp->in_sts.in_hsize, cur_in_sts->in_hsize);
 		devp->in_sts.in_hsize = cur_in_sts->in_hsize;
-		if (devp->frc_sts.state == FRC_STATE_ENABLE) {
+		if (devp->frc_sts.state == FRC_STATE_ENABLE && get_chip_type() >= ID_T5M) {
 			pr_frc(2, "%s start disable frc", __func__);
 			set_frc_enable(false);
-			frc_change_to_state(FRC_STATE_DISABLE);
+			set_frc_bypass(true);
+			// frc_change_to_state(FRC_STATE_DISABLE);
+			frc_change_to_state(FRC_STATE_BYPASS);
 			frc_state_change_finish(devp);
 		}
 		if (devp->in_sts.frc_seamless_en) {
@@ -584,10 +586,12 @@ enum efrc_event frc_input_sts_check(struct frc_dev_s *devp,
 		pr_frc(1, "vsize change (%d - %d)\n",
 			devp->in_sts.in_vsize, cur_in_sts->in_vsize);
 		devp->in_sts.in_vsize = cur_in_sts->in_vsize;
-		if (devp->frc_sts.state == FRC_STATE_ENABLE) {
+		if (devp->frc_sts.state == FRC_STATE_ENABLE && get_chip_type() >= ID_T5M) {
 			pr_frc(2, "%s start disable frc", __func__);
 			set_frc_enable(false);
-			frc_change_to_state(FRC_STATE_DISABLE);
+			set_frc_bypass(true);
+			// frc_change_to_state(FRC_STATE_DISABLE);
+			frc_change_to_state(FRC_STATE_BYPASS);
 			frc_state_change_finish(devp);
 		}
 		if (devp->in_sts.frc_seamless_en) {

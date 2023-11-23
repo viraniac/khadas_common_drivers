@@ -297,22 +297,19 @@ void frc_mc_reset(u32 onoff)
 void set_frc_enable(u32 en)
 {
 	enum chip_id chip;
-	u32 temp;
+	// u32 temp;
 	chip = get_chip_type();
 
 	pr_frc(2, "%s set(0817)  %d\n", __func__, en);
-	temp = en ? 0 : BIT_28;
-	regdata_top_ctl_0009 = READ_FRC_REG(FRC_REG_TOP_CTRL9);
-	frc_config_reg_value(temp, BIT_28, &regdata_top_ctl_0009);
-	WRITE_FRC_REG_BY_CPU(FRC_REG_TOP_CTRL9, regdata_top_ctl_0009);
+	// temp = en ? 0 : BIT_28;
+	// regdata_top_ctl_0009 = READ_FRC_REG(FRC_REG_TOP_CTRL9);
+	// frc_config_reg_value(temp, BIT_28, &regdata_top_ctl_0009);
+	// WRITE_FRC_REG_BY_CPU(FRC_REG_TOP_CTRL9, regdata_top_ctl_0009);
+	//temp = en ? BIT_0 : BIT_4;
 
-	temp = en ? BIT_0 : BIT_4;
 	regdata_topctl_3f01 = READ_FRC_REG(FRC_TOP_CTRL);
-	frc_config_reg_value(temp, BIT_0, &regdata_topctl_3f01);
+	frc_config_reg_value(en, BIT_0, &regdata_topctl_3f01);
 	WRITE_FRC_REG_BY_CPU(FRC_TOP_CTRL, regdata_topctl_3f01);
-//	regdata_topctl_3f01 = READ_FRC_REG(FRC_TOP_CTRL);
-//	frc_config_reg_value(temp, BIT_4, &regdata_topctl_3f01);
-//	WRITE_FRC_REG_BY_CPU(FRC_TOP_CTRL, regdata_topctl_3f01);
 	if (en == 1) {
 		if (chip == ID_T3X) {
 			//frc_mc_reset(1);
@@ -329,7 +326,6 @@ void set_frc_enable(u32 en)
 			WRITE_FRC_REG_BY_CPU(FRC_TOP_SW_RESET, 0xFFFF);
 			WRITE_FRC_REG_BY_CPU(FRC_TOP_SW_RESET, 0x0);
 		}
-
 	} else {
 		gst_frc_param.s2l_en = 0;
 		gst_frc_param.frc_mcfixlines = 0;

@@ -107,8 +107,9 @@
 // frc_20231016 set disable with input is 120Hz
 // frc_20231018 dly frc enable in video window
 // frc_20231020 set disable stats when video mute enable
+// frc_20231102 fix frc fhd windows flash
 
-#define FRC_FW_VER			"2023-1102 fix frc fhd windows flash"
+#define FRC_FW_VER			"2023-1102 restore enable setting"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1
