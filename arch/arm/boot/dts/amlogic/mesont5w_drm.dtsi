@@ -39,7 +39,8 @@
 		memory-region = <&logo_reserved>;
 		primary_plane_index = <0>; /* primary plane index for crtcs */
 		crtc_masks = <1 1 1>; /*for encoder: 0:hdmi 1:lcd 2:cvbs*/
-
+		/* OSD1&OSD2 with afbc, OSD3 has no afbc */
+		osd_afbc_mask = <3>;
 		vpu_topology: vpu_topology {
 			vpu_blocks {
 				osd1_block: block@0 {
