@@ -8,6 +8,7 @@
 #include "mesong12b_w400-panel.dtsi"
 #include "mesong12b_drm_dual_disp.dtsi"
 #include "partition_debian_linux.dtsi"
+#include "meson-ir-map-linux.dtsi"
 
 / {
 	amlogic-dt-id = "g12b_w400_a";
@@ -1611,6 +1612,8 @@
 	status = "okay";
 	pinctrl-0 = <&remote_pins>;
 	pinctrl-names = "default";
+	/*For linux platforms, use custom_maps_linux to override the default custom_maps in the IR*/
+	map = <&custom_maps_linux>;
 };
 
 &vddcpu0 {
