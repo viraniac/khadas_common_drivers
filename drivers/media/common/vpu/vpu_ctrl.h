@@ -35,6 +35,7 @@
 #define CLK_LEVEL_DFT_T3X    8
 #define CLK_LEVEL_MAX_T3X    11
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 /* vpu clk setting */
 static struct fclk_div_s fclk_div_table_g12a[] = {
 	/* id,         mux,  div */
@@ -44,6 +45,7 @@ static struct fclk_div_s fclk_div_table_g12a[] = {
 	{FCLK_DIV7,    3,    7},
 	{FCLK_DIV_MAX, 8,    1},
 };
+#endif
 
 static struct vpu_clk_s vpu_clk_suspend = {
 	/* frequency   clk_mux       div */
@@ -60,6 +62,7 @@ static struct fclk_div_s fclk_div_table_c3[] = {
 	{FCLK_DIV_MAX, 8,    1},
 };
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 __maybe_unused static struct fclk_div_s fclk_div_table_t3x[] = {
 	/* id,         mux,  div */
 	{FCLK_DIV3,    0,    3},
@@ -68,6 +71,7 @@ __maybe_unused static struct fclk_div_s fclk_div_table_t3x[] = {
 	{FCLK_DIV2P5,  3,   25},
 	{FCLK_DIV_MAX, 8,    1},
 };
+#endif
 #endif
 
 static struct vpu_clk_s vpu_clk_table[] = {
@@ -90,11 +94,13 @@ static struct vpu_clk_s vpu_clk_table[] = {
 /*                VPU reg access test                      */
 /* ******************************************************* */
 #define VCBUS_REG_CNT_MAX    3
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static unsigned int vcbus_test_reg[VCBUS_REG_CNT_MAX] = {
 	VENC_VDAC_TST_VAL,
 	VPP_DUMMY_DATA,
 	VPU_VPU_PWM_V0
 };
+#endif
 
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 static unsigned int vcbus_test_reg_c3[VCBUS_REG_CNT_MAX] = {
@@ -103,6 +109,7 @@ static unsigned int vcbus_test_reg_c3[VCBUS_REG_CNT_MAX] = {
 	VPU_VOUT_DTH_DATA
 };
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static unsigned int vcbus_test_reg_s5[VCBUS_REG_CNT_MAX] = {
 	VENC_VDAC_TST_VAL,
 	ENCP_DVI_HSO_BEGIN,
@@ -133,6 +140,7 @@ static struct vpu_ctrl_s vpu_iso_sm1[] = {
 	{0,   VPU_REG_END,            0,   0,   0},
 };
 #endif
+#endif
 
 /* ******************************************************* */
 /*                 VPU module init table                 */
@@ -141,6 +149,7 @@ static struct vpu_ctrl_s vpu_iso_sm1[] = {
 /* ******************************************************* */
 /*              VPU memory power down table                */
 /* ******************************************************* */
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct vpu_ctrl_s vpu_mem_pd_sc2[] = {
 	/* vpu module,        reg,                 val,  bit, len */
 	{VPU_VIU_OSD1,        PWRCTRL_MEM_PD5_SC2, 0x3,  0,   2},
@@ -468,10 +477,12 @@ static struct vpu_ctrl_s vpu_mem_pd_tm2b[] = {
 	{VPU_MOD_MAX,         VPU_REG_END,         0,    0,   0},
 };
 #endif
+#endif
 
 /* ******************************************************* */
 /*                 VPU pwrctrl id table                 */
 /* ******************************************************* */
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static unsigned int vpu_pwrctrl_id_table[] = {
 	PM_VPU_HDMI_SC2,
 	VPU_PWR_ID_END
@@ -544,6 +555,7 @@ static struct vpu_reset_s vpu_reset_tl1[] = {
 	{RESET7_LEVEL, (1 << 7)},
 	{VPU_REG_END, 0},
 };
+#endif
 #endif
 
 #endif
