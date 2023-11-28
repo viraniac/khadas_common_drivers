@@ -651,8 +651,7 @@
 				system-clock-frequency = <12288000>;
 			};
 			tdmbcodec: codec {
-				prefix-names = "AMP", "AMP1";
-				sound-dai = <&tas5707_36 &tas5707_3a &acodec>;
+				sound-dai = <&acodec>;
 			};
 		};
 
@@ -1163,7 +1162,7 @@
 		/* !!!For --TV platform-- ONLY */
 		Channel_Mask {
 			/*i2s has 4 pins, 8channel, mux output*/
-			Spdif_samesource_Channel_Mask = "i2s_2/3";
+			Spdif_samesource_Channel_Mask = "i2s_0/1";
 		};
 	};
 
@@ -1559,7 +1558,7 @@
 };
 
 &i2c1 {
-	status = "okay";
+	status = "disabled";
 	pinctrl-names="default";
 	pinctrl-0=<&i2c1_pins1>;
 	clock-frequency = <100000>; /* default 100k */
@@ -1568,7 +1567,7 @@
 		compatible = "ti,tas5707";
 		#sound-dai-cells = <0>;
 		reg = <0x1b>;
-		status = "okay";
+		status = "disabled";
 		reset_pin = <&gpio GPIOT_19 GPIO_ACTIVE_HIGH>;
 	};
 
@@ -1576,7 +1575,7 @@
 		compatible = "ti,tas5707";
 		#sound-dai-cells = <0>;
 		reg = <0x1d>;
-		status = "okay";
+		status = "disabled";
 	};
 };
 
