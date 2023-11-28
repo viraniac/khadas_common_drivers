@@ -1702,6 +1702,7 @@ static int lcd_mode_probe(struct aml_lcd_drv_s *pdrv)
 	ret = lcd_get_config(pdrv);
 	if (ret)
 		return -1;
+
 	/* must behind lcd_get_config, for phy will probe by interface type */
 	lcd_debug_probe(pdrv);
 	lcd_mode_init(pdrv);

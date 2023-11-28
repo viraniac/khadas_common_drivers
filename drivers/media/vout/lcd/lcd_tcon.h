@@ -65,6 +65,7 @@ struct lcd_tcon_config_s {
 	void (*lut_dma_mif_set)(phys_addr_t paddr, unsigned int size);
 	void (*lut_dma_enable)(struct aml_lcd_drv_s *pdrv);
 	void (*lut_dma_disable)(struct aml_lcd_drv_s *pdrv);
+	int (*tcon_check)(struct aml_lcd_drv_s *pdrv, char *ferr_str, char *warn_str);
 
 };
 
@@ -293,6 +294,9 @@ int lcd_tcon_disable_t3(struct aml_lcd_drv_s *pdrv);
 int lcd_tcon_enable_txhd2(struct aml_lcd_drv_s *pdrv);
 int lcd_tcon_reload_t3(struct aml_lcd_drv_s *pdrv);
 int lcd_tcon_reload_pre_t3(struct aml_lcd_drv_s *pdrv);
+
+int lcd_tcon_setting_check_t5(struct aml_lcd_drv_s *pdrv, char *ferr_str, char *warn_str);
+int lcd_tcon_setting_check_t5d(struct aml_lcd_drv_s *pdrv, char *ferr_str, char *warn_str);
 
 /* common */
 unsigned char *lcd_tcon_paddrtovaddr(unsigned long paddr, unsigned int mem_size);

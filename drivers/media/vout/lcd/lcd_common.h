@@ -53,7 +53,8 @@
 /* 20231011: t3x dual display support */
 /* 20231012: optimize clk management*/
 /* 20231113: update vrr_dev register flow for tablet mode*/
-#define LCD_DRV_VERSION    "20231113"
+/* 20231205: add lcd config check*/
+#define LCD_DRV_VERSION    "20231205"
 
 extern struct mutex lcd_vout_mutex;
 extern spinlock_t lcd_reg_spinlock;
@@ -104,6 +105,7 @@ void lcd_mlvds_bit_rate_config(struct aml_lcd_drv_s *pdrv);
 void lcd_p2p_bit_rate_config(struct aml_lcd_drv_s *pdrv);
 void lcd_mipi_dsi_bit_rate_config(struct aml_lcd_drv_s *pdrv);
 void lcd_edp_bit_rate_config(struct aml_lcd_drv_s *pdrv);
+int lcd_config_check(struct aml_lcd_drv_s *pdrv);
 void lcd_vrr_config_update(struct aml_lcd_drv_s *pdrv);
 void lcd_basic_timing_range_init(struct aml_lcd_drv_s *pdrv);
 void lcd_timing_init_config(struct aml_lcd_drv_s *pdrv);
@@ -167,6 +169,7 @@ int lcd_tcon_od_set(struct aml_lcd_drv_s *pdrv, int flag);
 int lcd_tcon_od_get(struct aml_lcd_drv_s *pdrv);
 int lcd_tcon_core_reg_get(struct aml_lcd_drv_s *pdrv,
 			  unsigned char *buf, unsigned int size);
+int lcd_tcon_check(struct aml_lcd_drv_s *pdrv, char *ferr_str, char *warn_str);
 int lcd_tcon_enable(struct aml_lcd_drv_s *pdrv);
 int lcd_tcon_reload(struct aml_lcd_drv_s *pdrv);
 int lcd_tcon_reload_pre(struct aml_lcd_drv_s *pdrv);
