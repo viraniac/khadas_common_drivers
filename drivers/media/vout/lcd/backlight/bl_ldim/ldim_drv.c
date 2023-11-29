@@ -810,7 +810,6 @@ static const struct file_operations ldim_fops = {
 
 int aml_ldim_get_config_dts(struct device_node *child)
 {
-	struct vinfo_s *vinfo = get_current_vinfo();
 	unsigned int para[5];
 	int ret;
 
@@ -818,10 +817,6 @@ int aml_ldim_get_config_dts(struct device_node *child)
 		LDIMERR("child device_node is null\n");
 		return -1;
 	}
-
-	/* default setting */
-	ldim_config.hsize = vinfo->width;
-	ldim_config.vsize = vinfo->height;
 
 	/* get row & col from dts */
 	ret = of_property_read_u32_array(child, "bl_ldim_zone_row_col", para, 2);
@@ -860,14 +855,7 @@ aml_ldim_get_config_dts_next:
 
 int aml_ldim_get_config_unifykey(unsigned char *buf)
 {
-	unsigned char *p;
-	struct vinfo_s *vinfo = get_current_vinfo();
-
-	/* default setting */
-	ldim_config.hsize = vinfo->width;
-	ldim_config.vsize = vinfo->height;
-
-	p = buf;
+	unsigned char *p = buf;
 
 	/* ldim: 24byte */
 	/* get bl_ldim_region_row_col 4byte*/
@@ -1050,8 +1038,9 @@ int aml_ldim_probe(struct platform_device *pdev)
 	struct aml_bl_drv_s *bdrv = aml_bl_get_driver(0);
 	struct ldim_fw_s *fw = aml_ldim_get_fw();
 	struct ldim_fw_custom_s *fw_cus = aml_ldim_get_fw_cus();
+	struct aml_lcd_drv_s *pdrv = aml_lcd_get_driver(0);
 
-	if (!bdrv)
+	if (!bdrv || !pdrv)
 		return -1;
 
 	memset(devp, 0, (sizeof(struct ldim_dev_s)));
@@ -1084,6 +1073,9 @@ int aml_ldim_probe(struct platform_device *pdev)
 	if (ret)
 		return -1;
 
+	ldim_config.hsize = pdrv->config.basic.h_active;
+	ldim_config.vsize = pdrv->config.basic.v_active;
+	ldim_driver.vsync_change_flag = pdrv->config.timing.frame_rate;
 	ldim_rmem.rsv_mem_size = ldim_driver.data->rsv_mem_size;
 	ldim_driver.resolution_update = 0;
 	ldim_driver.in_vsync_flag = 0;
