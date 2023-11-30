@@ -817,6 +817,11 @@
 		/* urgent_en; */
 		double_write_en;
 		v4l_support_en = <0>;
+		v4l_vd_num = <70>;
+		/* v4l2 capability */
+		driver   = "vdinvideo";
+		card     = "meson-tm2";
+		bus_info = "vdin0 v4l2";
 	};
 
 	vdin@1 {
@@ -841,6 +846,13 @@
 		 */
 		tv_bit_mode = <0x15>;
 		/*urgent_en*/
+		/* vdin v4l2 start */
+		v4l_support_en = <0>;
+		v4l_vd_num = <71>;
+		/* v4l2 capability */
+		driver   = "vdinvideo";
+		card     = "meson-tm2";
+		bus_info = "vdin1 v4l2";
 	};
 
 	vddq_1v5: regulator-vddq_1v5 {
