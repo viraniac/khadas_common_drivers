@@ -250,6 +250,8 @@ void frc_isr_print_zero(struct frc_dev_s *devp)
 	devp->frc_sts.vs_cnt = 0;
 	devp->frc_sts.video_mute_cnt = 0;
 	devp->frc_sts.vs_data_cnt = 0;
+	WRITE_FRC_REG_BY_CPU(0x6d, 0x0);
+	WRITE_FRC_REG_BY_CPU(0x6e, 0x0);
 
 	devp->frc_sts.changed_flag = 0;
 	devp->ud_dbg.align_dbg_en = 0;
@@ -281,7 +283,7 @@ irqreturn_t frc_input_isr(int irq, void *dev_id)
 			WRITE_FRC_REG_BY_CPU(FRC_MC_MVRD_CTRL, 0x100);
 	tasklet_schedule(&devp->input_tasklet);
 
-	FRC_RDMA_WR_REG_IN(0x6e, devp->in_sts.vs_cnt);
+	FRC_RDMA_WR_REG_IN(FRC_REG_TOP_RESERVE13, devp->in_sts.vs_cnt);
 	frc_rdma_config(1, 0);
 
 	return IRQ_HANDLED;
@@ -345,6 +347,7 @@ irqreturn_t frc_output_isr(int irq, void *dev_id)
 
 	// frc_rdma->rdma_item_count = 0;
 	// rdma trigger 0 manual, 1-7 auto path
+	FRC_RDMA_WR_REG_OUT(FRC_REG_TOP_RESERVE14, devp->out_sts.vs_cnt);
 	frc_rdma_config(2, 0);
 
 	if (devp->ud_dbg.pr_dbg)
@@ -1219,6 +1222,7 @@ void frc_state_handle(struct frc_dev_s *devp)
 	frame_cnt = devp->frc_sts.frame_cnt;
 	chg_flag = devp->ud_dbg.res2_time_en;
 	pfw_data = (struct frc_fw_data_s *)devp->fw_data;
+
 	if (cur_state != new_state) {
 		state_changed = 1;
 		pr_frc(log, "stat_chg(%d->%d), frm_cnt:%d\n", cur_state,
@@ -1229,6 +1233,16 @@ void frc_state_handle(struct frc_dev_s *devp)
 				frame_cnt,
 				READ_FRC_REG(FRC_REG_PAT_POINTER),
 				READ_FRC_REG(FRC_REG_OUT_FID));
+		pr_frc(log, "in_cnt:%X,out_cnt:%X,DBG1:0x%08X,DBG2:0x%08X,DBG3:0x%08X\n",
+			READ_FRC_REG(0x6d),
+			READ_FRC_REG(0x6e),
+			READ_FRC_REG(FRC_REG_INP_HS_DBG1),
+			READ_FRC_REG(FRC_REG_INP_HS_DBG2),
+			READ_FRC_REG(FRC_REG_INP_HS_DBG3));
+		pr_frc(log, "INP_MCDW_CTRL=0x%x, MCDW_CTRL=0x%x vs_cnt=%d\n",
+			READ_FRC_REG(FRC_INP_MCDW_CTRL),
+			READ_FRC_REG(FRC_MCDW_PATH_CTRL),
+			devp->frc_sts.vs_cnt);
 	}
 	switch (cur_state) {
 	case FRC_STATE_DISABLE:

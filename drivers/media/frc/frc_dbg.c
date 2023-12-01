@@ -606,27 +606,34 @@ ssize_t frc_debug_rdma_if_help(struct frc_dev_s *devp, char *buf)
 {
 	ssize_t len = 0;
 	struct frc_fw_data_s *fw_data;
+	struct frc_rdma_s *frc_rdma = get_frc_rdma();
 
 	if (!devp)
 		return len;
+
 	fw_data = (struct frc_fw_data_s *)devp->fw_data;
-	len += sprintf(buf + len, "frc_rdma\t=ctrl or debug frc rdma\n");
+	len += sprintf(buf + len, "status\t=show frc rdma status\n");
+	// len += sprintf(buf + len, "frc_rdma\t=ctrl or debug frc rdma\n");
 	len += sprintf(buf + len, "addr_val\t=addr val(set reg value to rdma table)\n");
-	len += sprintf(buf + len, "rdma_en\t\t=%d\n", fw_data->frc_top_type.rdma_en);
+	len += sprintf(buf + len, "rdma_en\t\t=%d drv, %d alg\n",
+		frc_rdma->rdma_en, fw_data->frc_top_type.rdma_en);
+	len += sprintf(buf + len, "rdma_table\t=show frc rdma table\n");
+	len += sprintf(buf + len, "trace_en\t=echo 1 > rdma_trace_enable\n");
+	len += sprintf(buf + len, "trace_reg\t=echo 0x60 0x61 xx > rdma_trace_reg\n");
+
 	return len;
 }
 
 void frc_debug_rdma_if(struct frc_dev_s *devp, const char *buf, size_t count)
 {
+	u32 val1;
+	u32 val2;
 	char *buf_orig, *parm[47] = {NULL};
 	struct frc_fw_data_s *fw_data;
-	int val1;
-	int val2;
+	struct frc_rdma_s *frc_rdma = get_frc_rdma();
 
-	if (!devp)
-		return;
 
-	if (!buf)
+	if (!devp || !buf || !frc_rdma)
 		return;
 
 	buf_orig = kstrdup(buf, GFP_KERNEL);
@@ -636,13 +643,8 @@ void frc_debug_rdma_if(struct frc_dev_s *devp, const char *buf, size_t count)
 	fw_data = (struct frc_fw_data_s *)devp->fw_data;
 	frc_debug_parse_param(buf_orig, (char **)&parm);
 
-	if (!strcmp(parm[0], "frc_rdma")) {
-		if (!parm[1])
-			goto exit;
-		if (kstrtoint(parm[1], 10, &val1) == 0) {
-			pr_frc(0, "frc rdma test start, val1:%d\n", val1);
-			frc_rdma_process(val1);
-		}
+	if (!strcmp(parm[0], "status")) {
+		frc_rdma_status();
 	} else if (!strcmp(parm[0], "addr_val")) {
 		if (!parm[2])
 			goto exit;
@@ -657,14 +659,15 @@ void frc_debug_rdma_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0) {
 			// fw_data->frc_top_type.rdma_en = val1;
-			pr_frc(2, "pass alg rdma\n");
-			devp->in_sts.rdma_en = val1;
+			pr_frc(2, "input rdma status:%d\n", val1);
+			frc_rdma->rdma_en = val1;
+			if (val1)
+				frc_rdma_init();
+			else
+				frc_rdma_exit();
 		}
-	} else if (!strcmp(parm[0], "rdma_chan")) {
-		if (!parm[1])
-			goto exit;
-		if (kstrtoint(parm[1], 10, &val1) == 0)
-			devp->in_sts.rdma_channel = val1;
+	} else if (!strcmp(parm[0], "rdma_table")) {
+		frc_read_table(frc_rdma);
 	}
 
 exit:
@@ -1149,12 +1152,14 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 	int debug_flag = 32;
 	unsigned int reg;
 	unsigned int regvalue;
-	struct frc_rdma_info *frc_rdma2 = frc_get_rdma_info_2();
+	struct frc_rdma_info *rdma_info;
+	struct frc_rdma_s *frc_rdma = get_frc_rdma();
 
 	buf_orig = kstrdup(buf, GFP_KERNEL);
 	if (!buf_orig)
 		return;
 	frc_debug_parse_param(buf_orig, (char **)&parm);
+	rdma_info = (struct frc_rdma_info *)frc_rdma->rdma_info[3];
 
 	if (!strcmp(parm[0], "r")) {
 		if (!parm[1])
@@ -1166,12 +1171,12 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 		devp->tool_dbg.reg_read = reg;
 
 		if (is_rdma_enable()) {
-			if (frc_rdma2->rdma_item_count) {
-				count = frc_rdma2->rdma_item_count;
+			if (rdma_info->rdma_item_count) {
+				count = rdma_info->rdma_item_count;
 				for (i = 0; i < count; i++) {
-					if (frc_rdma2->rdma_table_addr[i * 2] == reg) {
+					if (rdma_info->rdma_table_addr[i * 2] == reg) {
 						devp->tool_dbg.reg_read_val =
-							frc_rdma2->rdma_table_addr[i * 2 + 1];
+							rdma_info->rdma_table_addr[i * 2 + 1];
 						flag = 1;
 						break;
 					}
@@ -1196,13 +1201,13 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 
 		if (is_rdma_enable()) {
 			// debug
-			i = frc_rdma2->rdma_item_count;
-			frc_rdma2->rdma_table_addr[i * 2] = reg;
-			frc_rdma2->rdma_table_addr[i * 2 + 1] = regvalue;
-			frc_rdma2->rdma_item_count++;
+			i = rdma_info->rdma_item_count;
+			rdma_info->rdma_table_addr[i * 2] = reg;
+			rdma_info->rdma_table_addr[i * 2 + 1] = regvalue;
+			rdma_info->rdma_item_count++;
 			pr_frc(debug_flag, "addr:0x%04x, value:0x%08x\n",
-				frc_rdma2->rdma_table_addr[i * 2],
-				frc_rdma2->rdma_table_addr[i * 2 + 1]);
+				rdma_info->rdma_table_addr[i * 2],
+				rdma_info->rdma_table_addr[i * 2 + 1]);
 		} else {
 			WRITE_FRC_REG_BY_CPU(reg, regvalue);
 		}

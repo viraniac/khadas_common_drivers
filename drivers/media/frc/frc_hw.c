@@ -3765,18 +3765,17 @@ void t3x_verB_set_cfg(u8 flag, struct frc_dev_s *frc_devp)
 		FRC_RDMA_WR_REG_IN(FRC_INP_MCDW_CTRL, READ_FRC_REG(FRC_INP_MCDW_CTRL));
 		FRC_RDMA_WR_REG_IN(FRC_MCDW_PATH_CTRL, READ_FRC_REG(FRC_MCDW_PATH_CTRL));
 		FRC_RDMA_WR_REG_IN(FRC_SRCH_RNG_MODE, 0x77);
-		pr_frc(2, "%s set:%d INP_MCDW_CTRL=0x%x, H2V2=0x%x, MCDW_CTRL=0x%x vs_cnt=%d\n",
+		pr_frc(2, "%s set:%d INP_MCDW_CTRL=0x%x, MCDW_CTRL=0x%x vs_cnt=%d\n",
 			__func__,
 			flag,
 			READ_FRC_REG(FRC_INP_MCDW_CTRL),
-			READ_FRC_REG(FRC_MC_H2V2_SETTING),
 			READ_FRC_REG(FRC_MCDW_PATH_CTRL),
 			devp->frc_sts.vs_cnt);
 	} else {  //   restore after frc enable
 		if (devp->ud_dbg.other1_err == 1) {
 			tmp_isr_cnt = READ_FRC_REG(FRC_RO_INT_CNT);
 			// tmp_value = READ_FRC_REG(FRC_REG_INP_INT_FLAG);
-			pr_frc(0, "%s set:%d ro_isr_cnt=(%d,%d), isr_cnt=(%d,%d)\n",
+			pr_frc(2, "%s set:%d ro_isr_cnt=(%d,%d), isr_cnt=(%d,%d)\n",
 				__func__,
 				flag,
 				tmp_isr_cnt & 0xFFF,

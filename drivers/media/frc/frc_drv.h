@@ -111,8 +111,9 @@
 // frc_20231102 restore enable setting
 // frc_20231031 frc compress mc memory usage size
 // frc_20240111 n2m and vpu slice workaround
+// frc_20240104 open clk when sys resume
 
-#define FRC_FW_VER			"2024-0104 open clk when sys resume"
+#define FRC_FW_VER			"2024-0116 frc rdma process optimisation"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1
@@ -486,8 +487,6 @@ struct st_frc_in_sts {
 	u8 boot_timestamp_en;
 	u8 boot_check_finished;
 	u8 auto_ctrl_reserved;
-	u8 rdma_channel;
-	u8 rdma_en;
 	u8 enable_mute_flag;
 	u8 mute_vsync_cnt;
 };
@@ -685,7 +684,6 @@ struct frc_dev_s {
 	u32 clk_me_frq;
 	unsigned int clk_state;
 	u32 clk_chg;
-	u32 rdma_handle;
 
 	/* vframe check */
 	u32 vs_duration;	/*vpu int duration*/
@@ -694,8 +692,6 @@ struct frc_dev_s {
 	u8 st_change;
 	u8 need_bypass;	/*notify vpu to bypass frc*/
 	u8 next_frame;
-	u64 rdma_time;
-	u64 rdma_time2;
 
 	u32 dbg_force_en;
 	u32 dbg_in_out_ratio;

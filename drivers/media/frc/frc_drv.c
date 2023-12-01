@@ -155,7 +155,10 @@ static struct class_attribute frc_class_attrs[] = {
 	__ATTR(me_rule_param, 0644, frc_me_rule_param_show, frc_me_rule_param_store),
 	__ATTR(film_ctrl_param, 0644, frc_film_ctrl_param_show, frc_film_ctrl_param_store),
 	__ATTR(glb_ctrl_param, 0644, frc_glb_ctrl_param_show, frc_glb_ctrl_param_store),
-
+	__ATTR(trace_enable, 0664,
+	       frc_rdma_trace_enable_show, frc_rdma_trace_enable_stroe),
+	__ATTR(trace_reg, 0664,
+	       frc_rdma_trace_reg_show, frc_rdma_trace_reg_stroe),
 	__ATTR_NULL
 };
 
