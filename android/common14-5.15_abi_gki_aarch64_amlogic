@@ -1,43 +1,4 @@
-  kimage_vaddr
-  sysfs_create_bin_file
-  vabits_actual
-  list_sort
-  kthread_flush_worker
-
-# amlogic-debug.ko
-  __tracepoint_android_rvh_do_undefinstr
-  __traceiter_android_rvh_do_undefinstr
-
-# amlogic-debug-iotrace.ko
-  __tracepoint_android_vh_set_module_permit_after_init
-  __traceiter_android_vh_set_module_permit_after_init
-
-  sg_pcopy_to_buffer
-  usb_hcd_is_primary_hcd
-  usb_hcd_map_urb_for_dma
-  xhci_get_ep_ctx
-  usb_hcd_link_urb_to_ep
-
-# amlogic-host.ko
-  unregister_die_notifier
-
-# aml_drm.ko
-  drm_state_dump
-  __drm_printfn_seq_file
-  __drm_puts_seq_file
-  __drm_printfn_coredump
-  __drm_puts_coredump
-  drm_atomic_helper_shutdown
-  drm_atomic_helper_commit_duplicated_state
-  drm_atomic_helper_duplicate_state
-  drm_modeset_lock_all_ctx
-
-# amlogic-mmc.ko
-  mmc_gpiod_request_cd
-
 # aml_media.ko
-  __get_task_comm
-  is_dma_buf_file
   argv_free
   argv_split
   seq_list_next
