@@ -91,4 +91,4 @@ dtb-y += t7c_a311d2_an400_mercury.dtb
 dtb-y += t7_a311d2_an400_mercury.dtb
 dtb-y += g12a_s905x2_u212.dtb
 dtb-y += g12a_s905x2_u215.dtb
-dtb-y += tm2_t962e2_ab301.dtb
+dtb-y += tm2_t962x3_ab301.dtb
