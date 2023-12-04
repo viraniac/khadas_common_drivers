@@ -91,6 +91,11 @@ static struct clk_regmap txhd2_sys_pll_dco = {
 			.width	 = 2,
 		},
 #endif
+		.fl = {
+			.reg_off = HHI_SYS_PLL_CNTL2,
+			.shift   = 11,
+			.width   = 1,
+		},
 		.table = txhd2_sys_pll_params_table,
 		.init_regs = txhd2_sys_pll_init_regs,
 		.init_count = ARRAY_SIZE(txhd2_sys_pll_init_regs),
@@ -563,6 +568,11 @@ static struct clk_regmap txhd2_gp0_pll_dco = {
 			.shift   = 24,
 			.width   = 1,
 		},
+		.fl = {
+			.reg_off = HHI_GP0_PLL_CNTL2,
+			.shift   = 11,
+			.width   = 1,
+		},
 		.table = txhd2_gp0_pll_table,
 		.init_regs = txhd2_gp0_init_regs,
 		.init_count = ARRAY_SIZE(txhd2_gp0_init_regs),
@@ -663,6 +673,11 @@ static struct clk_regmap txhd2_hifi_pll_dco = {
 			.width	 = 2,
 		},
 #endif
+		.fl = {
+			.reg_off = HHI_HIFI_PLL_CNTL2,
+			.shift   = 11,
+			.width   = 1,
+		},
 		.frac = {
 			.reg_off = HHI_HIFI_PLL_CNTL3,
 			.shift   = 0,
@@ -801,6 +816,11 @@ static struct clk_regmap txhd2_hifi1_pll_dco = {
 		.th = {
 			.reg_off = HHI_HIFI1_PLL_CNTL0,
 			.shift   = 24,
+			.width   = 1,
+		},
+		.fl = {
+			.reg_off = HHI_HIFI1_PLL_CNTL2,
+			.shift   = 11,
 			.width   = 1,
 		},
 		.fixed_n = 3,
