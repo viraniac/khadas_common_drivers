@@ -768,6 +768,8 @@ static void hdmitx_set_drm_pkt(struct master_display_info_s *data)
 			hdev->colormetry = 0;
 			hdmi_avi_infoframe_config(CONF_AVI_BT2020, 0);
 			schedule_work(&hdev->work_hdr);
+			hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+						HDMITX_HDR_MODE_SDR);
 			drm_db[0] = 0;
 		}
 		spin_unlock_irqrestore(&hdev->tx_comm.edid_spinlock, flags);
@@ -845,6 +847,8 @@ static void hdmitx_set_drm_pkt(struct master_display_info_s *data)
 		drm_db[0] = 0x02; /* SMPTE ST 2084 */
 		hdmi_drm_infoframe_rawset(drm_hb, db);
 		hdmi_avi_infoframe_config(CONF_AVI_BT2020, SET_AVI_BT2020);
+		hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+					HDMITX_HDR_MODE_SMPTE2084);
 		break;
 	case 2:
 		/*non standard*/
@@ -857,6 +861,8 @@ static void hdmitx_set_drm_pkt(struct master_display_info_s *data)
 		drm_db[0] = 0x03;/* HLG is 0x03 */
 		hdmi_drm_infoframe_rawset(drm_hb, db);
 		hdmi_avi_infoframe_config(CONF_AVI_BT2020, SET_AVI_BT2020);
+		hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+					HDMITX_HDR_MODE_HLG);
 		break;
 	case 0:
 	default:
@@ -1054,9 +1060,13 @@ static void hdmitx_set_vsif_pkt(enum eotf_type type,
 			if (tunnel_mode == RGB_8BIT) {
 				hdmi_avi_infoframe_config(CONF_AVI_CS, HDMI_COLORSPACE_RGB);
 				hdmi_avi_infoframe_config(CONF_AVI_Q01, RGB_RANGE_FUL);
+				hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+							HDMITX_HDR_MODE_DV_STD);
 			} else {
 				hdmi_avi_infoframe_config(CONF_AVI_CS, HDMI_COLORSPACE_YUV422);
 				hdmi_avi_infoframe_config(CONF_AVI_YQ01, YCC_RANGE_FUL);
+				hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+							HDMITX_HDR_MODE_DV_LL);
 			}
 		} else {
 			if (hdmi_vic_4k_flag)
@@ -1075,6 +1085,8 @@ static void hdmitx_set_vsif_pkt(enum eotf_type type,
 					HDMITX_INFO("DV H14b VSIF OFF,re-enable force game mode\n");
 					hdmi_tx_enable_ll_mode(true);
 				}
+				hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+							HDMITX_HDR_MODE_SDR);
 			}
 		}
 	}
@@ -1160,9 +1172,13 @@ static void hdmitx_set_vsif_pkt(enum eotf_type type,
 			if (tunnel_mode == RGB_8BIT) {/*RGB444*/
 				hdmi_avi_infoframe_config(CONF_AVI_CS, HDMI_COLORSPACE_RGB);
 				hdmi_avi_infoframe_config(CONF_AVI_Q01, RGB_RANGE_FUL);
+				hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+							HDMITX_HDR_MODE_DV_STD);
 			} else {/*YUV422*/
 				hdmi_avi_infoframe_config(CONF_AVI_CS, HDMI_COLORSPACE_YUV422);
 				hdmi_avi_infoframe_config(CONF_AVI_YQ01, YCC_RANGE_FUL);
+				hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+							HDMITX_HDR_MODE_DV_LL);
 			}
 		}
 		/*Dolby Vision low-latency case*/
@@ -1195,6 +1211,8 @@ static void hdmitx_set_vsif_pkt(enum eotf_type type,
 				hdmi_avi_infoframe_config(CONF_AVI_CS, HDMI_COLORSPACE_YUV422);
 				hdmi_avi_infoframe_config(CONF_AVI_YQ01, YCC_RANGE_LIM);
 			}
+			hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+						HDMITX_HDR_MODE_DV_LL);
 		} else { /*SDR case*/
 			HDMITX_INFO("Dolby VSIF, ven_db2[3]) = %d\n", ven_db2[3]);
 			hdmi_vend_infoframe_rawset(ven_hb, db2);
@@ -1207,6 +1225,8 @@ static void hdmitx_set_vsif_pkt(enum eotf_type type,
 				hdmi_avi_infoframe_config(CONF_AVI_Q01, RGB_RANGE_DEFAULT);
 				hdmi_avi_infoframe_config(CONF_AVI_YQ01, YCC_RANGE_LIM);
 				hdmi_avi_infoframe_config(CONF_AVI_BT2020, CLR_AVI_BT2020);/*BT709*/
+				hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+							HDMITX_HDR_MODE_SDR);
 				/* re-enable forced game mode if selected by the user */
 				if (hdev->ll_user_set_mode == HDMI_LL_MODE_ENABLE) {
 					HDMITX_INFO("DV VSIF disabled,re-enable force game mode\n");
@@ -1242,6 +1262,8 @@ static void hdmitx_set_hdr10plus_pkt(u32 flag,
 		hdmi_avi_infoframe_config(CONF_AVI_BT2020, CLR_AVI_BT2020);
 		hdev->hdr10plus_feature = 0;
 		hdr_status_pos = 4;
+		hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+					HDMITX_HDR_MODE_SDR);
 		return;
 	}
 
@@ -1293,6 +1315,8 @@ static void hdmitx_set_hdr10plus_pkt(u32 flag,
 
 	hdmi_vend_infoframe_rawset(ven_hb, db);
 	hdmi_avi_infoframe_config(CONF_AVI_BT2020, SET_AVI_BT2020);
+	hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+				HDMITX_HDR_MODE_HDR10PLUS);
 }
 
 static void hdmitx_set_cuva_hdr_vsif(struct cuva_hdr_vsif_para *data)
@@ -1318,6 +1342,8 @@ static void hdmitx_set_cuva_hdr_vsif(struct cuva_hdr_vsif_para *data)
 	ven_db[4] = (data->version_code & 0xf) << 4;
 	hdmi_vend_infoframe_rawset(ven_hb, db);
 	spin_unlock_irqrestore(&hdev->tx_comm.edid_spinlock, flags);
+	hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+				HDMITX_HDR_MODE_CUVA);
 }
 
 static void hdmitx_set_cuva_hdr_vs_emds(struct cuva_hdr_vs_emds_para *data)
@@ -1425,6 +1451,8 @@ static void hdmitx_set_cuva_hdr_vs_emds(struct cuva_hdr_vs_emds_para *data)
 
 	hdmitx_dhdr_send((u8 *)&vs_emds, max_size);
 	spin_unlock_irqrestore(&hdev->tx_comm.edid_spinlock, flags);
+	hdmitx_tracer_write_event(hdev->tx_comm.tx_tracer,
+				HDMITX_HDR_MODE_CUVA);
 }
 
 /* reserved,  left blank here, move to hdmi_tx_vrr.c file */
