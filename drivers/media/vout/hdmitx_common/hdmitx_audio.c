@@ -852,8 +852,6 @@ void hdmitx_audio_notify_callback(struct hdmitx_common *tx_comm,
 			HDMITX_INFO("set audio param\n");
 		}
 	}
-	if (aud_param->fifo_rst)
-		hdmitx_hw_cntl_misc(tx_hw_base, MISC_AUDIO_RESET, 1);
 }
 
 struct hdmitx_tracer *tx_tracer;
