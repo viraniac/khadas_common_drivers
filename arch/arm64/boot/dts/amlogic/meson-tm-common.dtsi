@@ -55,7 +55,6 @@
 
 	cpu_info {
 		compatible = "amlogic, cpuinfo";
-		status = "disabled";
 		cpuinfo_cmd = <0x82000044>;
 	};
 

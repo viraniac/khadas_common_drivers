@@ -45,6 +45,11 @@
 		inout_size_func = <0x8200002a>;
 	};
 
+	cpu_info {
+		compatible = "amlogic, cpuinfo";
+		cpuinfo_cmd = <0x82000044>;
+	};
+
 	meson_uvm {
 		compatible = "amlogic, meson_uvm";
 		status = "okay";
