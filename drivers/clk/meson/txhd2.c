@@ -642,10 +642,10 @@ static const struct reg_sequence txhd2_hifi_init_regs[] = {
 	{ .reg = HHI_HIFI_PLL_CNTL0,	.def = 0x61030024 },
 	{ .reg = HHI_HIFI_PLL_CNTL0,	.def = 0x71030024 },
 	{ .reg = HHI_HIFI_PLL_CNTL1,	.def = 0x25002000 },
-	{ .reg = HHI_HIFI_PLL_CNTL2,	.def = 0x09001940 },
+	{ .reg = HHI_HIFI_PLL_CNTL2,	.def = 0x09001140 },
 	{ .reg = HHI_HIFI_PLL_CNTL3,	.def = 0x00083180, .delay_us = 20 },
 	{ .reg = HHI_HIFI_PLL_CNTL0,	.def = 0x51030024, .delay_us = 20 },
-	{ .reg = HHI_HIFI_PLL_CNTL2,	.def = 0x09001900 },
+	{ .reg = HHI_HIFI_PLL_CNTL2,	.def = 0x09001100 },
 };
 
 static struct clk_regmap txhd2_hifi_pll_dco = {
