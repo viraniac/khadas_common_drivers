@@ -1544,7 +1544,7 @@ int lcd_clk_config_print_dft(struct aml_lcd_drv_s *pdrv, char *buf, int offset)
 		len += snprintf((buf + len), n,
 			"lcd%d clk[%d] config:\n"
 			"pll_id:           %d\n"
-			"pll_offset:       %d\n"
+			"pll_offset:       0x%x\n"
 			"pll_mode:         %d\n"
 			"pll_m:            %d\n"
 			"pll_n:            %d\n"

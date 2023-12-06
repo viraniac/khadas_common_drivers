@@ -317,6 +317,11 @@ void lcd_vlock_m_update(int index, unsigned int vlock_m)
 	if (!cconf || !cconf->data)
 		return;
 
+	if (pdrv->config.timing.clk_mode == LCD_CLK_MODE_INDEPENDENCE) {
+		LCDERR("%s: clk_mode independence, can't adjust single pll m\n", __func__);
+		return;
+	}
+
 	vlock_m &= 0xff;
 	if (lcd_debug_print_flag & LCD_DBG_PR_ADV2)
 		LCDPR("[%d]: %s, vlcok_m: 0x%x\n", index, __func__, vlock_m);
@@ -356,29 +361,15 @@ void lcd_vlock_frac_update(int index, unsigned int vlock_frac)
 /* for frame rate change */
 void lcd_update_clk_frac(struct aml_lcd_drv_s *pdrv)
 {
-	struct lcd_clk_config_s *cconf, *phyconf, *pixconf;
+	struct lcd_clk_config_s *cconf;
 
 	cconf = get_lcd_clk_config(pdrv);
 	if (!cconf || !cconf->data)
-		return; // goto lcd_clk_update_end;
+		return;
 
 	mutex_lock(&lcd_clk_mutex);
-
-	if (pdrv->config.timing.clk_mode == LCD_CLK_MODE_INDEPENDENCE) {
-		phyconf = &cconf[0];
-		pixconf = &cconf[1];
-		if (phyconf->data->pll_frac_set)
-			phyconf->data->pll_frac_set(pdrv, phyconf->pll_frac);
-		if (pixconf->data->pll_frac_set)
-			pixconf->data->pll_frac_set(pdrv, pixconf->pll_frac);
-		LCDPR("[%d]: %s: phy pll_frac=0x%x, pix pll_frac=0x%x\n",
-			pdrv->index, __func__, phyconf->pll_frac, pixconf->pll_frac);
-	} else {
-		if (cconf->data->pll_frac_set)
-			cconf->data->pll_frac_set(pdrv, cconf->pll_frac);
-		LCDPR("[%d]: %s: pll_frac=0x%x\n", pdrv->index, __func__, cconf->pll_frac);
-	}
-
+	if (cconf->data->pll_frac_set)
+		cconf->data->pll_frac_set(pdrv, cconf->pll_frac);
 	mutex_unlock(&lcd_clk_mutex);
 }
 
@@ -638,7 +629,7 @@ static int lcd_clk_config_chip_init(struct aml_lcd_drv_s *pdrv, struct lcd_clk_c
 	unsigned int i;
 
 	for (i = 0; i < pdrv->clk_conf_num; i++) {
-		cconf[i].pll_id = i;
+		cconf[i].pll_id = pdrv->index + i;
 		cconf[i].fin = FIN_FREQ;
 	}
 

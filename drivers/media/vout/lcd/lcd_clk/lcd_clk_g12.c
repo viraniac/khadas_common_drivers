@@ -31,9 +31,9 @@ static void lcd_pll_frac_set_gp0(struct aml_lcd_drv_s *pdrv, unsigned int frac)
 	val = lcd_ana_read(HHI_GP0_PLL_CNTL1);
 	lcd_ana_setb(HHI_GP0_PLL_CNTL1, frac, 0, 19);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
+		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x, pll_frac=0x%x\n",
 			__func__, HHI_GP0_PLL_CNTL1,
-			val, lcd_ana_read(HHI_GP0_PLL_CNTL1));
+			val, lcd_ana_read(HHI_GP0_PLL_CNTL1), frac);
 	}
 }
 
@@ -44,9 +44,9 @@ static void lcd_pll_m_set_gp0(struct aml_lcd_drv_s *pdrv, unsigned int m)
 	val = lcd_ana_read(HHI_GP0_PLL_CNTL0);
 	lcd_ana_setb(HHI_GP0_PLL_CNTL0, m, 0, 8);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
+		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x, pll_m=0x%x\n",
 			__func__, HHI_GP0_PLL_CNTL0,
-			val, lcd_ana_read(HHI_GP0_PLL_CNTL0));
+			val, lcd_ana_read(HHI_GP0_PLL_CNTL0), m);
 	}
 }
 
@@ -64,9 +64,9 @@ static void lcd_pll_frac_set_hpll(struct aml_lcd_drv_s *pdrv, unsigned int frac)
 	val = lcd_ana_read(HHI_HDMI_PLL_CNTL1);
 	lcd_ana_setb(HHI_HDMI_PLL_CNTL1, frac, 0, 19);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
+		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x, pll_frac=0x%x\n",
 			__func__, HHI_HDMI_PLL_CNTL1,
-			val, lcd_ana_read(HHI_HDMI_PLL_CNTL1));
+			val, lcd_ana_read(HHI_HDMI_PLL_CNTL1), frac);
 	}
 }
 
@@ -77,9 +77,9 @@ static void lcd_pll_m_set_hpll(struct aml_lcd_drv_s *pdrv, unsigned int m)
 	val = lcd_ana_read(HHI_HDMI_PLL_CNTL0);
 	lcd_ana_setb(HHI_HDMI_PLL_CNTL0, m, 0, 8);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
+		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x, pll_m=0x%x\n",
 			__func__, HHI_HDMI_PLL_CNTL0,
-			val, lcd_ana_read(HHI_HDMI_PLL_CNTL0));
+			val, lcd_ana_read(HHI_HDMI_PLL_CNTL0), m);
 	}
 }
 

@@ -142,9 +142,9 @@ static void lcd_pll_frac_set(struct aml_lcd_drv_s *pdrv, unsigned int frac)
 	val = lcd_ana_read(ANACTRL_TCON_PLL0_CNTL1 + offset);
 	lcd_ana_setb(ANACTRL_TCON_PLL0_CNTL1 + offset, frac, 0, 17);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
-			__func__, ANACTRL_TCON_PLL0_CNTL1 + offset,
-			val, lcd_ana_read(ANACTRL_TCON_PLL0_CNTL1 + offset));
+		LCDPR("[%d]: %s: reg 0x%x: 0x%08x->0x%08x, pll_frac=0x%x\n",
+			pdrv->index, __func__, ANACTRL_TCON_PLL0_CNTL1 + offset,
+			val, lcd_ana_read(ANACTRL_TCON_PLL0_CNTL1 + offset), frac);
 	}
 }
 
@@ -161,9 +161,9 @@ static void lcd_pll_m_set(struct aml_lcd_drv_s *pdrv, unsigned int m)
 	val = lcd_ana_read(ANACTRL_TCON_PLL0_CNTL0 + offset);
 	lcd_ana_setb(ANACTRL_TCON_PLL0_CNTL0 + offset, m, 0, 8);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
+		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x, pll_m=0x%x\n",
 			__func__, ANACTRL_TCON_PLL0_CNTL0 + offset,
-			val, lcd_ana_read(ANACTRL_TCON_PLL0_CNTL0 + offset));
+			val, lcd_ana_read(ANACTRL_TCON_PLL0_CNTL0 + offset), m);
 	}
 }
 

@@ -31,9 +31,9 @@ static void lcd_pll_frac_set(struct aml_lcd_drv_s *pdrv, unsigned int frac)
 	val = lcd_ana_read(HHI_GP0_PLL_CNTL1_AXG);
 	lcd_ana_setb(HHI_GP0_PLL_CNTL1_AXG, frac, 0, 19);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
+		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x, pll_frac=0x%x\n",
 			__func__, HHI_GP0_PLL_CNTL1_AXG,
-			val, lcd_ana_read(HHI_GP0_PLL_CNTL1_AXG));
+			val, lcd_ana_read(HHI_GP0_PLL_CNTL1_AXG), frac);
 	}
 }
 
@@ -44,9 +44,9 @@ static void lcd_pll_m_set(struct aml_lcd_drv_s *pdrv, unsigned int m)
 	val = lcd_ana_read(HHI_GP0_PLL_CNTL_AXG);
 	lcd_ana_setb(HHI_GP0_PLL_CNTL_AXG, m, 0, 8);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x\n",
+		LCDPR("%s: reg 0x%x: 0x%08x->0x%08x, pll_m=0x%x\n",
 			__func__, HHI_GP0_PLL_CNTL_AXG,
-			val, lcd_ana_read(HHI_GP0_PLL_CNTL_AXG));
+			val, lcd_ana_read(HHI_GP0_PLL_CNTL_AXG), m);
 	}
 }
 
