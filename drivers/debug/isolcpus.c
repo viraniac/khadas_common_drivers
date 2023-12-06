@@ -14,7 +14,6 @@
 #include <linux/amlogic/gki_module.h>
 
 static int have_isolcpus;
-static int have_apu_enable = 1;
 static int have_aml_isolcpus;
 static int have_isolcpus_speedup_boot;
 static struct cpumask aml_house_keeping_mask;
@@ -64,14 +63,6 @@ static int isolcpus_setup(char *str)
 	return 0;
 }
 __setup("isolcpus=", isolcpus_setup);
-
-static int apu_enable_setup(char *str)
-{
-	if (!strcmp(str, "0"))
-		have_apu_enable = 0;
-	return 0;
-}
-__setup("apu_enable=", apu_enable_setup);
 
 static int aml_isolcpus_setup(char *str)
 {
@@ -136,7 +127,7 @@ int aml_isolcpus_init(void)
 		return 0;
 	}
 
-	if (!have_aml_isolcpus || !have_apu_enable)
+	if (!have_aml_isolcpus)
 		return 0;
 
 	ret = register_kprobe(&kp_housekeeping_cpumask);
