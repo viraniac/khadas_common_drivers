@@ -43,6 +43,7 @@ static int __init media_main_init(void)
 #ifdef CONFIG_AMLOGIC_MEDIA_VRR
 	call_sub_init(vrr_init);
 #endif
+	call_sub_init(dsc_enc_init);
 	call_sub_init(amcanvas_init);
 	call_sub_init(amrdma_init);
 #ifdef CONFIG_AMLOGIC_HDMITX21
