@@ -121,6 +121,7 @@ static struct aml_ldim_driver_s ldim_driver = {
 	.load_db_en = 1,
 	.level_update = 0,
 	.resolution_update = 0,
+	.debug_ctrl = 0,
 
 	.state = LDIM_STATE_LD_EN,
 	.data_min = LD_DATA_MIN,
@@ -330,7 +331,7 @@ void ldim_vs_arithmetic(struct aml_ldim_driver_s *ldim_drv)
 		memcpy(ldim_drv->local_bl_matrix, fw->bl_matrix,
 		       size * (sizeof(unsigned int)));
 	} else {
-		if (fw->fw_sel == 1) {
+		if (fw->fw_sel == 1 || ldim_drv->debug_ctrl & 0x01) {
 			memcpy(ldim_drv->local_bl_matrix, fw->bl_matrix,
 		       size * (sizeof(unsigned int)));
 		} else {
@@ -393,12 +394,21 @@ static irqreturn_t ldim_vsync_isr(int irq, void *dev_id)
 {
 	unsigned long long local_time[3];
 	unsigned long flags;
+	unsigned char frm_cnt;
+	struct aml_lcd_drv_s *pdrv = aml_lcd_get_driver(0);
 
 	if (ldim_driver.valid_flag == 0)
 		return IRQ_HANDLED;
 
 	if (ldim_driver.init_on_flag == 0)
 		return IRQ_HANDLED;
+
+	local_time[0] = sched_clock();
+
+	ldim_driver.irq_cnt++;
+	if (ldim_driver.irq_cnt > 0xfffffff)
+		ldim_driver.irq_cnt = 0;
+	frm_cnt = (unsigned char)lcd_get_encl_frm_cnt(pdrv);
 
 	atomic_set(&ldim_inirq_flag, 1);
 
@@ -411,24 +421,23 @@ static irqreturn_t ldim_vsync_isr(int irq, void *dev_id)
 
 	ldim_fw_vsync_update();
 
-	local_time[0] = sched_clock();
 	if (ldim_dev.data->vs_arithmetic)
 		ldim_dev.data->vs_arithmetic(&ldim_driver);
-	local_time[1] = sched_clock();
-	local_time[2] = local_time[1] - local_time[0];
-	ldim_time_sort_save(ldim_driver.arithmetic_time, local_time[2]);
 
 	if (ldim_driver.dev_drv && ldim_driver.dev_drv->spi_sync == SPI_DMA_TRIG)
 		ldim_vs_brightness();
-
-	ldim_driver.irq_cnt++;
-	if (ldim_driver.irq_cnt > 0xfffffff)
-		ldim_driver.irq_cnt = 0;
 
 	ldim_driver.in_vsync_flag = 0;
 
 	spin_unlock_irqrestore(&ldim_isr_lock, flags);
 	atomic_set(&ldim_inirq_flag, 0);
+
+	local_time[1] = sched_clock();
+	local_time[2] = local_time[1] - local_time[0];
+	ldim_time_sort_save(ldim_driver.arithmetic_time, local_time[2]);
+	if (ldim_debug_print & LDIM_DBG_PR_VSYNC_ISR)
+		LDIMPR("%s irq_cnt=%d, frm_cnt=%d time: %lld : %lld\n",
+		__func__, ldim_driver.irq_cnt, frm_cnt, local_time[0], local_time[2]);
 
 	return IRQ_HANDLED;
 }
@@ -436,6 +445,7 @@ static irqreturn_t ldim_vsync_isr(int irq, void *dev_id)
 static irqreturn_t ldim_pwm_vs_isr(int irq, void *dev_id)
 {
 	unsigned long flags;
+	unsigned long long local_time[3];
 
 	if (ldim_driver.valid_flag == 0)
 		return IRQ_HANDLED;
@@ -443,17 +453,24 @@ static irqreturn_t ldim_pwm_vs_isr(int irq, void *dev_id)
 	if (ldim_driver.init_on_flag == 0)
 		return IRQ_HANDLED;
 
-	ldim_driver.pwm_vs_irq_cnt = ldim_driver.irq_cnt;
+	local_time[0] = sched_clock();
+
+	ldim_driver.pwm_vs_irq_cnt++;
+	if (ldim_driver.pwm_vs_irq_cnt > 0xfffffff)
+		ldim_driver.pwm_vs_irq_cnt = 0;
 
 	spin_lock_irqsave(&ldim_pwm_vs_isr_lock, flags);
-
-	if (ldim_debug_print == 7)
-		LDIMPR("%s: pwm_vs_irq_cnt = %d\n", __func__, ldim_driver.pwm_vs_irq_cnt);
 
 	if (ldim_driver.dev_drv && ldim_driver.dev_drv->spi_sync != SPI_DMA_TRIG)
 		ldim_vs_brightness();
 
 	spin_unlock_irqrestore(&ldim_pwm_vs_isr_lock, flags);
+
+	local_time[1] = sched_clock();
+	local_time[2] = local_time[1] - local_time[0];
+	if (ldim_debug_print & LDIM_DBG_PR_PWM_VS_ISR)
+		LDIMPR("%s pwm_vs_irq_cnt=%d, time: %lld : %lld\n",
+		__func__, ldim_driver.pwm_vs_irq_cnt, local_time[0], local_time[2]);
 
 	return IRQ_HANDLED;
 }

@@ -295,7 +295,7 @@ void ldim_set_duty_pwm(struct bl_pwm_config_s *bl_pwm)
 	bl_pwm->pwm_level = bl_do_div(((temp * bl_pwm->pwm_duty) +
 		((bl_pwm->pwm_duty_max + 1) >> 1)), bl_pwm->pwm_duty_max);
 
-	if (ldim_debug_print == 2) {
+	if (ldim_debug_print & LDIM_DBG_PR_PWM) {
 		LDIMPR("pwm port %d: duty= %d / %d, pwm_max=%d, pwm_min=%d, pwm_level=%d\n",
 		       bl_pwm->pwm_port, bl_pwm->pwm_duty, bl_pwm->pwm_duty_max,
 		       bl_pwm->pwm_max, bl_pwm->pwm_min, bl_pwm->pwm_level);
@@ -377,7 +377,7 @@ static int ldim_pwm_vs_update(struct aml_ldim_driver_s *ldim_drv)
 	if (bl_pwm->pwm_port != BL_PWM_VS)
 		return 0;
 
-	if (ldim_debug_print)
+	if (ldim_debug_print & LDIM_DBG_PR_PWM)
 		LDIMPR("%s\n", __func__);
 
 	cnt = lcd_vcbus_read(ENCL_VIDEO_MAX_LNCNT) + 1;

@@ -50,6 +50,13 @@ enum spiout_type_e {
 	SPIOUT_MAX,
 };
 
+#define LDIM_DBG_PR_VSYNC_ISR		0x80
+#define LDIM_DBG_PR_PWM_VS_ISR		0x40
+#define LDIM_DBG_PR_DEV_DBG_INFO	0x20
+#define LDIM_DBG_PR_PWM			0x10
+#define LDIM_DBG_PR_SPI			0x08
+#define LDIM_DBG_PR_SWAP_64BIT		0x04
+
 extern unsigned char ldim_debug_print;
 
 extern int ld_remap_lut[16][32];

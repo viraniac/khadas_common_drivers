@@ -91,7 +91,7 @@ static int ldim_spi_buf_byte_swap_64bit(unsigned char *buf, int tlen, int xlen)
 	if (!buf)
 		return -1;
 
-	if (ldim_debug_print == 20) {
+	if (ldim_debug_print & LDIM_DBG_PR_SWAP_64BIT) {
 		LDIMPR("dump Original buf len = %d\n", tlen);
 		ldim_spi_dump_buffer_array(buf, tlen);
 	}
@@ -104,7 +104,7 @@ static int ldim_spi_buf_byte_swap_64bit(unsigned char *buf, int tlen, int xlen)
 		tmp[i] = _bswap64(a);
 	}
 
-	if (ldim_debug_print == 20) {
+	if (ldim_debug_print & LDIM_DBG_PR_SWAP_64BIT) {
 		LDIMPR("dump buf_swap len = %d\n", xlen);
 		ldim_spi_dump_buffer_array(buf, xlen);
 	}
@@ -148,13 +148,14 @@ int ldim_spi_write_async(struct spi_device *spi, unsigned char *tbuf,
 
 	if (ldim_spi_async_busy_cnt > 5) {
 		ldim_spi_async_busy = 0;
-		LDIMPR("%s: ldim spi timeout!! ldim_spi_async_busy_cnt = %d\n",
+		if (ldim_debug_print & LDIM_DBG_PR_SPI)
+			LDIMPR("%s: ldim spi timeout!! ldim_spi_async_busy_cnt = %d\n",
 			__func__, ldim_spi_async_busy_cnt);
 	}
 
 	if (ldim_spi_async_busy) {
 		ldim_spi_async_busy_cnt++;
-		if (ldim_debug_print)
+		if (ldim_debug_print & LDIM_DBG_PR_SPI)
 			LDIMERR("%s: spi_async_busy=%d\n", __func__, ldim_spi_async_busy);
 		return -1;
 	}
@@ -258,7 +259,7 @@ int ldim_spi_write_dma_trig(struct spi_device *spi, unsigned char *tbuf,
 				ldim_spi_buf_byte_swap_64bit(tbuf, tlen, xlen);
 		}
 	} else {
-		if (ldim_debug_print)
+		if (ldim_debug_print & LDIM_DBG_PR_SPI)
 			LDIMERR("%s: dma_support should set 1\n", __func__);
 		return 0;
 	}
@@ -290,7 +291,7 @@ int ldim_spi_write(struct spi_device *spi, unsigned char *tbuf, int tlen)
 		return -1;
 	}
 	if (ldim_spi_async_busy) {
-		if (ldim_debug_print)
+		if (ldim_debug_print & LDIM_DBG_PR_SPI)
 			LDIMERR("%s: spi_async_busy=%d\n", __func__, ldim_spi_async_busy);
 		return -1;
 	}
@@ -327,7 +328,7 @@ int ldim_spi_read(struct spi_device *spi, unsigned char *tbuf, int tlen,
 		return -1;
 	}
 	if (ldim_spi_async_busy) {
-		if (ldim_debug_print)
+		if (ldim_debug_print & LDIM_DBG_PR_SPI)
 			LDIMERR("%s: spi_async_busy=%d\n", __func__, ldim_spi_async_busy);
 		return -1;
 	}
@@ -369,7 +370,7 @@ int ldim_spi_read_sync(struct spi_device *spi, unsigned char *tbuf,
 		return -1;
 	}
 	if (ldim_spi_async_busy) {
-		if (ldim_debug_print)
+		if (ldim_debug_print & LDIM_DBG_PR_SPI)
 			LDIMERR("%s: spi_async_busy=%d\n", __func__, ldim_spi_async_busy);
 		return -1;
 	}
@@ -406,9 +407,6 @@ static int ldim_spi_dev_probe(struct spi_device *spi)
 	struct ldim_dev_driver_s *dev_drv;
 	int ret = 0;
 
-	if (ldim_debug_print)
-		LDIMPR("%s\n", __func__);
-
 	if (!ldim_drv->dev_drv)
 		return 0;
 
@@ -433,9 +431,6 @@ static int ldim_spi_dev_remove(struct spi_device *spi)
 {
 	struct ldim_dev_driver_s *dev_drv = dev_get_drvdata(&spi->dev);
 	struct device *dev = spi->controller->dev.parent;
-
-	if (ldim_debug_print)
-		LDIMPR("%s\n", __func__);
 
 	if (dev_drv && dev_drv->spi_sync == SPI_DMA_TRIG)  {
 		dma_free_coherent(dev, dev_drv->spi_xlen,

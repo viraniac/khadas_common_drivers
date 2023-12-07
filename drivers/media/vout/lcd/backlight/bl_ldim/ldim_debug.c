@@ -572,7 +572,7 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 		aml_ldim_rmem_info();
 	} else if (!strcmp(parm[0], "print")) {
 		if (parm[1]) {
-			if (kstrtoul(parm[1], 10, &val1) < 0)
+			if (kstrtoul(parm[1], 0, &val1) < 0)
 				goto ldim_attr_store_err;
 			ldim_debug_print = (unsigned char)val1;
 		}
@@ -931,14 +931,27 @@ static ssize_t ldim_debug_store(struct class *class, struct class_attribute *att
 				goto ldim_debug_store_err;
 			ldim_drv->brightness_bypass = temp;
 		}
+	} else if (!strcmp(parm[0], "debug_ctrl")) {
+		if (parm[1]) {
+			if (kstrtouint(parm[1], 0, &temp) < 0)
+				goto ldim_debug_store_err;
+			ldim_drv->debug_ctrl = temp;
+		}
+		pr_info("debug_ctrl = %d\n", ldim_drv->debug_ctrl);
 	} else if (!strcmp(parm[0], "print")) {
 		if (parm[1]) {
-			if (kstrtouint(parm[1], 10, &temp) < 0)
+			if (kstrtouint(parm[1], 0, &temp) < 0)
 				goto ldim_debug_store_err;
 			ldim_debug_print = (unsigned char)temp;
 		}
 		pr_info("ldim_debug_print = %d\n", ldim_debug_print);
 	} else if (!strcmp(parm[0], "time")) {
+		if (!strcmp(parm[1], "clr")) {
+			for (i = 0; i < 10; i++) {
+				ldim_drv->arithmetic_time[0] = 0;
+				ldim_drv->xfer_time[0] = 0;
+			}
+		}
 		pr_info("arithmetic_time:\n");
 		ldim_time_print(ldim_drv->arithmetic_time);
 		pr_info("xfer_time:\n");

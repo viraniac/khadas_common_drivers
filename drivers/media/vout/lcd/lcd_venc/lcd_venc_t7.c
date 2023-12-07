@@ -555,7 +555,7 @@ static unsigned int lcd_venc_get_encl_frm_cnt(struct aml_lcd_drv_s *pdrv)
 	offset = pdrv->data->offset_venc[pdrv->index];
 	reg = VPU_VENCP_STAT + offset;
 
-	cnt = lcd_vcbus_getb(reg, 29, 3);
+	cnt = lcd_vcbus_getb(reg, 13, 3);
 	return cnt;
 }
 

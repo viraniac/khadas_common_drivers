@@ -101,7 +101,7 @@ static void ldim_vs_debug_info(struct aml_ldim_driver_s *ldim_drv)
 
 	if (bl_mcu->vsync_cnt) //300 vsync print once
 		return;
-	if (ldim_debug_print != 3)
+	if ((ldim_debug_print & LDIM_DBG_PR_DEV_DBG_INFO) == 0)
 		return;
 
 	LDIMPR("%s:\n", __func__);
