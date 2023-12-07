@@ -467,12 +467,15 @@ static enum tvin_sg_chg_flg vdin_hdmirx_fmt_chg_detect(struct vdin_dev_s *devp)
 					pre_color_fmt, cur_color_fmt,
 					pre_vdin_fmt_range, vdin_fmt_range,
 					devp->csc_cfg);
-			vdin_get_format_convert(devp);
-			devp->csc_cfg = 1;
-			if (!devp->game_mode && color_range_force == COLOR_RANGE_AUTO) {
-				vdin_vf_skip_all_disp(devp->vfp);
-				devp->chg_drop_frame_cnt = vdin_re_cfg_drop_cnt;
+
+			if (cur_color_fmt != pre_color_fmt) {
+				if (!devp->game_mode) {
+					vdin_vf_skip_all_disp(devp->vfp);
+					devp->chg_drop_frame_cnt = vdin_re_cfg_drop_cnt;
+				}
+				vdin_get_format_convert(devp);
 			}
+			devp->csc_cfg = 1;
 		}
 	}
 

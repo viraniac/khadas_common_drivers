@@ -4477,6 +4477,14 @@ start_chk:
 		pr_info("vdin%d:dbg_dv_hw5:%#x;%d,%d,%d\n", devp->index,
 			devp->debug.dbg_dv_hw5, devp->debug.dbg_dw_h, devp->debug.dbg_dw_v,
 			devp->debug.dbg_dw_dfmt);
+	} else if (!strcmp(parm[0], "hconv_mode")) {
+		if (!parm[1]) {
+			pr_err("miss parameters .\n");
+		} else if (kstrtoul(parm[1], 10, &val) == 0) {
+			devp->debug.hconv_mode = val;
+			pr_info("hconv_mode(%d):0x%x\n\n", devp->index,
+				devp->debug.hconv_mode);
+		}
 	}
 #endif
 	else if (!strcmp(parm[0], "state")) {
