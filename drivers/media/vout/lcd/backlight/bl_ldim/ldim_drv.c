@@ -48,6 +48,7 @@
 #include "../../lcd_common.h"
 #include "ldim_drv.h"
 #include "ldim_reg.h"
+#include "ldim_dev_drv.h"
 
 #define AML_LDIM_DEV_NAME            "aml_ldim"
 
@@ -105,7 +106,7 @@ static struct aml_ldim_driver_s ldim_driver = {
 	.vsync_change_flag = 0,
 	.duty_update_flag = 0,
 	.in_vsync_flag = 0,
-	.spiout_mode = 0,
+	.spiout_mode = SPIOUT_VSYNC,
 
 	.init_on_flag = 0,
 	.func_en = 1,
@@ -210,6 +211,11 @@ static int ldim_power_off(void)
 	ldim_driver.init_on_flag = 0;
 	if (ldim_driver.dev_drv && ldim_driver.dev_drv->power_off)
 		ldim_driver.dev_drv->power_off(&ldim_driver);
+
+	if (ldim_driver.dev_drv && ldim_driver.dev_drv->spi_sync == SPI_DMA_TRIG)
+		ldim_spi_dma_trig_stop(ldim_driver.dev_drv->spi_dev);
+
+	ldim_driver.state &= ~LDIM_STATE_SPI_SMR_EN;
 
 	return 0;
 }
@@ -408,7 +414,7 @@ static irqreturn_t ldim_vsync_isr(int irq, void *dev_id)
 	local_time[2] = local_time[1] - local_time[0];
 	ldim_time_sort_save(ldim_driver.arithmetic_time, local_time[2]);
 
-	if (ldim_driver.spiout_mode == 1)
+	if (ldim_driver.spiout_mode == SPIOUT_VSYNC)
 		ldim_vs_brightness();
 
 	ldim_driver.irq_cnt++;
@@ -440,7 +446,7 @@ static irqreturn_t ldim_pwm_vs_isr(int irq, void *dev_id)
 	if (ldim_debug_print == 7)
 		LDIMPR("%s: pwm_vs_irq_cnt = %d\n", __func__, ldim_driver.pwm_vs_irq_cnt);
 
-	if (ldim_driver.spiout_mode == 0)
+	if (ldim_driver.spiout_mode == SPIOUT_PWM_VS)
 		ldim_vs_brightness();
 
 	spin_unlock_irqrestore(&ldim_pwm_vs_isr_lock, flags);
@@ -470,15 +476,26 @@ static void ldim_dev_smr(int update_flag, unsigned int size)
 {
 	struct ldim_dev_driver_s *dev_drv = ldim_driver.dev_drv;
 
-	if (ldim_driver.dev_smr_bypass || ldim_driver.brightness_bypass)
-		return;
-
 	if (!dev_drv)
 		return;
 	if (!dev_drv->dev_smr) {
 		if (ldim_driver.dbg_vs_cnt == 0)
 			LDIMERR("%s: dev_smr is null\n", __func__);
 		return;
+	}
+
+	if (ldim_driver.dev_smr_bypass || ldim_driver.brightness_bypass) {
+		if ((ldim_driver.state & LDIM_STATE_SPI_SMR_EN) &&
+		dev_drv->spi_sync == SPI_DMA_TRIG)
+			ldim_spi_dma_trig_stop(dev_drv->spi_dev);
+
+		ldim_driver.state &= ~LDIM_STATE_SPI_SMR_EN;
+		return;
+	} else if ((ldim_driver.state & LDIM_STATE_SPI_SMR_EN) == 0) {
+		if (dev_drv->spi_sync == SPI_DMA_TRIG)
+			ldim_spi_dma_trig_start(dev_drv->spi_dev);
+
+		ldim_driver.state |= LDIM_STATE_SPI_SMR_EN;
 	}
 
 	if (update_flag) {
@@ -959,8 +976,9 @@ ldim_malloc_t7_err0:
 }
 
 static struct ldim_drv_data_s ldim_data_t7 = {
-	.ldc_chip_type = 0,
-	.spi_sync = 0,
+	.ldc_chip_type = LDC_T7,
+	.spi_sync = SPI_DMA_TRIG,
+	.spi_cont = SPI_T3,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
 	.v_zone_max = 32,
@@ -973,8 +991,24 @@ static struct ldim_drv_data_s ldim_data_t7 = {
 };
 
 static struct ldim_drv_data_s ldim_data_t3 = {
-	.ldc_chip_type = 1,
-	.spi_sync = 0,
+	.ldc_chip_type = LDC_T3,
+	.spi_sync = SPI_DMA_TRIG,
+	.spi_cont = SPI_T3,
+	.rsv_mem_size = 0x100000,
+	.h_zone_max = 48,
+	.v_zone_max = 32,
+	.total_zone_max = 1536,
+
+	.vs_arithmetic = ldim_vs_arithmetic,
+	.memory_init = aml_ldim_malloc,
+	.drv_init = NULL,
+	.func_ctrl = NULL,
+};
+
+static struct ldim_drv_data_s ldim_data_t5m = {
+	.ldc_chip_type = LDC_T3,
+	.spi_sync = SPI_DMA_TRIG,
+	.spi_cont = SPI_T5M,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
 	.v_zone_max = 32,
@@ -987,8 +1021,9 @@ static struct ldim_drv_data_s ldim_data_t3 = {
 };
 
 static struct ldim_drv_data_s ldim_data_t3x = {
-	.ldc_chip_type = 2,
-	.spi_sync = 0,
+	.ldc_chip_type = LDC_T3X,
+	.spi_sync = SPI_DMA_TRIG,
+	.spi_cont = SPI_T3X,
 	.rsv_mem_size = 0x400000,
 	.h_zone_max = 96,
 	.v_zone_max = 64,
@@ -1056,9 +1091,12 @@ int aml_ldim_probe(struct platform_device *pdev)
 		break;
 	case LCD_CHIP_T3:
 	case LCD_CHIP_T5W:
-	case LCD_CHIP_T5M:
 		devp->data = &ldim_data_t3;
 		ldim_driver.data = &ldim_data_t3;
+		break;
+	case LCD_CHIP_T5M:
+		devp->data = &ldim_data_t5m;
+		ldim_driver.data = &ldim_data_t5m;
 		break;
 	case LCD_CHIP_T3X:
 		devp->data = &ldim_data_t3x;
