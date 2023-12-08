@@ -860,7 +860,7 @@
 };
 
 &vpu {
-	clk_level = <5>;
+	clk_level = <6>;
 };
 
 &cma_shrinker {
