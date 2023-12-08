@@ -497,7 +497,7 @@ void pq_user_latch_process(int vpp_index);
 void vlock_process(struct vframe_s *vf,
 		   struct vpp_frame_par_s *cur_video_sts);
 void frame_lock_process(struct vframe_s *vf,
-		   struct vpp_frame_par_s *cur_video_sts);
+		   struct vpp_frame_par_s *cur_video_sts, u16 line);
 int frc_input_handle(struct vframe_s *vf, struct vpp_frame_par_s *cur_video_sts);
 void get_hdr_process_name(int id, char *name, char *output_fmt);
 

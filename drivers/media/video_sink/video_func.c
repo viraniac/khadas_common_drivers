@@ -2800,6 +2800,9 @@ static int amvideo_early_proc(u8 layer_id)
 	struct vframe_s *vf_tmp;
 	s32 vd1_path_id = glayer_info[0].display_path_id;
 	struct cur_line_info_t *cur_line_info = get_cur_line_info(0);
+#if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
+	u16 line = glayer_info[0].layer_top;
+#endif
 
 	vd_dispbuf_to_put(layer_id);
 	get_count_pip[0] = 0;
@@ -2861,9 +2864,9 @@ static int amvideo_early_proc(u8 layer_id)
 		vd1_path_id == VFM_PATH_DEF)) {
 		/*need call every vsync*/
 		if (vf_tmp)
-			frame_lock_process(vf_tmp, cur_frame_par[0]);
+			frame_lock_process(vf_tmp, cur_frame_par[0], line);
 		else
-			frame_lock_process(NULL, cur_frame_par[0]);
+			frame_lock_process(NULL, cur_frame_par[0], line);
 	}
 #endif
 
@@ -3300,6 +3303,9 @@ static struct vframe_s *do_renderx_toggle_frame
 	struct path_id_s *path_id)
 {
 	struct vframe_s *path_new_frame = NULL;
+#if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
+	u16 line = glayer_info[0].layer_top;
+#endif
 
 	/* video_render.x toggle frame */
 	if (gvideo_recv[path_index]) {
@@ -3323,12 +3329,12 @@ static struct vframe_s *do_renderx_toggle_frame
 				/*need call every vsync*/
 				if (path_new_frame)
 					frame_lock_process(path_new_frame,
-						cur_frame_par[0]);
+						cur_frame_par[0], line);
 				else if (vd_layer[0].dispbuf)
 					frame_lock_process(vd_layer[0].dispbuf,
-						cur_frame_par[0]);
+						cur_frame_par[0], line);
 				else
-					frame_lock_process(NULL, cur_frame_par[0]);
+					frame_lock_process(NULL, cur_frame_par[0], line);
 			}
 #endif
 		}

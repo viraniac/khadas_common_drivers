@@ -46,6 +46,7 @@ unsigned int frame_lock_en = 1;
 unsigned int vrr_priority;
 unsigned int vrr_delay_line = 200;
 unsigned int vrr_delay_line_50hz = 600;
+unsigned int vrr_delay_line_pre;
 
 static unsigned int vrrlock_support = VRRLOCK_SUP_MODE;
 static unsigned int vrr_dis_cnt_no_vf_limit = 5;
@@ -590,7 +591,7 @@ u16 frame_lock_check_lock_type(struct vpp_frame_par_s *cur_video_sts, struct vfr
 }
 
 void vrrlock_process(struct vframe_s *vf,
-		   struct vpp_frame_par_s *cur_video_sts)
+		   struct vpp_frame_par_s *cur_video_sts, u16 line)
 {
 	u16 vrr_en = frame_sts.vrr_en;
 	u32 cur_frame_rate = frame_sts.vrr_frame_cur;
@@ -609,10 +610,25 @@ void vrrlock_process(struct vframe_s *vf,
 	if (!vinfo)
 		return;
 
-	if (ret_hz == 50 || ret_hz == 100)
+	if ((ret_hz == 50 || ret_hz == 100) && !frame_sts.vrr_policy) {
 		vdata.line_dly = vrr_delay_line_50hz;
-	else
-		vdata.line_dly = vrr_delay_line;
+		if (frame_lock_debug & VRR_POLICY_LOCK_STATUS_DEBUG_FLAG)
+			framelock_pr_info("%s vdata.line_dly:%d\n",
+				__func__, vdata.line_dly);
+	} else {
+		if (vinfo->height == 2160)
+			vdata.line_dly =
+			(vf->compHeight < vinfo->height &&
+			vf->compHeight >= 1080 && line <= 1080) ?
+			(vinfo->height - vf->compHeight - line) + vrr_delay_line :
+			vrr_delay_line;
+		else if (vinfo->height == 1080)
+			vdata.line_dly =
+				vf->compHeight > vinfo->height ?
+					(vf->compHeight - vinfo->height) : vrr_delay_line;
+		else
+			vdata.line_dly = vrr_delay_line;
+	}
 
 	if (vrr_en) {
 		frame_lock_calc_lcnt_variance_val(vf);
@@ -636,7 +652,8 @@ void vrrlock_process(struct vframe_s *vf,
 				frame_lock_vrr_ctrl(true, &vdata);
 			}
 		} else if (vrr_display_mode_chg_cmd == 0) {
-			if (frame_sts.vrr_frame_sts != frame_sts.vrr_frame_pre_sts) {
+			if (frame_sts.vrr_frame_sts != frame_sts.vrr_frame_pre_sts ||
+					vdata.line_dly != vrr_delay_line_pre) {
 				if (frame_sts.vrr_frame_sts == FRAMELOCK_VRRLOCK) {
 					vlock_set_sts_by_frame_lock(false);
 					frame_lock_vrr_ctrl(true, &vdata);
@@ -673,15 +690,25 @@ void vrrlock_process(struct vframe_s *vf,
 		}
 	}
 
-	if (frame_lock_debug & VRR_POLICY_LOCK_STATUS_DEBUG_FLAG)
-		framelock_pr_info("vrr_frame_sts:%d vrr_frame_pre_sts:%d vlock_en:%d lfc:%d policy_pre:%d policy:%d",
+	if (frame_lock_debug & VRR_POLICY_LOCK_STATUS_DEBUG_FLAG) {
+		framelock_pr_info("vrr_frame_sts:%d vrr_frame_pre_sts:%d vlock_en:%d lfc:%d",
 			frame_sts.vrr_frame_sts,
 			frame_sts.vrr_frame_pre_sts,
 			vlock_en,
-			frame_sts.vrr_lfc_mode,
+			frame_sts.vrr_lfc_mode);
+		framelock_pr_info("pol_pre:%d pol:%d cHei:%d hei:%d l_d:%d l_d_pre:%d l:%d",
 			frame_sts.vrr_policy_pre,
-			frame_sts.vrr_policy);
+			frame_sts.vrr_policy,
+			vf->compHeight,
+			vinfo->height,
+			vdata.line_dly,
+			vrr_delay_line_pre,
+			line);
+	}
+
+	vrr_delay_line_pre = vdata.line_dly;
 }
+
 #endif
 
 /*
@@ -696,7 +723,7 @@ void vrrlock_process(struct vframe_s *vf,
  */
 
 void frame_lock_process(struct vframe_s *vf,
-		   struct vpp_frame_par_s *cur_video_sts)
+		   struct vpp_frame_par_s *cur_video_sts, u16 line)
 {
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	if (probe_ok == 0) {
@@ -721,7 +748,7 @@ void frame_lock_process(struct vframe_s *vf,
 
 	switch (frame_sts.vrr_frame_lock_type) {
 	case FRAMELOCK_VRRLOCK:
-		vrrlock_process(vf, cur_video_sts);
+		vrrlock_process(vf, cur_video_sts, line);
 		break;
 	case FRAMELOCK_VLOCK:
 		if (frame_sts.vrr_frame_pre_sts != frame_sts.vrr_frame_lock_type)
