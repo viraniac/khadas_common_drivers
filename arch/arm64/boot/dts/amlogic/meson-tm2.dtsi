@@ -660,7 +660,7 @@
 
 	multi-di {
 		compatible = "amlogic, dim-tm2vb";
-		status = "disabled";
+		status = "okay";
 		/* 0:use reserved; 1:use cma; 2:use cma as reserved */
 		flag_cma = <4>;
 		//memory-region = <&di_reserved>;
