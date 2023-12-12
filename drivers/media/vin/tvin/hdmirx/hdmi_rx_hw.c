@@ -1691,6 +1691,8 @@ void rx_get_aud_info(struct aud_info_s *audio_info, u8 port)
 	struct aud_infoframe_st *pkt =
 		(struct aud_infoframe_st *)&prx->aud_pktinfo;
 
+	if (port == rx_info.sub_port)
+		return;
 	/* refer to hdmi spec. CT = 0 */
 	audio_info->coding_type = 0;
 	/* refer to hdmi spec. SS = 0 */
@@ -2002,6 +2004,8 @@ u32 hdmirx_audio_fifo_rst(u8 port)
 {
 	int error = 0;
 
+	if (port == rx_info.sub_port)
+		return 0;
 	if (rx_info.chip_id >= CHIP_ID_T7) {
 		if (rx_info.chip_id >= CHIP_ID_T5M) {
 			hdmirx_wr_cor(RX_AUDIO_FIFO_RST, 0xff, port);
@@ -4535,12 +4539,16 @@ bool is_aud_fifo_error(void)
 bool is_aud_pll_error(void)
 {
 	bool ret = true;
-	u32 clk = rx[rx_info.main_port].aud_info.aud_clk;
-	u32 aud_128fs = rx[rx_info.main_port].aud_info.real_sr * 128;
-	u32 aud_512fs = rx[rx_info.main_port].aud_info.real_sr * 512;
+	u32 clk;
+	u32 aud_128fs;
+	u32 aud_512fs;
 
 	if (rx_info.chip_id >= CHIP_ID_T7)
 		return false;
+
+	clk = rx[rx_info.main_port].aud_info.aud_clk;
+	aud_128fs = rx[rx_info.main_port].aud_info.real_sr * 128;
+	aud_512fs = rx[rx_info.main_port].aud_info.real_sr * 512;
 	if (rx[rx_info.main_port].aud_info.real_sr == 0)
 		return false;
 	if (abs(clk - aud_128fs) < AUD_PLL_THRESHOLD ||
@@ -4559,6 +4567,10 @@ void rx_aud_pll_ctl(bool en, u8 port)
 	int tmp = 0;
 	/*u32 od, od2;*/
 
+	if (rx_is_pip_on() && port == rx_info.sub_port) {
+		rx_pr("%s sub_port mute\n", __func__);
+		return;
+	}
 	if (rx_info.chip_id >= CHIP_ID_TL1) {
 		if (rx_info.chip_id == CHIP_ID_T7) {
 			if (en) {
@@ -5452,6 +5464,8 @@ void hdmirx_config_video(u8 port)
  */
 void hdmirx_config_audio(u8 port)
 {
+	if (port == rx_info.sub_port)
+		return;
 	if (rx_info.chip_id >= CHIP_ID_T7) {
 		/* set MCLK for I2S/SPDIF */
 		hdmirx_wr_cor(AAC_MCLK_SEL_AUD_IVCRX, 0x80, port);

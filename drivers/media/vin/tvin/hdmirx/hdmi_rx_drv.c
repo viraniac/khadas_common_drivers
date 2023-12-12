@@ -515,6 +515,8 @@ int hdmirx_dec_open(struct tvin_frontend_s *fe, enum tvin_port_e port,
 	enum tvin_port_type_e port_type)
 {
 	struct hdmirx_dev_s *devp;
+	u8 main_port = rx_info.main_port;
+	u8 sub_port = rx_info.sub_port;
 
 	devp = container_of(fe, struct hdmirx_dev_s, frontend);
 	devp->param[port_type].port = port;
@@ -522,17 +524,15 @@ int hdmirx_dec_open(struct tvin_frontend_s *fe, enum tvin_port_e port,
 	/* should enable the adc ref signal for audio pll */
 	/* vdac_enable(1, VDAC_MODULE_AUDIO_OUT); */
 	if (port_type == TVIN_PORT_MAIN) {
-		rx_info.main_port = (port - TVIN_PORT_HDMI0) & 0xff;
-		if (!rx_info.sub_port_open)
-			rx_info.sub_port = 0xff;
+		main_port = (port - TVIN_PORT_HDMI0) & 0xff;
 	} else if (port_type == TVIN_PORT_SUB) {
 		rx_info.pip_on = true;
-		rx_info.sub_port = (port - TVIN_PORT_HDMI0) & 0xff;
+		sub_port = (port - TVIN_PORT_HDMI0) & 0xff;
 	} else {
 		return -1;
 	}
-	hdmirx_open_port(rx_info.main_port, rx_info.sub_port);
-	rx_pr("%s main_port:%x, sub_port:%x\n", __func__, rx_info.main_port, rx_info.sub_port);
+	hdmirx_open_port(main_port, sub_port);
+	rx_pr("%s main_port:%x, sub_port:%x\n", __func__, main_port, sub_port);
 	return 0;
 }
 
@@ -4364,7 +4364,12 @@ static struct platform_driver hdmirx_driver = {
 
 u8 rx_get_port_type(u8 port)
 {
-	return (port == rx_info.sub_port) ? TVIN_PORT_SUB : TVIN_PORT_MAIN;
+	if (port == rx_info.main_port)
+		return TVIN_PORT_MAIN;
+	else if (port == rx_info.sub_port)
+		return TVIN_PORT_SUB;
+	else
+		return TVIN_PORT_UNKNOWN;
 }
 
 bool rx_is_pip_on(void)

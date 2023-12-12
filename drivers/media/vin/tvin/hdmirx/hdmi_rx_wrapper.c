@@ -2105,7 +2105,7 @@ reisr:hdmirx_top_intr_stat = hdmirx_rd_top(TOP_INTR_STAT, port);
 					rx_update_sig_info(port);
 					emp_rcvd = false;
 				}
-				tvin_update_vdin_prop();
+				tvin_update_vdin_prop(rx_get_port_type(port));
 			}
 			if (log_level & 0x400)
 				rx_pr("[isr] DE rise.\n");
@@ -2258,7 +2258,7 @@ irqreturn_t irq1_handler(int irq, void *params)
 				rx_update_sig_info(E_PORT1);
 				emp_rcvd = false;
 			}
-			tvin_update_vdin_prop();
+			tvin_update_vdin_prop(rx_get_port_type(E_PORT1));
 		}
 		if (log_level & 0x400)
 			rx_pr("[isr] DE rise.\n");
@@ -2394,7 +2394,7 @@ irqreturn_t irq2_handler(int irq, void *params)
 				rx_update_sig_info(E_PORT2);
 				emp_rcvd = false;
 			}
-			tvin_update_vdin_prop();
+			tvin_update_vdin_prop(rx_get_port_type(E_PORT2));
 		}
 		if (log_level & 0x400)
 			rx_pr("[isr] DE rise.\n");
@@ -2553,7 +2553,7 @@ irqreturn_t irq3_handler(int irq, void *params)
 				rx_update_sig_info(E_PORT3);
 				emp_rcvd = false;
 			}
-			tvin_update_vdin_prop();
+			tvin_update_vdin_prop(rx_get_port_type(E_PORT3));
 		}
 		if (log_level & 0x400)
 			rx_pr("[isr] DE rise.\n");
@@ -2636,6 +2636,8 @@ static bool check_real_sr_change(u8 port)
 	/* note: if arc is mismatch with LUT, then return 0 */
 	u32 ret_sr = 0;
 
+	if (port  == rx_info.sub_port)
+		return false;
 	for (i = 0; sr_tbl[i][0] != 0; i++) {
 		if (abs(rx[port].aud_info.arc - sr_tbl[i][0]) < sr_tbl[i][1]) {
 			ret_sr = sr_tbl[i][0];
@@ -4779,12 +4781,16 @@ void wait_ddc_idle(u8 port)
 
 void hdmirx_open_main_port_t3x(u8 port)
 {
+	if (rx_info.main_port_open && port == rx_info.main_port)
+		return;
 	rx_info.main_port_open = true;
+	rx_info.main_port = port;
 	aml_phy_switch_port(port);
 	if (rx[port].state >= FSM_SIG_READY) {
 		hdmirx_top_irq_en(1, 2, port);
 		rx_aud_pll_ctl(1, port);
 	}
+	rx_pr("%s:%d\n", __func__, port);
 }
 
 /***********************
@@ -4795,6 +4801,7 @@ static void hdmirx_open_main_port(u8 port)
 	u32 fsmst = sm_pause;
 
 	rx_info.main_port_open = true;
+	rx_info.main_port = port;
 	/* stop fsm when switch port */
 	if (rx[port].resume_flag) {
 		rx[port].resume_flag = false;
@@ -4859,12 +4866,13 @@ static void hdmirx_open_main_port(u8 port)
 
 static void hdmirx_open_sub_port(u8 port)
 {
+	if (rx_info.sub_port_open && port == rx_info.sub_port)
+		return;
 	rx_info.sub_port_open = true;
+	rx_info.sub_port = port;
 	aml_phy_switch_port(port);
-	if (rx[port].state >= FSM_SIG_READY) {
+	if (rx[port].state >= FSM_SIG_READY)
 		hdmirx_top_irq_en(1, 2, port);
-		rx_aud_pll_ctl(1, port);
-	}
 	rx_pr("%s:%d\n", __func__, port);
 }
 
@@ -4891,7 +4899,8 @@ void hdmirx_close_port(u8 port)
 	if (disable_port_en)
 		rx_set_port_hpd(disable_port_num, 0);
 	hdmirx_top_irq_en(0, 0, port);
-	hdmirx_audio_disabled(port);//todo
+	if (port != rx_info.sub_port)
+		hdmirx_audio_disabled(port);//todo
 	if (hdmirx_repeat_support())
 		hdmitx_reauth_request(UPSTREAM_INACTIVE);
 	/* after port close, stop count DE/AVI infoframe */

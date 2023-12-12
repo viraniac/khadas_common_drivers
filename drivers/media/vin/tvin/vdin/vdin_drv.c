@@ -274,51 +274,57 @@ EXPORT_SYMBOL(get_vdin_buffer_num);
  *	true: state change
  *	false: state not change
  */
-void tvin_update_vdin_prop(void)
+void tvin_update_vdin_prop(u8 port_type)
 {
 	struct tvin_state_machine_ops_s *sm_ops;
 	struct vframe_s *update_wr_vf = NULL;
-	struct vdin_dev_s *vdin0_devp = vdin_devp[0];
+	struct vdin_dev_s *devp = NULL;
 	ulong flags;
 
-	if (!vdin0_devp || !vdin0_devp->frontend ||
-	    !vdin0_devp->frontend->sm_ops ||
-	    !(vdin0_devp->flags & VDIN_FLAG_ISR_EN))
+	if (port_type == TVIN_PORT_MAIN)
+		devp = vdin_devp[0];
+	else if (port_type == TVIN_PORT_SUB)
+		devp = vdin_devp[1];
+	else
+		return;
+	if (!devp || !devp->frontend ||
+	    !devp->frontend->sm_ops ||
+	    !(devp->flags & VDIN_FLAG_ISR_EN))
 		return;
 
-	if (vdin0_devp->debug.bypass_update_prop)
+	if (devp->debug.bypass_update_prop)
 		return;
 
-	sm_ops = vdin0_devp->frontend->sm_ops;
+	sm_ops = devp->frontend->sm_ops;
 
-	spin_lock_irqsave(&vdin0_devp->isr_lock, flags);
-	sm_ops->get_sig_property(vdin0_devp->frontend, &vdin0_devp->prop, vdin0_devp->port_type);
-	if (vdin_package_done_check_state(vdin0_devp)) {
-		if (vdin0_devp->game_mode)
-			vdin_pause_hw_write(vdin0_devp, 0);
-		vdin0_devp->frame_drop_num = 1;
-		vdin_vf_skip_all_disp(vdin0_devp->vfp);
-		vdin_drop_frame_info(vdin0_devp, "de start state chg");
+	spin_lock_irqsave(&devp->isr_lock, flags);
+	sm_ops->get_sig_property(devp->frontend, &devp->prop, devp->port_type);
+	if (vdin_package_done_check_state(devp)) {
+		if (devp->game_mode)
+			vdin_pause_hw_write(devp, 0);
+		devp->frame_drop_num = 1;
+		vdin_vf_skip_all_disp(devp->vfp);
+		vdin_drop_frame_info(devp, "de start state chg");
 	}
 
-	if ((vdin0_devp->debug.change_get_drm & CURRENT_FRAME_GET_PROP) &&
-	    vdin0_devp->last_wr_vfe && (vdin0_devp->game_mode & VDIN_GAME_MODE_1 ||
-	    vdin0_devp->game_mode & VDIN_GAME_MODE_2)) {
-		update_wr_vf = &vdin0_devp->last_wr_vfe->vf;
-		vdin_set_drm_data(vdin0_devp, update_wr_vf);
-		vdin_set_vframe_prop_info(update_wr_vf, vdin0_devp);
-		vdin_set_freesync_data(vdin0_devp, update_wr_vf);
+	if ((devp->debug.change_get_drm & CURRENT_FRAME_GET_PROP) &&
+	    devp->last_wr_vfe && (devp->game_mode & VDIN_GAME_MODE_1 ||
+	    devp->game_mode & VDIN_GAME_MODE_2)) {
+		update_wr_vf = &devp->last_wr_vfe->vf;
+		vdin_set_drm_data(devp, update_wr_vf);
+		vdin_set_vframe_prop_info(update_wr_vf, devp);
+		vdin_set_freesync_data(devp, update_wr_vf);
 	}
 	if (sm_ops->hdmi_clr_pkts)
-		sm_ops->hdmi_clr_pkts(vdin0_devp->frontend, vdin0_devp->port_type);
-	spin_unlock_irqrestore(&vdin0_devp->isr_lock, flags);
+		sm_ops->hdmi_clr_pkts(devp->frontend, devp->port_type);
+	spin_unlock_irqrestore(&devp->isr_lock, flags);
 
 	if (vdin_isr_monitor & DBG_RX_UPDATE_VDIN_PROP && update_wr_vf)
 		pr_info("%s: index:%d disp:%d game:%d\n",
 			__func__, update_wr_vf->index,
-			update_wr_vf->index_disp, vdin0_devp->game_mode);
+			update_wr_vf->index_disp, devp->game_mode);
 	else if (vdin_isr_monitor & DBG_RX_UPDATE_VDIN_PROP)
-		pr_info("%s: game:%d\n", __func__, vdin0_devp->game_mode);
+		pr_info("%s: game:%d\n", __func__, devp->game_mode);
 }
 EXPORT_SYMBOL(tvin_update_vdin_prop);
 
