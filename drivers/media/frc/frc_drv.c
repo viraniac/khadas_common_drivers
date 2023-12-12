@@ -66,6 +66,7 @@
 #include <linux/cma.h>
 #include <linux/genalloc.h>
 #include <linux/dma-mapping.h>
+// #include <linux/delay.h>
 
 #include "frc_drv.h"
 #include "frc_proc.h"
@@ -462,6 +463,7 @@ void frc_power_domain_ctrl(struct frc_dev_s *devp, u32 onoff)
 		set_frc_enable(false);
 		set_frc_bypass(true);
 		frc_state_change_finish(devp);
+		set_frc_clk_disable(devp, 1);
 		devp->power_on_flag = false;
 	}
 
@@ -472,11 +474,18 @@ void frc_power_domain_ctrl(struct frc_dev_s *devp, u32 onoff)
 			pwr_ctrl_psci_smc(PDID_T3_FRCME, PWR_ON);
 			pwr_ctrl_psci_smc(PDID_T3_FRCMC, PWR_ON);
 #endif
+			devp->power_on_flag = true;
+			if (devp->clk_me || devp->clk_frc) {
+				set_frc_clk_disable(devp, 0);
+			} else {
+				devp->clk_frc = clk_get(&devp->pdev->dev, "clk_frc");
+				devp->clk_me = clk_get(&devp->pdev->dev, "clk_me");
+				frc_clk_init(devp);
+			}
 			// alloc frc buf according to status of alloced
 			if (!devp->buf.cma_mem_alloced) {
 				frc_buf_alloc(devp);
 			}
-			devp->power_on_flag = true;
 			frc_init_config(devp);
 			frc_buf_config(devp);
 			frc_internal_initial(devp);
@@ -496,9 +505,17 @@ void frc_power_domain_ctrl(struct frc_dev_s *devp, u32 onoff)
 #ifdef K_MEMC_CLK_DIS
 			pwr_ctrl_psci_smc(PDID_T5M_FRC_TOP, PWR_ON);
 #endif
+			devp->power_on_flag = true;
+			pr_frc(0, "%s clk set\n", __func__);
+			if (devp->clk_me || devp->clk_frc) {
+				set_frc_clk_disable(devp, 0);
+			} else {
+				devp->clk_frc = clk_get(&devp->pdev->dev, "clk_frc");
+				devp->clk_me = clk_get(&devp->pdev->dev, "clk_me");
+				frc_clk_init(devp);
+			}
 			if (!devp->buf.cma_mem_alloced)
 				frc_buf_alloc(devp);
-			devp->power_on_flag = true;
 			frc_init_config(devp);
 			frc_buf_config(devp);
 			frc_internal_initial(devp);
@@ -511,16 +528,23 @@ void frc_power_domain_ctrl(struct frc_dev_s *devp, u32 onoff)
 
 #endif
 		}
-		pr_frc(2, "t5m power domain power %d\n", onoff);
+		pr_frc(2, "t5m power domain power. %d\n", onoff);
 
 	} else if (chip == ID_T3X) {
 		if (onoff) {
 #ifdef K_MEMC_CLK_DIS
 			pwr_ctrl_psci_smc(PDID_T3X_FRC_TOP, PWR_ON);
 #endif
+			devp->power_on_flag = true;
+			if (devp->clk_me || devp->clk_frc) {
+				set_frc_clk_disable(devp, 0);
+			} else {
+				devp->clk_frc = clk_get(&devp->pdev->dev, "clk_frc");
+				devp->clk_me = clk_get(&devp->pdev->dev, "clk_me");
+				frc_clk_init(devp);
+			}
 			if (!devp->buf.cma_mem_alloced)
 				frc_buf_alloc(devp);
-			devp->power_on_flag = true;
 			set_frc_clk_disable(devp, 0);
 			frc_init_config(devp);
 			frc_buf_config(devp);
@@ -532,7 +556,6 @@ void frc_power_domain_ctrl(struct frc_dev_s *devp, u32 onoff)
 			set_frc_clk_disable(devp, 1);
 #ifdef K_MEMC_CLK_DIS
 			pwr_ctrl_psci_smc(PDID_T3X_FRC_TOP, PWR_OFF);
-
 #endif
 		}
 		pr_frc(2, "t3x power domain power %d\n", onoff);

@@ -110,8 +110,9 @@
 // frc_20231102 fix frc fhd windows flash
 // frc_20231102 restore enable setting
 // frc_20231031 frc compress mc memory usage size
+// frc_20240111 n2m and vpu slice workaround
 
-#define FRC_FW_VER			"2024-0111 n2m and vpu slice workaround"
+#define FRC_FW_VER			"2024-0104 open clk when sys resume"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1

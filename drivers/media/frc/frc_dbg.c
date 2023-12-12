@@ -1037,7 +1037,17 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->use_pre_vsync = val1;
-	}  else if (!strcmp(parm[0], "frc_sus")) {
+	} else if (!strcmp(parm[0], "mvrd_mode")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->dbg_mvrd_mode = val1;
+	} else if (!strcmp(parm[0], "mute_dis")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->dbg_mute_disable = val1;
+	} else if (!strcmp(parm[0], "frc_sus")) {
 		if (!parm[1])
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0) {
@@ -1057,16 +1067,6 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 				devp->frc_sts.re_config = true;
 			}
 		}
-	} else if (!strcmp(parm[0], "mvrd_mode")) {
-		if (!parm[1])
-			goto exit;
-		if (kstrtoint(parm[1], 10, &val1) == 0)
-			devp->dbg_mvrd_mode = val1;
-	} else if (!strcmp(parm[0], "mute_dis")) {
-		if (!parm[1])
-			goto exit;
-		if (kstrtoint(parm[1], 10, &val1) == 0)
-			devp->dbg_mute_disable = val1;
 	} else if (!strcmp(parm[0], "en_mute")) {
 		if (!parm[2])
 			goto exit;
