@@ -265,7 +265,7 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 	vso_ln_bgn = vs_vs_addr;
 	vso_ln_end = vs_ve_addr;
 
-	lcd_vcbus_write(ENCL_VIDEO_MODE_T3X + offset, 0x10040);
+	lcd_vcbus_write(ENCL_VIDEO_MODE_T3X + offset, 0x18040);//bit[15];shadow_en
 	lcd_vcbus_setb(ENCL_VIDEO_VSRC_CTRL + offset, 1, 4, 1);//reg_vfifo_en
 	/*vfifo_upmode, 0:1ppc,1:2ppc,2, 4ppc */
 	lcd_vcbus_setb(ENCL_VIDEO_VSRC_CTRL + offset, 0, 0, 3);
@@ -498,7 +498,7 @@ static void lcd_venc_enable_ctrl(struct aml_lcd_drv_s *pdrv, int flag)
 static void lcd_venc_mute_set(struct aml_lcd_drv_s *pdrv, unsigned char flag)
 {
 	if (flag)
-		lcd_venc_debug_test(pdrv, 9);
+		lcd_venc_debug_test(pdrv, 8);
 	else
 		lcd_venc_debug_test(pdrv, 0);
 }
