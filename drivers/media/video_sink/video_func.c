@@ -78,8 +78,11 @@
 #include "video_reg.h"
 #include "video_func.h"
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
 static unsigned int vpp_new_frame;
-
+#endif
+#endif
 /* local var */
 static u32 blend_conflict_cnt;
 static u32 stop_update;
@@ -126,6 +129,11 @@ static bool need_force_black;
 static u32 always_new_vf_cnt;
 
 bool rdma_enable_pre;
+
+u32 frc_mute_frames = 3;
+u32 frc_muted_frames;
+MODULE_PARM_DESC(frc_mute_frames, "\n frc_mute_frames\n");
+module_param(frc_mute_frames, uint, 0664);
 
 bool get_video_reverse(void)
 {
@@ -1904,8 +1912,10 @@ render_exit:
 #ifdef CONFIG_AMLOGIC_VDETECT
 		vdetect_get_frame_nn_info(vd_layer[0].dispbuf);
 #endif
+#if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
 		vf_pq_process(vd_layer[0].dispbuf, vpp_scenes,
 			      pq_process_debug, vpp_new_frame);
+#endif
 		if (ai_pq_debug > 0x10) {
 			ai_pq_debug--;
 			if (ai_pq_debug == 0x10)
@@ -3731,6 +3741,76 @@ static struct vframe_s *vdx_swap_frame(u8 layer_id,
 	return new_frame;
 }
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+static void force_switch_slice(void)
+{
+	const struct vinfo_s *vinfo = get_current_vinfo();
+	u32 slice_num;
+	u32 switch_flag = 0;
+
+	if (!video_is_meson_t3x_cpu())
+		return;
+
+	switch_flag = frc_ready_to_switch();
+	if (switch_flag != 1 && switch_flag != 2)
+		return;
+
+	if (vinfo && (vinfo->width > 1920 && vinfo->height > 1080 &&
+		(vinfo->sync_duration_num /
+		vinfo->sync_duration_den > 60))) {
+		/* for t3x */
+		if (switch_flag == 1) {
+			/* frc is ready on */
+			/* 4k120hz and frc_n2m_worked 1 slice */
+			slice_num = 1;
+			vd_layer[0].slice_num = slice_num;
+			vd_layer[0].property_changed = true;
+			if (debug_common_flag & DEBUG_FLAG_COMMON_FRC)
+				pr_info("%s:slice_num=%d\n",
+					__func__, slice_num);
+		} else if (switch_flag == 2) {
+			/* frc is ready off */
+			/* 4k120hz and frc_n2m_not_worked 2 slice */
+			slice_num = 2;
+			vd_layer[0].slice_num = slice_num;
+			vd_layer[0].property_changed = true;
+			if (debug_common_flag & DEBUG_FLAG_COMMON_FRC)
+				pr_info("%s:slice_num=%d\n",
+					__func__, slice_num);
+		}
+	}
+}
+#endif
+
+bool force_switch_to_2slice(void)
+{
+	const struct vinfo_s *vinfo = get_current_vinfo();
+	u32 slice_num;
+
+	if (!video_is_meson_t3x_cpu())
+		return false;
+
+	if (vinfo && (vinfo->width > 1920 && vinfo->height > 1080 &&
+		(vinfo->sync_duration_num /
+		vinfo->sync_duration_den > 60))) {
+		/* for t3x */
+		/* frc is ready off */
+		/* 4k120hz and frc_n2m_not_worked 2 slice */
+		slice_num = 2;
+		pr_info("%s:slice_num = %d gslice_num = %d\n",
+				__func__, slice_num, vd_layer[0].slice_num);
+		if (slice_num != vd_layer[0].slice_num) {
+			vd_layer[0].slice_num = slice_num;
+			vd_layer[0].property_changed = true;
+//			set_frc_bypass_byself(&vd_layer[0]);
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+
 static void do_vd1_swap_frame(u8 layer_id,
 				s32 vd1_path_id,
 				s32 cur_vd1_path_id,
@@ -3748,6 +3828,11 @@ static void do_vd1_swap_frame(u8 layer_id,
 		if (!frc_drv_get_1st_frm())
 			return;
 	}
+#endif
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+	force_switch_slice();
+#endif
 #endif
 	new_frame = vdx_swap_frame(0, vd1_path_id,
 				  cur_vd1_path_id,
@@ -3812,9 +3897,10 @@ static void do_vd1_swap_frame(u8 layer_id,
 			cur_frame_par[0]->aisr_enable = 0;
 	}
 
-#if defined(CONFIG_AMLOGIC_MEDIA_FRC)
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
 	update_frc_in_size(&vd_layer[0]);
 	frc_input_handle(vd_layer[0].dispbuf, vd_layer[0].next_frame_par);
+	vpu_set_frc_bypass(&vd_layer[0]);
 #endif
 	if (atomic_read(&axis_changed)) {
 		video_prop_status |= VIDEO_PROP_CHANGE_AXIS;
@@ -3838,11 +3924,14 @@ static void do_vd1_swap_frame(u8 layer_id,
 		frame_par = vd_layer[0].next_frame_par;
 	else
 		frame_par = vd_layer[0].cur_frame_par;
-
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
 	if (new_frame)
 		vpp_new_frame = 1;
 	else
 		vpp_new_frame = 0;
+#endif
+#endif
 
 	refresh_on_vs(new_frame, vd_layer[0].dispbuf, vd_layer[0].vpp_index);
 

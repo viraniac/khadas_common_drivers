@@ -595,3 +595,8 @@ int nn_mod_getinfo(void *arg, char *buf)
 
 	return 0;
 }
+
+bool get_uvm_open_nn(void)
+{
+	return uvm_open_nn;
+}

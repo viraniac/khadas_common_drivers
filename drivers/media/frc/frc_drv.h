@@ -109,8 +109,9 @@
 // frc_20231020 set disable stats when video mute enable
 // frc_20231102 fix frc fhd windows flash
 // frc_20231102 restore enable setting
+// frc_20231031 frc compress mc memory usage size
 
-#define FRC_FW_VER			"20231031 frc compress mc memory usage size"
+#define FRC_FW_VER			"2024-0111 n2m and vpu slice workaround"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1
@@ -263,6 +264,14 @@ extern int frc_dbg_en;
 #define PRE_VSYNC_060HZ   BIT_1
 
 #define FRC_BOOT_TIMESTAMP 35
+
+#define FRC_DELAY_FRAME_2OPEN  1
+
+#define FRC_BYPASS_FRAME_NUM  3
+#define FRC_FREEZE_FRAME_NUM  3    // should less than 16
+
+#define FRC_BYPASS_FRAME_NUM_T3X  7
+#define FRC_FREEZE_FRAME_NUM_T3X  8  // should less than 16
 
 enum chip_id {
 	ID_NULL = 0,
@@ -426,6 +435,7 @@ struct st_frc_sts {
 	u32 vp_undone_cnt;
 	u32 retrycnt;
 	u32 video_mute_cnt;
+	u32 vs_data_cnt;
 };
 
 struct st_frc_in_sts {
@@ -475,6 +485,10 @@ struct st_frc_in_sts {
 	u8 boot_timestamp_en;
 	u8 boot_check_finished;
 	u8 auto_ctrl_reserved;
+	u8 rdma_channel;
+	u8 rdma_en;
+	u8 enable_mute_flag;
+	u8 mute_vsync_cnt;
 };
 
 struct st_frc_out_sts {
@@ -582,6 +596,7 @@ struct frc_ud_s {
 	unsigned vp_undone_err:2;
 
 	u8 pr_dbg;
+	u8 align_dbg_en;
 };
 
 struct frc_force_size_s {
@@ -675,6 +690,9 @@ struct frc_dev_s {
 	u32 vs_duration;	/*vpu int duration*/
 	u64 vs_timestamp;	/*vpu int time stamp*/
 	u32 in_out_ratio;
+	u8 st_change;
+	u8 need_bypass;	/*notify vpu to bypass frc*/
+	u8 next_frame;
 	u64 rdma_time;
 	u64 rdma_time2;
 
@@ -693,7 +711,7 @@ struct frc_dev_s {
 	u8  little_win;
 	u8  vlock_flag;
 	u8  use_pre_vsync; /* bit_0:120hz_enable , bit_1: 60hz enable */
-	u8  test2;
+	u8  test2;         /* test patch function*/
 
 	u8  prot_mode;
 	u8  no_ko_mode;

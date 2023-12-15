@@ -39,7 +39,7 @@ struct frc_rdma_info {
 	u8 is_64bit_addr;
 	int rdma_item_count;
 	int rdma_write_count;
-	struct rdma_regadr_s *rdma_regadr;
+	struct rdma_regadr_s *rdma_regadr[RDMA_NUM];
 };
 
 struct rdma_instance_s {
@@ -92,11 +92,13 @@ int frc_rdma_init(void);
 struct frc_rdma_info *frc_get_rdma_info(void);
 struct frc_rdma_info *frc_get_rdma_info_2(void);
 int frc_auto_test(int val, int val2);
-void frc_rdma_speed_test(int num);
+
 void frc_rdma_reg_list(void);
-int frc_rdma_test_write(u32 handle, u32 addr, u32 val, u32 start, u32 len);
+
 int FRC_RDMA_VSYNC_WR_REG(u32 addr, u32 val);
 int FRC_RDMA_VSYNC_WR_BITS(u32 addr, u32 val, u32 start, u32 len);
 int FRC_RDMA_VSYNC_REG_UPDATE(u32 addr, u32 val, u32 mask);
+int _frc_rdma_wr_reg_in(u32 addr, u32 val);
+int _frc_rdma_wr_reg_out(u32 addr, u32 val);
 
 int is_rdma_enable(void);

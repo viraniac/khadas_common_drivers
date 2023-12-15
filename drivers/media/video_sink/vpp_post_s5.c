@@ -850,7 +850,6 @@ static int vpp_post_in_padcut_param_set(struct vpp_post_input_s *vpp_input,
 			vpp_post->vpp_pad_cut.v_cut_en = 0;
 
 		vpp_post_in_pad_hsize = roundup(vpp_input->vpp_post_in_pad_hsize, 2);
-
 		vpp_post->vpp_pad_cut.cut_in_hsize = vpp_input->bld_out_hsize +
 			vpp_post_in_pad_hsize;
 		vpp_post->vpp_pad_cut.cut_in_vsize = vpp_input->bld_out_vsize +
@@ -1443,6 +1442,23 @@ static int check_vpp_info_changed(struct vpp_post_input_s *vpp_input, u8 vpp_ind
 					g_vpp_input_pre.bld_out_vsize);
 		}
 	}
+	if (!changed) {
+		if (vpp_input->vd1_padding_en != g_vpp_input_pre.vd1_padding_en ||
+			vpp_input->vd1_size_before_padding !=
+			g_vpp_input_pre.vd1_size_before_padding ||
+			vpp_input->vd1_size_after_padding !=
+			g_vpp_input_pre.vd1_size_after_padding) {
+			changed = 1;
+			pr_info("hit vpp_input->vd1_padding_en=%d, %d, before padding: %d, %d, after padding: %d, %d\n",
+				vpp_input->vd1_padding_en,
+				g_vpp_input_pre.vd1_padding_en,
+				vpp_input->vd1_size_before_padding,
+				vpp_input->vd1_size_after_padding,
+				g_vpp_input_pre.vd1_size_before_padding,
+				g_vpp_input_pre.vd1_size_after_padding);
+		}
+	}
+
 	/* check padding pram */
 	if (cur_dev->vpp_in_padding_support) {
 		if (vpp_input->vpp_post_in_pad_en !=

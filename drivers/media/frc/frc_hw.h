@@ -11,6 +11,16 @@
 #define HEIGHT_1K 1080
 #define WIDTH_2K  1920
 
+#define VSIZE_MAX_2K  900
+#define VSIZE_MIN_2K  500
+#define VSIZE_MAX_1K  390
+#define VSIZE_MIN_1K  260
+
+#define HSIZE_MAX_4K  1500
+#define HSIZE_MIN_4K  900
+#define HSIZE_MAX_2K  680
+#define HSIZE_MIN_2K  470
+
 #define  HME_ME_OFFSET 0x100
 
 //#define HME_MVX_BIT		10	//include sign bit for HME@960x540
@@ -51,7 +61,7 @@
 #define FORCE_MC_PHASE             0x08000000
 #define FORCE_INPUT_BUFIDX         0x10000000
 
-#define FRAME_RATE_CNT      16
+#define FRAME_RATE_CNT      17
 #define FRC_DBG_DUMP_TABLE_NUM       18
 
 extern void __iomem *frc_clk_base;
@@ -96,6 +106,7 @@ void frc_frame_forcebuf_count(u8 forceidx);
 void inp_undone_read(struct frc_dev_s *frc_devp);
 void vp_undone_read(struct frc_dev_s *frc_devp);
 u32 vpu_reg_read(u32 addr);
+void vpu_reg_write(u32 addr, u32 value);
 void frc_check_hw_stats(struct frc_dev_s *frc_devp, u8 checkflag);
 u16 frc_check_vf_rate(u16 duration, struct frc_dev_s *frc_devp);
 void frc_get_film_base_vf(struct frc_dev_s *frc_devp);

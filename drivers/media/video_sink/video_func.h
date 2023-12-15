@@ -73,7 +73,9 @@ extern int vsync_enter_line_max;
 extern int vsync_exit_line_max;
 extern u32 video_notify_flag;
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
 extern struct ai_scenes_pq vpp_scenes[AI_SCENES_MAX];
+#endif
 extern struct nn_value_t nn_scenes_value[AI_PQ_TOP];
 extern struct video_frame_aiface_s ai_face_value;
 #endif
@@ -167,6 +169,8 @@ inline bool is_tunnel_mode(const char *receiver_name);
 
 void post_vsync_process(void);
 void pre_vsync_process(void);
+
+bool force_switch_to_2slice(void);
 
 ssize_t blend_conflict_show(struct class *cla,
 		struct class_attribute *attr, char *buf);

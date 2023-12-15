@@ -855,7 +855,7 @@ EXPORT_SYMBOL(get_dv_vpu_mem_power_status);
 static struct vframe_pic_mode_s gpic_info[MAX_VD_LAYERS];
 u32 reference_zorder = 128;
 static int param_vpp_num = VPP_MAX;
-u32 vpp_hold_line[VPP_MAX] = {8, 8, 8};
+u32 vpp_hold_line[VPP_MAX] = {8, 8, 8, 8};
 static u32 cur_vpp_num = MAX_VPP_NUM;
 static unsigned int cur_vf_flag[MAX_VPP_NUM];
 static u32 vpp_ofifo_size = 0x1000;
@@ -976,6 +976,19 @@ bool is_dovi_tv_on(void)
 #endif
 }
 
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+void update_frc_in_size(struct video_layer_s *layer)
+{
+	if (cur_dev->display_module == S5_DISPLAY_MODULE) {
+		update_frc_in_size_s5(layer);
+	} else {
+		if (!layer || !layer->next_frame_par)
+			return;
+		layer->next_frame_par->frc_h_size = layer->next_frame_par->nnhf_input_w;
+		layer->next_frame_par->frc_v_size = layer->next_frame_par->nnhf_input_h;
+	}
+}
+#endif
 struct video_dev_s *get_video_cur_dev(void)
 {
 	return cur_dev;
@@ -6694,7 +6707,7 @@ static void check_output_mute(void)
 
 static inline void vdx_test_pattern_output(u32 index, u32 on, u32 color)
 {
-	u8 vpp_index = VPP0;
+	u8 vpp_index = vd_layer[index].vpp_index;
 	u32 vdx_clip_misc0, vdx_clip_misc1;
 	struct clip_setting_s setting;
 
@@ -7893,13 +7906,13 @@ void vpp_blend_update(const struct vinfo_s *vinfo, u8 vpp_index)
 
 	if (cur_dev->display_module != C3_DISPLAY_MODULE) {
 		if (vd1_vd2_mux) {
-			vd_clip_setting(VPP0, 1, &vd_layer[0].clip_setting);
+			vd_clip_setting(vpp_index, 1, &vd_layer[0].clip_setting);
 		} else {
-			vd_clip_setting(VPP0, 0, &vd_layer[0].clip_setting);
-			vd_clip_setting(VPP0, 1, &vd_layer[1].clip_setting);
+			vd_clip_setting(vpp_index, 0, &vd_layer[0].clip_setting);
+			vd_clip_setting(vpp_index, 1, &vd_layer[1].clip_setting);
 		}
 		if (cur_dev->max_vd_layers == 3)
-			vd_clip_setting(VPP0, 2, &vd_layer[2].clip_setting);
+			vd_clip_setting(vpp_index, 2, &vd_layer[2].clip_setting);
 	}
 
 	if (cur_dev->display_module == C3_DISPLAY_MODULE) {
@@ -9113,6 +9126,7 @@ static bool is_sr_phase_changed(void)
 	static u32 sr0_sharp_sr2_ctrl2_pre;
 	static u32 sr1_sharp_sr2_ctrl2_pre;
 	bool changed = false;
+	u32 vpp_index = vd_layer[0].vpp_index;
 
 	if (!cur_dev->aisr_support ||
 	    !cur_dev->pps_auto_calc)
@@ -9122,10 +9136,10 @@ static bool is_sr_phase_changed(void)
 
 	sr = &sr_info;
 	sr0_sharp_sr2_ctrl2 =
-		cur_dev->rdma_func[VPP0].rdma_rd
+		cur_dev->rdma_func[vpp_index].rdma_rd
 			(SRSHARP0_SHARP_SR2_CTRL2 + sr->sr_reg_offt);
 	sr1_sharp_sr2_ctrl2 =
-		cur_dev->rdma_func[VPP0].rdma_rd
+		cur_dev->rdma_func[vpp_index].rdma_rd
 			(SRSHARP1_SHARP_SR2_CTRL2 + sr->sr_reg_offt2);
 	sr0_sharp_sr2_ctrl2 &= 0x7fff;
 	sr1_sharp_sr2_ctrl2 &= 0x7fff;
@@ -9634,10 +9648,17 @@ int set_layer_display_canvas(struct video_layer_s *layer,
 	int slice = 0, temp_slice = 0;
 	u8 frame_id = 0;
 
-	if (layer->layer_id == 0 && layer->slice_num > 1) {
+	/* && layer->slice_num > 1*/
+	if (layer->layer_id == 0 && cur_dev->display_module == S5_DISPLAY_MODULE) {
+		u32 slice_num = 0;
 		if (layer->mosaic_mode)
 			vd_switch_frm_idx(layer->vpp_index, frame_id);
-		for (slice = 0; slice < layer->slice_num; slice++) {
+		/* for t3x always write 2 slice mif/afbc addr */
+		if (video_is_meson_t3x_cpu())
+			slice_num = 2;
+		else
+			slice_num = layer->slice_num;
+		for (slice = 0; slice < slice_num; slice++) {
 			if (layer->vd1s1_vd2_prebld_en &&
 				layer->slice_num == 2 &&
 				slice == 1)
@@ -10219,8 +10240,10 @@ s32 layer_swap_frame(struct vframe_s *vf, struct video_layer_s *layer,
 		layer->new_frame = true;
 		if (!layer->dispbuf ||
 		    layer->new_vframe_count == 1 ||
-		    (is_local_vf(layer->dispbuf)))
+		    (is_local_vf(layer->dispbuf))) {
 			first_picture = true;
+			frc_muted_frames = frc_mute_frames;
+		}
 	}
 
 	if (is_afd_available(layer_id)) {

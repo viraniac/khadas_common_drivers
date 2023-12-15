@@ -2939,6 +2939,8 @@ extern int fw_idx;
 /******************************************************************************/
 inline void WRITE_FRC_REG(unsigned int reg, unsigned int val);
 inline void WRITE_FRC_REG_BY_CPU(unsigned int reg, unsigned int val);
+inline void FRC_RDMA_WR_REG_IN(unsigned int reg, unsigned int val);
+inline void FRC_RDMA_WR_REG_OUT(unsigned int reg, unsigned int val);
 
 inline void WRITE_FRC_BITS(unsigned int reg, unsigned int value,
     unsigned int start, unsigned int len);

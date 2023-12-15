@@ -21,6 +21,9 @@
 #include "video_reg_s5.h"
 #include "video_priv.h"
 
+extern u32 frc_mute_frames;
+extern u32 frc_muted_frames;
+
 #define DEBUG_VD_PROC     BIT(0)
 #define DEBUG_VPP_POST    BIT(1)
 #define DEBUG_AISR        BIT(2)
@@ -256,6 +259,7 @@ struct vd_proc_vd1_info_s {
 	u32 vd1_whole_hsize;
 	u32 vd1_whole_vsize;
 	u32 crop_left;
+	u32 h_no_scale[SLICE_NUM];
 };
 
 struct vd2_proc_s {
@@ -420,7 +424,12 @@ void save_pps_data(int slice, u32 vd_vsc_phase_ctrl_val);
 u32 get_pps_data(int slice);
 u32 get_vpu_venc_error_status(void);
 void clear_vpu_venc_error(void);
-void update_frc_in_size(struct video_layer_s *layer);
+
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+void vpu_set_frc_bypass(struct video_layer_s *layer);
+void update_frc_in_size_s5(struct video_layer_s *layer);
+#endif
+
 void vd1_set_go_field_s5(void);
 u32 get_vd1s1_vd2_prebld_en(u32 layer_id);
 #endif

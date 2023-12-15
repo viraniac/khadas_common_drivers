@@ -73,15 +73,17 @@ int frc_input_handle(struct vframe_s *vf, struct vpp_frame_par_s *cur_video_sts)
 	devp->vs_timestamp = timestamp;
 	// frc_vpp_vs_ir_chk_film(devp);
 	/*vframe change detect and video state detects*/
-	frc_boot_timestamp_check(devp);
+//	frc_boot_timestamp_check(devp);
 	frc_input_vframe_handle(devp, vf, cur_video_sts);
 
 	frc_isr_print_zero(devp);
 
 	/*frc work mode handle*/
 	// frc_state_handle_old(devp);
-	// frc_state_handle(devp);
-	frc_state_handle_new(devp);
+	if (devp->out_sts.out_framerate <= 60)
+		frc_state_handle(devp);
+	else
+		frc_state_handle_new(devp);
 
 	return 0;
 }
@@ -239,6 +241,42 @@ int frc_get_n2m_setting(void)
 		return 0;
 }
 EXPORT_SYMBOL(frc_get_n2m_setting);
+
+int frc_ready_to_switch(void)
+{
+	struct frc_dev_s *devp = get_frc_devp();
+
+	if (!devp)
+		return 0;
+	if (!devp->probe_ok)
+		return 0;
+	if (devp->st_change == 1)
+		return 1;
+	else if (devp->st_change == 2)
+		return 2;
+	else if (devp->st_change == 3)
+		return 3;
+	else
+		return 0;
+}
+EXPORT_SYMBOL(frc_ready_to_switch);
+
+int frc_bypass_signal(void)
+{
+	struct frc_dev_s *devp = get_frc_devp();
+
+	if (!devp)
+		return 0;
+	if (!devp->probe_ok)
+		return 0;
+	if (devp->need_bypass == 1)
+		return 1;
+	else if (devp->need_bypass == 2)
+		return 2;
+	else
+		return 0;
+}
+EXPORT_SYMBOL(frc_bypass_signal);
 
 int frc_get_memc_size(u16 *hsize, u16 *vsize)
 {

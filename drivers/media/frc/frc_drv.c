@@ -145,8 +145,8 @@ static struct class_attribute frc_class_attrs[] = {
 	__ATTR(logo_ctrl_param, 0644, frc_logo_ctrl_param_show, frc_logo_ctrl_param_store),
 	__ATTR(iplogo_ctrl_param, 0644, frc_iplogo_ctrl_param_show, frc_iplogo_ctrl_param_store),
 	__ATTR(melogo_ctrl_param, 0644, frc_melogo_ctrl_param_show, frc_melogo_ctrl_param_store),
-	__ATTR(sence_chg_detect_param, 0644, frc_scene_chg_detect_param_show,
-		frc_sence_chg_detect_param_store),
+	__ATTR(scene_chg_detect_param, 0644, frc_scene_chg_detect_param_show,
+		frc_scene_chg_detect_param_store),
 	__ATTR(fb_ctrl_param, 0644, frc_fb_ctrl_param_show, frc_fb_ctrl_param_store),
 	__ATTR(me_ctrl_param, 0644, frc_me_ctrl_param_show, frc_me_ctrl_param_store),
 	__ATTR(search_rang_param, 0644, frc_search_rang_param_show, frc_search_rang_param_store),
@@ -247,13 +247,14 @@ static long frc_ioctl(struct file *file,
 		pr_frc(1, "set memc_autoctrl:%d boot_timestamp_en%d boot_check%d\n",
 		data, devp->in_sts.boot_timestamp_en, devp->in_sts.boot_check_finished);
 		if (data) {
-			if (devp->in_sts.boot_timestamp_en &&
-				!devp->in_sts.boot_check_finished) {
-				devp->in_sts.auto_ctrl_reserved = 1;
-				devp->frc_sts.auto_ctrl = false;
-				frc_change_to_state(FRC_STATE_DISABLE);
-				pr_frc(1, "set memc_autoctrl-1:%d\n", data);
-			} else if (!devp->frc_sts.auto_ctrl) {
+//			if (devp->in_sts.boot_timestamp_en &&
+//				!devp->in_sts.boot_check_finished) {
+//				devp->in_sts.auto_ctrl_reserved = 1;
+//				devp->frc_sts.auto_ctrl = false;
+//				frc_change_to_state(FRC_STATE_DISABLE);
+//				pr_frc(1, "set memc_autoctrl-1:%d\n", data);
+//			} else if (!devp->frc_sts.auto_ctrl) {
+			if (!devp->frc_sts.auto_ctrl) {
 				devp->frc_sts.auto_ctrl = true;
 				devp->frc_sts.re_config = true;
 				pr_frc(1, "set memc_autoctrl-2:%d\n", data);
@@ -749,12 +750,15 @@ int frc_vd_notify_callback(struct notifier_block *block, unsigned long cmd, void
 {
 	struct frc_dev_s *devp = get_frc_devp();
 	struct vd_info_s *info;
+	enum chip_id chip = get_chip_type();
 	u32 flags;
 
 	if (!devp)
 		return -1;
 	if (devp->clk_state == FRC_CLOCK_OFF)
 		return -1;
+	if (chip == ID_T3X)
+		return 0;
 
 	info = (struct vd_info_s *)para;
 	flags = info->flags;
@@ -767,14 +771,12 @@ int frc_vd_notify_callback(struct notifier_block *block, unsigned long cmd, void
 			== VIDEO_SIZE_CHANGE_EVENT) &&
 			devp->probe_ok && (!devp->in_sts.frc_seamless_en ||
 			(devp->in_sts.frc_seamless_en && devp->in_sts.frc_is_tvin))) {
-//	if (devp->frc_sts.state == FRC_STATE_ENABLE) {
 				pr_frc(0, "%s start disable frc", __func__);
 				set_frc_enable(false);
 				set_frc_bypass(true);
-				frc_change_to_state(FRC_STATE_DISABLE);
-				//frc_change_to_state(FRC_STATE_BYPASS);
+				// frc_change_to_state(FRC_STATE_DISABLE);
+				frc_change_to_state(FRC_STATE_BYPASS);
 				frc_state_change_finish(devp);
-//	}
 			if (devp->frc_sts.frame_cnt != 0) {
 				devp->frc_sts.frame_cnt = 0;
 				pr_frc(1, "%s reset frm_cnt\n", __func__);
@@ -1033,17 +1035,18 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 	devp->frc_sts.re_cfg_cnt = 0;
 	devp->frc_sts.out_put_mode_changed = false;
 	devp->frc_sts.re_config = false;
-	devp->in_sts.vf_sts = 0;/*initial to no*/
 	devp->dbg_force_en = 0;
 	devp->auto_n2m = 1;
 	devp->other1_flag = 0;
-	devp->other2_flag = 25;  // 16;
+	devp->other2_flag = 0;  // 25, 16;
 	devp->vlock_flag = 1;
 	devp->dbg_mvrd_mode = 8;
 	devp->dbg_mute_disable = 1;
+	devp->test2 = 1;
 	/*input sts initial*/
 	devp->in_sts.have_vf_cnt = 0;
 	devp->in_sts.no_vf_cnt = 0;
+	devp->in_sts.vf_sts = 0;/*initial to no*/
 
 	devp->dbg_in_out_ratio = FRC_RATIO_1_1;
 	// devp->dbg_in_out_ratio = FRC_RATIO_2_5;
@@ -1067,6 +1070,8 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 	// devp->film_mode = EN_DRV_FILM32;
 	devp->film_mode = EN_DRV_VIDEO;
 	devp->film_mode_det = 0;
+
+	devp->pat_dbg.pat_en = 1;
 
 	fw_data = (struct frc_fw_data_s *)devp->fw_data;
 	fw_data->holdline_parm.me_hold_line = 4;
@@ -1100,6 +1105,7 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 	/*used for force in/out size for frc process*/
 	memset(&devp->force_size, 0, sizeof(struct frc_force_size_s));
 	devp->ud_dbg.res2_dbg_en = 3;  // t3x_revB test
+	devp->ud_dbg.align_dbg_en = 0;  // t3x_revB test
 	if (get_chip_type() == ID_T3X)
 		devp->in_sts.boot_timestamp_en = 1;
 }

@@ -343,6 +343,7 @@ enum mediasync_parameter_e {
 #define USER_MUTE_SET          2
 #define AML_DOLBY_MUTE_SET     3
 #define DRM_MUTE_SET           4
+#define VPP_INTERNAL           5
 
 struct mediasync_parameter {
 	u32 vsync_period;
@@ -357,7 +358,7 @@ struct mediasync_ptr {
 	int (*reserved2)(void);
 };
 
-#define MAX_VIDEO_MUTE_OWNER 5
+#define MAX_VIDEO_MUTE_OWNER 6
 #define AMVIDEO_UPDATE_OSD_MODE	0x00000001
 #define AMVIDEO_UPDATE_PREBLEND_MODE	0x00000002
 #define AMVIDEO_UPDATE_SIGNAL_MODE      0x00000003

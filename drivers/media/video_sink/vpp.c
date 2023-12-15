@@ -50,6 +50,7 @@
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
 #include <linux/amlogic/media/frc/frc_common.h>
 #endif
+#include "../common/uvm/meson_uvm_nn_processor.h"
 
 #include "video_priv.h"
 #include "video_hw_s5.h"
@@ -1689,7 +1690,18 @@ static int vpp_set_filters_internal
 		video_layer_left >>= 1;
 		video_layer_top >>= 1;
 	}
-
+	/* t3x aisr enalbe out axis must even */
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifdef CONFIG_AMLOGIC_UVM_CORE
+	if (video_is_meson_t3x_cpu() &&
+		get_uvm_open_nn() &&
+		(width_in <= 1920 && height_in <= 1080) &&
+		check_aisr_need_disable(&vd_layer[0])) {
+		video_layer_width = round_up(video_layer_width, 2);
+		video_layer_height = round_up(video_layer_height, 2);
+	}
+#endif
+#endif
 RESTART_ALL:
 	crop_left = video_source_crop_left / crop_ratio;
 	crop_right = video_source_crop_right / crop_ratio;
@@ -5121,6 +5133,7 @@ int vpp_set_filters(struct disp_info_s *input,
 RERTY:
 	vpp_flags = 0;
 	adjust = false;
+	input->op_flag = op_flag;
 	/* use local var to avoid the input data be overwritten */
 	memcpy(&local_input, input, sizeof(struct disp_info_s));
 

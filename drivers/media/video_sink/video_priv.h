@@ -606,6 +606,8 @@ struct video_layer_s {
 	u32 mosaic_mode;
 	struct sub_slice_s sub_slice[SLICE_NUM - 1];
 	struct vframe_s *vf_top1;
+	u32 frc_h_size_pre;
+	u32 frc_v_size_pre;
 };
 
 enum {
@@ -1027,6 +1029,9 @@ int set_vpu_super_urgent_t3(u32 module_id, u32 low_level, u32 high_level);
 int get_vpu_urgent_info_t5m(void);
 int set_vpu_super_urgent_t5m(u32 module_id, u32 urgent_level);
 int set_vpu_super_urgent_t7(u32 module_id, u32 urgent_level);
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+void update_frc_in_size(struct video_layer_s *layer);
+#endif
 #ifdef CONFIG_AMLOGIC_MEDIA_VSYNC_RDMA
 void vsync_rdma_process(void);
 #endif

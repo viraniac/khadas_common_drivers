@@ -254,6 +254,7 @@ struct disp_info_s {
 	u32 src_width_max;
 	u32 src_height_max;
 	u32 slice_num;
+	u32 op_flag;
 	bool ver_coef_adjust;
 	bool afd_enable;
 	struct crop_rect_s afd_crop;

@@ -321,6 +321,7 @@ ssize_t frc_debug_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "set_n2m\t\t=%d\n", devp->in_out_ratio);
 	len += sprintf(buf + len, "auto_n2m\t=%d\n", devp->auto_n2m);
 	len += sprintf(buf + len, "set_mcdw\t=(read reg check)\n");
+	len += sprintf(buf + len, "test2\t\t=%d\n", devp->test2);
 
 	return len;
 }
@@ -490,6 +491,11 @@ void frc_debug_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			frc_set_h2v2(val1);
+	} else if (!strcmp(parm[0], "test2")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->test2 = (u8)val1;
 	}
 exit:
 	kfree(buf_orig);
@@ -649,8 +655,16 @@ void frc_debug_rdma_if(struct frc_dev_s *devp, const char *buf, size_t count)
 	} else if (!strcmp(parm[0], "rdma_en")) {
 		if (!parm[1])
 			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0) {
+			// fw_data->frc_top_type.rdma_en = val1;
+			pr_frc(2, "pass alg rdma\n");
+			devp->in_sts.rdma_en = val1;
+		}
+	} else if (!strcmp(parm[0], "rdma_chan")) {
+		if (!parm[1])
+			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
-			fw_data->frc_top_type.rdma_en = val1;
+			devp->in_sts.rdma_channel = val1;
 	}
 
 exit:
@@ -943,6 +957,8 @@ ssize_t frc_debug_other_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "del_120_pth\t=%d\n", devp->ud_dbg.res2_dbg_en);
 	len += sprintf(buf + len, "pr_dbg\t\t=%d\n", devp->ud_dbg.pr_dbg);
 	len += sprintf(buf + len, "pre_vsync\t=%d\n", devp->use_pre_vsync);
+	len += sprintf(buf + len, "mute_en\t\t=%d\t%d\n", devp->in_sts.enable_mute_flag,
+							devp->in_sts.mute_vsync_cnt);
 	return len;
 }
 
@@ -1051,7 +1067,23 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->dbg_mute_disable = val1;
-
+	} else if (!strcmp(parm[0], "en_mute")) {
+		if (!parm[2])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0) {
+			devp->in_sts.enable_mute_flag = val1;
+			if (val1)
+				devp->pat_dbg.pat_en = 1;
+			else
+				devp->pat_dbg.pat_en = 0;
+		}
+		if (kstrtoint(parm[2], 10, &val1) == 0)
+			devp->in_sts.mute_vsync_cnt = val1;
+	} else if (!strcmp(parm[0], "align_dbg")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->ud_dbg.align_dbg_en = val1;
 	}
 exit:
 	kfree(buf_orig);
