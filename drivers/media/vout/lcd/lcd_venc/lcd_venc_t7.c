@@ -530,7 +530,7 @@ static void lcd_venc_set_vrr_recovery(struct aml_lcd_drv_s *pdrv)
 
 	vtotal = pdrv->config.basic.v_period;
 
-	lcd_vcbus_write(ENCL_VIDEO_MAX_LNCNT + offset, vtotal);
+	lcd_vcbus_write(ENCL_VIDEO_MAX_LNCNT + offset, vtotal - 1);
 }
 
 static unsigned int lcd_venc_get_encl_line_cnt(struct aml_lcd_drv_s *pdrv)
