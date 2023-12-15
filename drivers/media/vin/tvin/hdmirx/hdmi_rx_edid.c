@@ -653,7 +653,8 @@ void rx_edid_update_vrr_info(unsigned char *p_edid)
 		if (rx_info.vrr_min == 0 || rx_info.vrr_max == 0)
 			return;
 		p_edid[hf_vsdb_start + 9] = rx_info.vrr_min;
-		p_edid[hf_vsdb_start + 10] = rx_info.vrr_max;
+		p_edid[hf_vsdb_start + 10] =
+			rx_info.vrr_max >= 100 ? rx_info.vrr_max : 0;
 		if (log_level & EDID_LOG)
 			rx_pr("modify vrr min = %d, vrr_max = %d\n",
 				  rx_info.vrr_min, rx_info.vrr_max);
@@ -5001,8 +5002,11 @@ bool hdmi_rx_top_edid_update(void)
 		if (allm_update_en)
 			rx_edid_update_allm_info(pedid);
 		rpt_edid_extraction(pedid);
-		for (j = 0; j <= ext_blk_num; ++j)
+		for (j = 0; j <= ext_blk_num; ++j) {
+			if (pedid[j * EDID_BLK_SIZE] == 0x70) //dp block
+				continue;
 			pedid[END_OF_BLK(j)] = rx_edid_calc_cksum(pedid, j);
+		}
 		for (j = 0; j < EDID_SIZE; j++)
 			hdmirx_wr_top(edid_addr[i] + j, pedid[j], i);
 		rx_get_edid_support(i);
