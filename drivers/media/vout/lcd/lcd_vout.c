@@ -687,7 +687,7 @@ static inline void lcd_vsync_handler(struct aml_lcd_drv_s *pdrv)
 			pdrv->vs_msr_max = temp;
 		if (temp < pdrv->vs_msr_min)
 			pdrv->vs_msr_min = temp;
-		if (pdrv->vs_msr_i >= pdrv->config.timing.frame_rate) {
+		if (pdrv->vs_msr_i >= pdrv->config.timing.act_timing.frame_rate) {
 			pdrv->vs_msr[pdrv->vs_msr_cnt++] =
 				lcd_do_div(pdrv->vs_msr_sum_temp, pdrv->vs_msr_i);
 			pdrv->vs_msr_sum_temp = 0;
@@ -1844,7 +1844,7 @@ static void lcd_config_default(struct aml_lcd_drv_s *pdrv)
 	LCDPR("[%d]: ppc: %d, clk_mode: %d, base_fr: %d, status: 0x%x, init_flag: %d\n",
 		pdrv->index, pdrv->config.timing.ppc,
 		pdrv->config.timing.clk_mode,
-		pdrv->config.timing.base_frame_rate,
+		pdrv->config.timing.dft_timing.frame_rate,
 		pdrv->status, pdrv->init_flag);
 }
 
@@ -1870,7 +1870,9 @@ static void lcd_bootup_config_init(struct aml_lcd_drv_s *pdrv)
 	pdrv->config.custom_pinmux = pdrv->boot_ctrl->custom_pinmux;
 	pdrv->config.basic.lcd_type = pdrv->boot_ctrl->lcd_type;
 	pdrv->config.timing.clk_mode = pdrv->boot_ctrl->clk_mode;
-	pdrv->config.timing.base_frame_rate = pdrv->boot_ctrl->base_frame_rate;
+	pdrv->config.timing.dft_timing.frame_rate = pdrv->boot_ctrl->base_frame_rate;
+	pdrv->config.timing.base_timing.frame_rate = pdrv->boot_ctrl->base_frame_rate;
+	pdrv->config.timing.act_timing.frame_rate = pdrv->boot_ctrl->base_frame_rate;
 	switch (pdrv->boot_ctrl->ppc) {
 	case LCD_VENC_2PPC:
 		pdrv->config.timing.ppc = 2;

@@ -114,7 +114,7 @@ static int lcd_venc_debug_test(struct aml_lcd_drv_s *pdrv, unsigned int num)
 
 	lcd_queue_work(&pdrv->test_check_work);
 
-	h_active = pdrv->config.basic.h_active;
+	h_active = pdrv->config.timing.act_timing.h_active;
 	video_on_pixel = pdrv->config.timing.hstart;
 	if (num > 0)
 		lcd_venc_gamma_debug_test_en(pdrv, 0);
@@ -142,7 +142,7 @@ static void lcd_test_pattern_init(struct aml_lcd_drv_s *pdrv, unsigned int num)
 
 	num = (num >= LCD_ENC_TST_NUM_MAX) ? 0 : num;
 
-	h_active = pdrv->config.basic.h_active;
+	h_active = pdrv->config.timing.act_timing.h_active;
 	video_on_pixel = pdrv->config.timing.hstart;
 
 	lcd_vcbus_write(ENCL_VIDEO_RGBIN_CTRL, lcd_enc_tst[num][6]);
@@ -201,13 +201,13 @@ static void lcd_venc_set_tcon(struct aml_lcd_drv_s *pdrv)
 	case LCD_LVDS:
 		lcd_vcbus_setb(L_POL_CNTL_ADDR, 1, 0, 3);
 		// refs to lcd_lvds.c@lcd_lvds_enable
-		if (pconf->timing.vsync_pol == pconf->timing.hsync_pol)
+		if (pconf->timing.act_timing.vsync_pol == pconf->timing.act_timing.hsync_pol)
 			lcd_vcbus_setb(L_POL_CNTL_ADDR, 1, 1, 1);
 		break;
 	case LCD_VBYONE:
-		if (pconf->timing.hsync_pol)
+		if (pconf->timing.act_timing.hsync_pol)
 			lcd_vcbus_setb(L_POL_CNTL_ADDR, 1, 0, 1);
-		if (pconf->timing.vsync_pol)
+		if (pconf->timing.act_timing.vsync_pol)
 			lcd_vcbus_setb(L_POL_CNTL_ADDR, 1, 1, 1);
 		break;
 	case LCD_MIPI:
@@ -258,8 +258,8 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 	vstart = pconf->timing.vstart;
 	vend = pconf->timing.vend;
 
-	lcd_vcbus_write(ENCL_VIDEO_MAX_PXCNT, pconf->basic.h_period - 1);
-	lcd_vcbus_write(ENCL_VIDEO_MAX_LNCNT, pconf->basic.v_period - 1);
+	lcd_vcbus_write(ENCL_VIDEO_MAX_PXCNT, pconf->timing.act_timing.h_period - 1);
+	lcd_vcbus_write(ENCL_VIDEO_MAX_LNCNT, pconf->timing.act_timing.v_period - 1);
 	lcd_vcbus_write(ENCL_VIDEO_HAVON_BEGIN, hstart);
 	lcd_vcbus_write(ENCL_VIDEO_HAVON_END,   hend);
 	lcd_vcbus_write(ENCL_VIDEO_VAVON_BLINE, vstart);
@@ -273,14 +273,14 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 			pre_de_vs = vstart - pre_vde;
 			pre_de_ve = pre_de_vs + 4;
 			pre_de_hs = hstart + PRE_DE_DELAY;
-			pre_de_he = pconf->basic.h_active - 1 + pre_de_hs;
+			pre_de_he = pconf->timing.act_timing.h_active - 1 + pre_de_hs;
 			break;
 		default:
 			pre_vde = pconf->timing.pre_de_v ? pconf->timing.pre_de_v : 8;
 			pre_de_vs = vstart - pre_vde;
-			pre_de_ve = pconf->basic.v_active + pre_de_vs;
+			pre_de_ve = pconf->timing.act_timing.v_active + pre_de_vs;
 			pre_de_hs = hstart + PRE_DE_DELAY;
-			pre_de_he = pconf->basic.h_active - 1 + pre_de_hs;
+			pre_de_he = pconf->timing.act_timing.h_active - 1 + pre_de_hs;
 			break;
 		}
 		lcd_vcbus_write(ENCL_VIDEO_V_PRE_DE_BLINE, pre_de_vs);
@@ -297,7 +297,7 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 	lcd_vcbus_write(ENCL_VIDEO_VSO_ELINE, pconf->timing.vs_ve_addr);
 
 	/*[15:14]: 2'b10 or 2'b01*/
-	lcd_vcbus_write(ENCL_INBUF_CNTL1, (2 << 14) | (pconf->basic.h_active - 1));
+	lcd_vcbus_write(ENCL_INBUF_CNTL1, (2 << 14) | (pconf->timing.act_timing.h_active - 1));
 	lcd_vcbus_write(ENCL_INBUF_CNTL0, 0x200);
 
 	lcd_venc_set_tcon(pdrv);
@@ -328,25 +328,24 @@ static void lcd_venc_change_timing(struct aml_lcd_drv_s *pdrv)
 	unsigned int htotal, vtotal;
 
 	if (pdrv->vmode_update) {
-		lcd_timing_init_config(pdrv);
 		lcd_venc_set_timing(pdrv);
 	} else {
 		htotal = lcd_vcbus_read(ENCL_VIDEO_MAX_PXCNT) + 1;
 		vtotal = lcd_vcbus_read(ENCL_VIDEO_MAX_LNCNT) + 1;
 
-		if (pdrv->config.basic.h_period != htotal) {
+		if (pdrv->config.timing.act_timing.h_period != htotal) {
 			lcd_vcbus_write(ENCL_VIDEO_MAX_PXCNT,
-					pdrv->config.basic.h_period - 1);
+					pdrv->config.timing.act_timing.h_period - 1);
 		}
-		if (pdrv->config.basic.v_period != vtotal) {
+		if (pdrv->config.timing.act_timing.v_period != vtotal) {
 			lcd_vcbus_write(ENCL_VIDEO_MAX_LNCNT,
-					pdrv->config.basic.v_period - 1);
+					pdrv->config.timing.act_timing.v_period - 1);
 		}
 		if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
 			LCDPR("[%d]: venc changed: %d,%d\n",
 			      pdrv->index,
-			      pdrv->config.basic.h_period,
-			      pdrv->config.basic.v_period);
+			      pdrv->config.timing.act_timing.h_period,
+			      pdrv->config.timing.act_timing.v_period);
 		}
 	}
 
@@ -382,12 +381,21 @@ static int lcd_venc_get_init_config(struct aml_lcd_drv_s *pdrv)
 	struct lcd_config_s *pconf = &pdrv->config;
 	unsigned int init_state;
 
-	pconf->basic.h_active = lcd_vcbus_read(ENCL_VIDEO_HAVON_END)
+	pconf->timing.dft_timing.h_active = lcd_vcbus_read(ENCL_VIDEO_HAVON_END)
 		- lcd_vcbus_read(ENCL_VIDEO_HAVON_BEGIN) + 1;
-	pconf->basic.v_active = lcd_vcbus_read(ENCL_VIDEO_VAVON_ELINE)
+	pconf->timing.dft_timing.v_active = lcd_vcbus_read(ENCL_VIDEO_VAVON_ELINE)
 		- lcd_vcbus_read(ENCL_VIDEO_VAVON_BLINE) + 1;
-	pconf->basic.h_period = lcd_vcbus_read(ENCL_VIDEO_MAX_PXCNT) + 1;
-	pconf->basic.v_period = lcd_vcbus_read(ENCL_VIDEO_MAX_LNCNT) + 1;
+	pconf->timing.dft_timing.h_period = lcd_vcbus_read(ENCL_VIDEO_MAX_PXCNT) + 1;
+	pconf->timing.dft_timing.v_period = lcd_vcbus_read(ENCL_VIDEO_MAX_LNCNT) + 1;
+
+	pconf->timing.base_timing.h_active = pconf->timing.dft_timing.h_active;
+	pconf->timing.act_timing.h_active = pconf->timing.dft_timing.h_active;
+	pconf->timing.base_timing.v_active = pconf->timing.dft_timing.v_active;
+	pconf->timing.act_timing.v_active = pconf->timing.dft_timing.v_active;
+	pconf->timing.base_timing.h_period = pconf->timing.dft_timing.h_period;
+	pconf->timing.act_timing.h_period = pconf->timing.dft_timing.h_period;
+	pconf->timing.base_timing.v_period = pconf->timing.dft_timing.v_period;
+	pconf->timing.act_timing.v_period = pconf->timing.dft_timing.v_period;
 
 	lcd_venc_gamma_check_en(pdrv);
 
@@ -405,7 +413,7 @@ static void lcd_test_pattern_check(struct work_struct *work)
 
 static void lcd_venc_set_vrr_recovery(struct aml_lcd_drv_s *pdrv)
 {
-	unsigned int vtotal = pdrv->config.basic.v_period;
+	unsigned int vtotal = pdrv->config.timing.act_timing.v_period;
 
 	lcd_vcbus_write(ENCL_VIDEO_MAX_LNCNT, vtotal - 1);
 }

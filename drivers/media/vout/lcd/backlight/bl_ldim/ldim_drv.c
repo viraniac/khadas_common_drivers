@@ -1110,9 +1110,9 @@ int aml_ldim_probe(struct platform_device *pdev)
 	if (ret)
 		return -1;
 
-	ldim_config.hsize = pdrv->config.basic.h_active;
-	ldim_config.vsize = pdrv->config.basic.v_active;
-	ldim_driver.vsync_change_flag = pdrv->config.timing.frame_rate;
+	ldim_config.hsize = pdrv->config.timing.act_timing.h_active;
+	ldim_config.vsize = pdrv->config.timing.act_timing.v_active;
+	ldim_driver.vsync_change_flag = pdrv->config.timing.act_timing.frame_rate;
 	ldim_rmem.rsv_mem_size = ldim_driver.data->rsv_mem_size;
 	ldim_driver.resolution_update = 0;
 	ldim_driver.in_vsync_flag = 0;

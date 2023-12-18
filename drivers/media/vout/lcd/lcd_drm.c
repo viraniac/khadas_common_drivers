@@ -184,7 +184,7 @@ static unsigned int lcd_drm_vmode_get_valid_num(struct aml_lcd_drv_s *pdrv,
 	for (i = 0; i < cnt; i++) {
 		if (fr_table[i] == 0)
 			break;
-		if (fr_table[i] > pdrv->config.timing.base_frame_rate)
+		if (fr_table[i] > pdrv->config.timing.base_timing.frame_rate)
 			continue;
 		num++;
 	}
@@ -196,15 +196,15 @@ static void lcd_drm_vmode_update(struct aml_lcd_drv_s *pdrv, struct drm_display_
 		unsigned int frame_rate)
 {
 	struct lcd_config_s *pconf = &pdrv->config;
-	unsigned int pclk = pconf->timing.base_pixel_clk;
-	unsigned int htotal = pconf->timing.base_h_period;
-	unsigned int vtotal = pconf->timing.base_v_period;
+	unsigned int pclk = pconf->timing.base_timing.pixel_clk;
+	unsigned int htotal = pconf->timing.base_timing.h_period;
+	unsigned int vtotal = pconf->timing.base_timing.v_period;
 	unsigned long long temp;
 
 	if (!mode)
 		return;
 
-	switch (pconf->timing.fr_adjust_type) {
+	switch (pconf->timing.base_timing.fr_adjust_type) {
 	case 0: /* pixel clk adjust */
 		pclk = frame_rate * htotal * vtotal;
 		break;
@@ -230,20 +230,20 @@ static void lcd_drm_vmode_update(struct aml_lcd_drv_s *pdrv, struct drm_display_
 		vtotal = htotal * frame_rate;
 		vtotal = lcd_do_div(temp, vtotal);
 		vtotal = (vtotal + 99) / 100; /* round off */
-		if (vtotal > pconf->basic.v_period_max) {
-			vtotal = pconf->basic.v_period_max;
+		if (vtotal > pconf->timing.base_timing.v_period_max) {
+			vtotal = pconf->timing.base_timing.v_period_max;
 			htotal = vtotal * frame_rate;
 			htotal = lcd_do_div(temp, htotal);
 			htotal = (htotal + 99) / 100; /* round off */
-			if (htotal > pconf->basic.h_period_max)
-				htotal = pconf->basic.h_period_max;
-		} else if (vtotal < pconf->basic.v_period_min) {
-			vtotal = pconf->basic.v_period_min;
+			if (htotal > pconf->timing.base_timing.h_period_max)
+				htotal = pconf->timing.base_timing.h_period_max;
+		} else if (vtotal < pconf->timing.base_timing.v_period_min) {
+			vtotal = pconf->timing.base_timing.v_period_min;
 			htotal = vtotal * frame_rate;
 			htotal = lcd_do_div(temp, htotal);
 			htotal = (htotal + 99) / 100; /* round off */
-			if (htotal < pconf->basic.h_period_min)
-				htotal = pconf->basic.h_period_min;
+			if (htotal < pconf->timing.base_timing.h_period_min)
+				htotal = pconf->timing.base_timing.h_period_min;
 		}
 		pclk = frame_rate * htotal * vtotal;
 		break;
@@ -279,7 +279,7 @@ static void lcd_drm_vmode_update(struct aml_lcd_drv_s *pdrv, struct drm_display_
 		break;
 	default:
 		LCDERR("[%d]: %s: invalid fr_adjust_type: %d\n",
-		       pdrv->index, __func__, pconf->timing.fr_adjust_type);
+		       pdrv->index, __func__, pconf->timing.base_timing.fr_adjust_type);
 		return;
 	}
 
@@ -396,7 +396,7 @@ static int get_lcd_tv_modes(struct meson_panel_dev *panel,
 
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
 		LCDPR("[%d]: %s\n", pdrv->index, __func__);
-	switch (pdrv->config.basic.v_active) {
+	switch (pdrv->config.timing.base_timing.v_active) {
 	case 600:
 		native_mode = &tv_lcd_mode_ref[0];
 		break;
@@ -404,12 +404,12 @@ static int get_lcd_tv_modes(struct meson_panel_dev *panel,
 		native_mode = &tv_lcd_mode_ref[1];
 		break;
 	case 1080:
-		if (pdrv->config.basic.h_active == 3840) {
-			if (pdrv->config.timing.base_frame_rate == 240 ||
-			    pdrv->config.timing.base_frame_rate == 288) {
+		if (pdrv->config.timing.base_timing.h_active == 3840) {
+			if (pdrv->config.timing.base_timing.frame_rate == 240 ||
+			    pdrv->config.timing.base_timing.frame_rate == 288) {
 				find_high = 1;
 				hsr_flag = 1;
-			} else if (pdrv->config.timing.base_frame_rate == 120) {
+			} else if (pdrv->config.timing.base_timing.frame_rate == 120) {
 				find_high = 1;
 			}
 
@@ -419,8 +419,8 @@ static int get_lcd_tv_modes(struct meson_panel_dev *panel,
 		}
 		break;
 	case 2160:
-		if (pdrv->config.timing.base_frame_rate == 120 ||
-		    pdrv->config.timing.base_frame_rate == 144) {
+		if (pdrv->config.timing.base_timing.frame_rate == 120 ||
+		    pdrv->config.timing.base_timing.frame_rate == 144) {
 			find_high = 1;
 			hsr_flag = 1;
 			native_mode = &tv_lcd_mode_ref[5];
@@ -476,7 +476,7 @@ static int get_lcd_tv_modes(struct meson_panel_dev *panel,
 	for (i = 0; i < cnt; i++) {
 		if (fr_table[i] == 0)
 			break;
-		if (fr_table[i] > pdrv->config.timing.base_frame_rate)
+		if (fr_table[i] > pdrv->config.timing.base_timing.frame_rate)
 			continue;
 		if (mode_idx >= *num)
 			break;
@@ -499,7 +499,7 @@ static int get_lcd_tablet_modes(struct meson_panel_dev *panel,
 	struct drm_lcd_wrapper *wrapper = to_drm_lcd_wrapper(panel);
 	struct aml_lcd_drv_s *pdrv = wrapper->lcd_drv;
 	struct drm_display_mode *mode;
-	struct lcd_config_s *pconf = &pdrv->config;
+	struct lcd_detail_timing_s *ptiming;
 	unsigned short tmp;
 
 	if (!pdrv)
@@ -518,21 +518,22 @@ static int get_lcd_tablet_modes(struct meson_panel_dev *panel,
 	else
 		snprintf(mode->name, DRM_DISPLAY_MODE_LEN, "panel%d", pdrv->index);
 
-	mode->clock = pconf->timing.lcd_clk / 1000;
-	mode->hdisplay = pconf->basic.h_active;
-	tmp = pconf->basic.h_period - pconf->basic.h_active - pconf->timing.hsync_bp;
-	mode->hsync_start = pconf->basic.h_active + tmp - pconf->timing.hsync_width;
-	mode->hsync_end = pconf->basic.h_active + tmp;
-	mode->htotal = pconf->basic.h_period;
-	mode->vdisplay = pconf->basic.v_active;
-	tmp = pconf->basic.v_period - pconf->basic.v_active - pconf->timing.vsync_bp;
-	mode->vsync_start = pconf->basic.v_active + tmp - pconf->timing.vsync_width;
-	mode->vsync_end = pconf->basic.v_active + tmp;
-	mode->vtotal = pconf->basic.v_period;
-	mode->width_mm = pconf->basic.screen_width;
-	mode->height_mm = pconf->basic.screen_height;
-	//mode->vrefresh = pconf->timing.sync_duration_num/
-		//pconf->timing.sync_duration_den;
+	ptiming = &pdrv->config.timing.base_timing;
+	mode->clock = ptiming->pixel_clk / 1000;
+	mode->hdisplay = ptiming->h_active;
+	tmp = ptiming->h_period - ptiming->h_active - ptiming->hsync_bp;
+	mode->hsync_start = ptiming->h_active + tmp - ptiming->hsync_width;
+	mode->hsync_end = ptiming->h_active + tmp;
+	mode->htotal = ptiming->h_period;
+	mode->vdisplay = ptiming->v_active;
+	tmp = ptiming->v_period - ptiming->v_active - ptiming->vsync_bp;
+	mode->vsync_start = ptiming->v_active + tmp - ptiming->vsync_width;
+	mode->vsync_end = ptiming->v_active + tmp;
+	mode->vtotal = ptiming->v_period;
+	mode->width_mm = pdrv->config.basic.screen_width;
+	mode->height_mm = pdrv->config.basic.screen_height;
+	//mode->vrefresh = ptiming->sync_duration_num/
+		//ptiming->sync_duration_den;
 
 	return 0;
 }
