@@ -437,6 +437,10 @@
 		clock-names = "vdac_clk_gate";
 		cutwindow_val_h = <0 0 0 0 8>; /* level 0~4 */
 		cutwindow_val_v = <4 8 14 16 24>;  /* level 0~4 */
+		horizontal_dir0 = <148 148 148 148 148>;
+		horizontal_dir1 = <148 168 166 160 148>;
+		horizontal_stp0 = <0 0 0 0 0>;
+		horizontal_stp1 = <0 0 0 0 0>;
 	};
 
 	vbi {
