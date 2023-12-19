@@ -1593,13 +1593,8 @@ int lcd_clk_config_print_dft(struct aml_lcd_drv_s *pdrv, char *buf, int offset)
 	return len;
 }
 
-#define CLK_CHK_MAX    2000000  /*Hz*/
-unsigned long lcd_encl_clk_check_std = 121000000;
-unsigned long lcd_fifo_clk_check_std = 42000000;
-
-int lcd_prbs_clk_check(unsigned long encl_clk, unsigned int encl_msr_id,
-			unsigned long fifo_clk, unsigned int fifo_msr_id,
-			unsigned int cnt)
+int lcd_prbs_clk_check(unsigned int encl_clk, unsigned int encl_msr_id,
+			unsigned int fifo_clk, unsigned int fifo_msr_id, unsigned int cnt)
 {
 	unsigned long clk_check, temp;
 
@@ -1608,7 +1603,7 @@ int lcd_prbs_clk_check(unsigned long encl_clk, unsigned int encl_msr_id,
 	clk_check = meson_clk_measure(encl_msr_id);
 	if (clk_check != encl_clk) {
 		temp = lcd_abs(clk_check, encl_clk);
-		if (temp >= CLK_CHK_MAX) {
+		if (temp >= PLL_CLK_CHECK_MAX) {
 			if (lcd_debug_print_flag & LCD_DBG_PR_TEST) {
 				LCDERR("encl clkmsr error %ld, cnt:%d\n",
 				       clk_check, cnt);
@@ -1618,12 +1613,12 @@ int lcd_prbs_clk_check(unsigned long encl_clk, unsigned int encl_msr_id,
 	}
 
 lcd_prbs_clk_check_next:
-	if (encl_msr_id == LCD_CLK_MSR_INVALID)
+	if (fifo_msr_id == LCD_CLK_MSR_INVALID)
 		return 0;
 	clk_check = meson_clk_measure(fifo_msr_id);
 	if (clk_check != fifo_clk) {
 		temp = lcd_abs(clk_check, fifo_clk);
-		if (temp >= CLK_CHK_MAX) {
+		if (temp >= PLL_CLK_CHECK_MAX) {
 			if (lcd_debug_print_flag & LCD_DBG_PR_TEST) {
 				LCDERR("fifo clkmsr error %ld, cnt:%d\n",
 				       clk_check, cnt);

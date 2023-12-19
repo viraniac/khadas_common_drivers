@@ -11,10 +11,14 @@
 		mode = "tv";
 		fr_auto_policy = <1>; /* 0=disable, 1=60/50hz, 2=60/50/48hz */
 		key_valid = <1>;
-		clocks = <&clkc CLKID_FCLK_DIV5
-				&clkc CLKID_CTS_TCON_PLL_CLK>;
-		clock-names = "fclk_div5",
-				"clk_tcon";
+
+		assigned-clocks = <&clkc CLKID_CTS_TCON_PLL_CLK_SEL>,
+				  <&clkc CLKID_CTS_TCON_PLL_CLK>;
+		assigned-clock-parents = <&clkc CLKID_FCLK_DIV5>, <0>;
+		assigned-clock-rates = <0>,  <50000000>;
+		clocks = <&clkc CLKID_CTS_TCON_PLL_CLK>;
+		clock-names = "clk_tcon";
+
 		reg = <0x0 0xfe380000 0x0 0xd000   /* tcon */
 			0x0 0xfe004000 0x0 0x70    /* periphs */
 			0x0 0xfe002000 0x0 0xa0    /* reset */

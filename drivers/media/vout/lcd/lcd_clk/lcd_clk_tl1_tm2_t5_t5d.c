@@ -953,6 +953,7 @@ static void lcd_clk_prbs_test(struct aml_lcd_drv_s *pdrv, unsigned int ms, unsig
 	unsigned int reg0, reg1;
 	unsigned int val1, val2, timeout;
 	unsigned int clk_err_cnt = 0;
+	unsigned int lcd_encl_clk_check_std, lcd_fifo_clk_check_std;
 	int i, j, ret;
 
 	if (!cconf)
@@ -1072,6 +1073,7 @@ static void lcd_clk_prbs_test_txhd2(struct aml_lcd_drv_s *pdrv,
 	unsigned int lcd_prbs_cnt;
 	unsigned int val1, val2, timeout;
 	unsigned int clk_err_cnt = 0;
+	unsigned int lcd_encl_clk_check_std, lcd_fifo_clk_check_std;
 	int j, ret;
 
 	if (!cconf)
