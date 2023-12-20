@@ -121,7 +121,6 @@ struct ldim_dev_driver_s {
 
 struct ldim_drv_data_s {
 	unsigned char ldc_chip_type;
-	unsigned char spi_sync;
 	unsigned char spi_cont;
 	unsigned int rsv_mem_size;
 	unsigned short h_zone_max;

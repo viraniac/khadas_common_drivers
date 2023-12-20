@@ -1226,11 +1226,14 @@ static int ldim_dev_get_config_from_dts(struct ldim_dev_driver_s *dev_drv,
 	dev_drv->mcu_header, dev_drv->mcu_dim);
 
 	ret = of_property_read_u32(child, "spi_line_n", &val);
-	if (ret)
-		dev_drv->spi_line_n = 50;
-	else
+	if (ret) {
+		dev_drv->spi_sync = SPI_ASYNC;
+		dev_drv->spi_line_n = 0;
+	} else {
+		dev_drv->spi_sync = SPI_DMA_TRIG;
 		dev_drv->spi_line_n = (unsigned int)val;
-	LDIMPR("spi_line_n: %d\n", dev_drv->spi_line_n);
+	}
+	LDIMPR("spi_sync:%d, spi_line_n: %d\n", dev_drv->spi_sync, dev_drv->spi_line_n);
 
 	ret = of_property_read_u32(child, "chip_count", &val);
 	if (ret)
@@ -1584,14 +1587,18 @@ static int ldim_dev_get_config_from_ukey(struct ldim_dev_driver_s *dev_drv,
 	LDIMPR("mcu_header: 0x%x, mcu_dim: 0x%x\n",
 	dev_drv->mcu_header, dev_drv->mcu_dim);
 
-	dev_drv->spi_line_n =
-		(*(p + LCD_UKEY_LDIM_DEV_CUST_ATTR_2) |
+	temp =	(*(p + LCD_UKEY_LDIM_DEV_CUST_ATTR_2) |
 		((*(p + LCD_UKEY_LDIM_DEV_CUST_ATTR_2 + 1)) << 8) |
 		((*(p + LCD_UKEY_LDIM_DEV_CUST_ATTR_2 + 2)) << 16) |
 		((*(p + LCD_UKEY_LDIM_DEV_CUST_ATTR_2 + 3)) << 24));
-	if (dev_drv->spi_line_n == 0)
-		dev_drv->spi_line_n = 50;
-	LDIMPR("spi_line_n: %d\n", dev_drv->spi_line_n);
+	if (temp == 0) {
+		dev_drv->spi_sync = SPI_ASYNC;
+		dev_drv->spi_line_n = 0;
+	} else {
+		dev_drv->spi_sync = SPI_DMA_TRIG;
+		dev_drv->spi_line_n = temp;
+	}
+	LDIMPR("spi_sync: %d ,spi_line_n: %d\n", dev_drv->spi_sync, dev_drv->spi_line_n);
 
 	str = (const char *)(p + LCD_UKEY_LDIM_DEV_ZONE_MAP_PATH);
 	if (strlen(str) == 0) {
@@ -2244,7 +2251,6 @@ static void ldim_dev_probe_func(struct work_struct *work)
 	ldim_drv->dev_drv = &ldim_dev_drv;
 	ldim_dev_drv.bl_row = ldim_drv->conf->seg_row;
 	ldim_dev_drv.bl_col = ldim_drv->conf->seg_col;
-	ldim_dev_drv.spi_sync = ldim_drv->data->spi_sync;
 	ldim_dev_drv.spi_cont = ldim_drv->data->spi_cont;
 	ldim_dev_drv.ldim_pwm_config.pwm_duty_max = 4095;
 	ldim_dev_drv.analog_pwm_config.pwm_duty_max = 4095;

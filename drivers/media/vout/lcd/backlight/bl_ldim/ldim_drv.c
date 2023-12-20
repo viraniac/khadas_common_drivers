@@ -303,6 +303,9 @@ static void ldim_fw_vsync_update(void)
 
 		if (fw->fw_info_update)
 			fw->fw_info_update(ldim_driver.fw);
+
+		ldim_driver.resolution_update = 0;
+		fw->res_update = 0;
 	}
 }
 
@@ -414,7 +417,7 @@ static irqreturn_t ldim_vsync_isr(int irq, void *dev_id)
 	local_time[2] = local_time[1] - local_time[0];
 	ldim_time_sort_save(ldim_driver.arithmetic_time, local_time[2]);
 
-	if (ldim_driver.spiout_mode == SPIOUT_VSYNC)
+	if (ldim_driver.dev_drv && ldim_driver.dev_drv->spi_sync == SPI_DMA_TRIG)
 		ldim_vs_brightness();
 
 	ldim_driver.irq_cnt++;
@@ -446,7 +449,7 @@ static irqreturn_t ldim_pwm_vs_isr(int irq, void *dev_id)
 	if (ldim_debug_print == 7)
 		LDIMPR("%s: pwm_vs_irq_cnt = %d\n", __func__, ldim_driver.pwm_vs_irq_cnt);
 
-	if (ldim_driver.spiout_mode == SPIOUT_PWM_VS)
+	if (ldim_driver.dev_drv && ldim_driver.dev_drv->spi_sync != SPI_DMA_TRIG)
 		ldim_vs_brightness();
 
 	spin_unlock_irqrestore(&ldim_pwm_vs_isr_lock, flags);
@@ -977,7 +980,6 @@ ldim_malloc_t7_err0:
 
 static struct ldim_drv_data_s ldim_data_t7 = {
 	.ldc_chip_type = LDC_T7,
-	.spi_sync = SPI_DMA_TRIG,
 	.spi_cont = SPI_T3,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
@@ -992,7 +994,6 @@ static struct ldim_drv_data_s ldim_data_t7 = {
 
 static struct ldim_drv_data_s ldim_data_t3 = {
 	.ldc_chip_type = LDC_T3,
-	.spi_sync = SPI_DMA_TRIG,
 	.spi_cont = SPI_T3,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
@@ -1007,7 +1008,6 @@ static struct ldim_drv_data_s ldim_data_t3 = {
 
 static struct ldim_drv_data_s ldim_data_t5m = {
 	.ldc_chip_type = LDC_T3,
-	.spi_sync = SPI_DMA_TRIG,
 	.spi_cont = SPI_T5M,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
@@ -1022,7 +1022,6 @@ static struct ldim_drv_data_s ldim_data_t5m = {
 
 static struct ldim_drv_data_s ldim_data_t3x = {
 	.ldc_chip_type = LDC_T3X,
-	.spi_sync = SPI_DMA_TRIG,
 	.spi_cont = SPI_T3X,
 	.rsv_mem_size = 0x400000,
 	.h_zone_max = 96,
