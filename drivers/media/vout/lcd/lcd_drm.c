@@ -287,8 +287,9 @@ static void lcd_drm_vmode_update(struct aml_lcd_drv_s *pdrv, struct drm_display_
 	mode->htotal = htotal;
 	mode->vtotal = vtotal;
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("[%d]: %s: clock=%d, htotal=%d, vtotal=%d, frame_rate=%d\n",
-			pdrv->index, __func__, mode->clock, mode->htotal, mode->vtotal, frame_rate);
+		LCDPR("[%d]: %s: %s, clock=%d, htotal=%d, vtotal=%d\n",
+			pdrv->index, __func__, mode->name, mode->clock,
+			mode->htotal, mode->vtotal);
 	}
 }
 
@@ -360,7 +361,7 @@ static int lcd_drm_update_hsr_mode(struct aml_lcd_drv_s *pdrv,
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
 		LCDPR("[%d]: %s add dlg mode\n", pdrv->index, __func__);
 	fr_table = lcd_std_frame_rate_high;
-	native_mode = &tv_lcd_mode_ref[5];
+	native_mode = &tv_lcd_mode_ref[4];
 	for (i = 0; i < num_1; i++) {
 		if (fr_table[i] == 0)
 			break;
