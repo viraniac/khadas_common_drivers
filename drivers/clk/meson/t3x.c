@@ -468,19 +468,6 @@ static struct clk_regmap t3x_sys3_pll = {
 };
 #endif
 
-#ifdef CONFIG_ARM
-static const struct pll_params_table t3x_fix_pll_params_table[] = {
-	PLL_PARAMS(166, 1, 0), /*DCO=3984M OD=DCO/2=1992M*/
-	{ /* sentinel */ }
-};
-
-#else
-static const struct pll_params_table t3x_fix_pll_params_table[] = {
-	PLL_PARAMS(166, 1), /*DCO=3984M OD=DCO/2=1992M*/
-	{ /* sentinel */ }
-};
-#endif
-
 static struct clk_regmap t3x_fixed_pll_dco = {
 	.data = &(struct meson_clk_pll_data){
 		.en = {
@@ -513,23 +500,14 @@ static struct clk_regmap t3x_fixed_pll_dco = {
 			.shift   = 29,
 			.width   = 1,
 		},
-		.table = t3x_fix_pll_params_table,
-		.smc_id = SECURE_PLL_CLK,
-		.secid_disable = SECID_FIX_DCO_PLL_DIS,
-		.secid = SECID_FIX_DCO_PLL
 	},
 	.hw.init = &(struct clk_init_data){
 		.name = "fixed_pll_dco",
-		.ops = &meson_secure_pll_v2_ops,
+		.ops = &meson_clk_pll_ro_ops,
 		.parent_data = &(const struct clk_parent_data) {
 			.fw_name = "xtal",
 		},
 		.num_parents = 1,
-		/*
-		 * This clock feeds the CPU, avoid disabling it
-		 * Register has the risk of being directly operated
-		 */
-		.flags = CLK_IGNORE_UNUSED | CLK_GET_RATE_NOCACHE,
 	},
 };
 
@@ -542,13 +520,6 @@ static struct clk_regmap t3x_fixed_pll = {
 			&t3x_fixed_pll_dco.hw
 		},
 		.num_parents = 1,
-		/*
-		 * sys pll is used by cpu clock , it is initialized
-		 * to 1200M in bl2, CLK_IGNORE_UNUSED is needed to
-		 * prevent the system hang up which will be called
-		 * by clk_disable_unused
-		 */
-		.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 	},
 };
 #else
@@ -558,22 +529,15 @@ static struct clk_regmap t3x_fixed_pll = {
 		.shift = 12,
 		.width = 3,
 		.table = t3x_pll_od_tab,
-		.smc_id = SECURE_PLL_CLK,
-		.secid = SECID_FIX_PLL_OD
+		.flags = CLK_DIVIDER_POWER_OF_TWO,
 	},
 	.hw.init = &(struct clk_init_data){
 		.name = "fixed_pll",
-		.ops = &clk_regmap_secure_v2_divider_ops,
+		.ops = &clk_regmap_divider_ro_ops,
 		.parent_hws = (const struct clk_hw *[]) {
 			&t3x_fixed_pll_dco.hw
 		},
 		.num_parents = 1,
-		/*
-		 * This clock won't ever change at runtime so
-		 * CLK_SET_RATE_PARENT is not required
-		 * Never close , Register may be rewritten
-		 */
-		.flags = CLK_IGNORE_UNUSED | CLK_GET_RATE_NOCACHE,
 	},
 };
 #endif
