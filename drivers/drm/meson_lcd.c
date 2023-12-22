@@ -61,7 +61,7 @@ int meson_panel_get_modes(struct drm_connector *connector)
 	}
 
 	ret = panel_dev->get_modes(panel_dev, &modes, &modes_cnt);
-	DRM_INFO("%s: get modes %d, ret %d\n", __func__, modes_cnt, ret);
+	DRM_DEBUG("%s: get modes %d, ret %d\n", __func__, modes_cnt, ret);
 	if (ret == 0 && modes_cnt > 0) {
 		if (!connector->display_info.width_mm || !connector->display_info.height_mm) {
 			connector->display_info.width_mm = modes[i].width_mm;
