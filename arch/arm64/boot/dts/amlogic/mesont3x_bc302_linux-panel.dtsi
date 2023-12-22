@@ -10,7 +10,7 @@
 		index = <0>;
 		mode = "tv";
 		fr_auto_policy = <1>; /* 0=disable, 1=60/50hz, 2=60/50/48hz */
-		key_valid = <0>;
+		key_valid = <1>;
 		clocks = <&clkc CLKID_FCLK_DIV5
 				&clkc CLKID_CTS_TCON_PLL_CLK>;
 		clock-names = "fclk_div5",
@@ -567,7 +567,7 @@
 		compatible = "amlogic, lcd_extern";
 		status = "okay";
 		index = <0>;
-		key_valid = <0>;
+		key_valid = <1>;
 		i2c_bus = "i2c_bus_2";
 
 		extern_0{
@@ -608,7 +608,7 @@
 		compatible = "amlogic, backlight-t3x";
 		status = "okay";
 		index = <0>;
-		key_valid = <0>;
+		key_valid = <1>;
 		pinctrl-names = "pwm_on","pwm_vs_on",
 				"pwm_off";
 		pinctrl-0 = <&pwm_d_pins4>;
