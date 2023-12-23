@@ -221,7 +221,7 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 	struct lcd_config_s *pconf = &pdrv->config;
 	unsigned int hstart, hend, vstart, vend, h_period, v_period;
 	unsigned int offset;
-	unsigned int pre_de_vs, pre_de_ve, pre_de_hs, pre_de_he;
+	unsigned int pre_vde, pre_de_vs, pre_de_ve, pre_de_hs, pre_de_he;
 	unsigned int hs_hs_addr, hs_he_addr, vs_vs_addr, vs_ve_addr, vs_hs_addr, vs_he_addr;
 	unsigned int ppc, slice, p2s_px_dly;
 	unsigned int hde_px_bgn, hde_px_end;
@@ -290,7 +290,8 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 
 	if (pconf->basic.lcd_type == LCD_P2P ||
 	    pconf->basic.lcd_type == LCD_MLVDS) {
-		pre_de_vs = vstart - 16;
+		pre_vde = pconf->timing.pre_de_v ? pconf->timing.pre_de_v : 16;
+		pre_de_vs = vstart - pre_vde;
 		pre_de_ve = pconf->basic.v_active + pre_de_vs;
 		pre_de_hs = hstart + 6;
 		pre_de_he = pconf->basic.h_active + pre_de_hs;
