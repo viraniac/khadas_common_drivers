@@ -752,9 +752,7 @@ static inline unsigned int bl_brightness_level_map(struct aml_bl_drv_s *bdrv,
 {
 	unsigned int level;
 
-	if (brightness == 0)
-		level = 0;
-	else if (brightness > bdrv->bconf.level_max)
+	if (brightness > bdrv->bconf.level_max)
 		level = bdrv->bconf.level_max;
 	else if (brightness < bdrv->bconf.level_min)
 		level = bdrv->bconf.level_min;
