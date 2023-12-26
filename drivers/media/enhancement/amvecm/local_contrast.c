@@ -1454,6 +1454,7 @@ int global_scene_change(int *curve_nodes_cur,
 	static int frm_dif[N_DELAY];
 	/*store frame valid block for frm diff calc*/
 	static int valid_blk_num[N_DELAY];
+
 	int frm_dif_osd, vnum_osd;
 	int addr_curv1;
 	int apl_cur, apl_pre;
