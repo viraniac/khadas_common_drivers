@@ -1173,6 +1173,21 @@
 	pinctrl-0 = <&pdmin>;
 };
 
+&spdifa {
+
+		pinctrl-names = "spdif_pins",
+			"spdif_pins_mute";
+		pinctrl-0 = <&spdifout_a>;
+		pinctrl-1 = <&spdifout_a_mute>;
+};
+
+&spdifb {
+		pinctrl-names = "spdif_pins",
+			"spdif_pins_mute";
+		pinctrl-0 = <&spdifout_b>;
+		pinctrl-1 = <&spdifout_b_mute>;
+};
+
 &pinctrl_audio {
 	tdm_d0_pins: tdm_d0_pin {
 		mux {
