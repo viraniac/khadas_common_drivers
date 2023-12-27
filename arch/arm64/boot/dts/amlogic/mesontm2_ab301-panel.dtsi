@@ -55,6 +55,13 @@
 		lcd_cpu_gpio_names = "GPIOAO_4","GPIOH_2","GPIOH_3","GPIOH_12",
 			"GPIOH_8","GPIOH_10","GPIOH_11","GPIOH_14";
 
+		config_check_glb = <1>;
+		display_timing_req_min = <1  /*alert_level: 0:disable, 1:warning, 2:fatal error*/
+			45   /*hsw+hbp*/
+			0    /*hfp, 0 for no need*/
+			20   /*vsw+vbp*/
+			15>; /*vfp*/
+
 		lvds_0{
 			model_name = "1080p-vfreq";
 			interface = "lvds"; /*lcd_interface(lvds, vbyone)*/
@@ -64,12 +71,12 @@
 				8      /*lcd_bits */
 				16 9>; /*screen_widht, screen_height*/
 			range_setting = <
-				2060 2650  /*h_period_min,max*/
-				1100 1480  /*v_period_min,max*/
+				2132 2650  /*h_period_min,max*/
+				1120 1480  /*v_period_min,max*/
 				120000000 160000000>; /*pclk_min,max*/
 			lcd_timing = <
 				44 148 0  /*hs_width, hs_bp, hs_pol*/
-				5  30 0>; /*vs_width, vs_bp, vs_pol*/
+				5  20 0>; /*vs_width, vs_bp, vs_pol*/
 			clk_attr = <
 				2 /*fr_adj_type
 				   *(0=clk, 1=htotal, 2=vtotal, 3=auto_range,
@@ -107,12 +114,12 @@
 				8      /*lcd_bits*/
 				16 9>; /*screen_widht, screen_height*/
 			range_setting = <
-				2080 2720 /*h_period min, max*/
-				1100 1380 /*v_period min, max*/
+				2132 2720 /*h_period min, max*/
+				1120 1380 /*v_period min, max*/
 				133940000 156000000>; /*pclk_min, max*/
 			lcd_timing = <
 				44 148 0   /*hs_width, hs_bp, hs_pol*/
-				5  30  0>; /*vs_width, vs_bp, vs_pol*/
+				5  20  0>; /*vs_width, vs_bp, vs_pol*/
 			clk_attr = <
 				4 /*fr_adj_type
 				   *(0=clk, 1=htotal, 2=vtotal, 3=auto_range,
@@ -150,11 +157,11 @@
 				16 9>; /*screen_widht, screen_height*/
 			range_setting = <
 				1460 2000 /*h_period_min, max */
-				784 1015  /*v_period_min, max */
+				805 1015  /*v_period_min, max */
 				50000000 85000000>; /*pclk_min, max*/
 			lcd_timing = <
 				56 64 0   /*hs_width, hs_bp, hs_pol*/
-				3  28 0>; /*vs_width, vs_bp, vs_pol*/
+				3  17 0>; /*vs_width, vs_bp, vs_pol*/
 			clk_attr = <
 				2 /*fr_adj_type
 				   *(0=clk, 1=htotal, 2=vtotal, 3=auto_range,
