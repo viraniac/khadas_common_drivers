@@ -1194,7 +1194,7 @@
 		samesource_sel = <3>;
 		/* In for ACODEC_ADC */
 		/* tdmin-src-name = "acodec_adc"; */
-		tdmin-src-name = "hdmirx";
+		tdmin-src-name = "hdmirx_b";
 		/*enable default mclk(12.288M), before extern codec start*/
 		start_clk_enable = <1>;
 
@@ -1222,7 +1222,7 @@
 		dai-tdm-lane-slot-mask-in = <1 1 1 1>;
 		dai-tdm-lane-slot-mask-out = <1 0 0 0>;
 		dai-tdm-clk-sel = <2>;
-
+		tdmin-src-name = "hdmirx_b";
 		clocks = <&clkaudio CLKID_AUDIO_MCLK_C
 				&clkc CLKID_HIFI_PLL
 				&clkc CLKID_HIFI1_PLL>;
