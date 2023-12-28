@@ -180,28 +180,9 @@
 		compatible = "gpio-leds";
 		status = "okay";
 
-		net_red {
-			label="net_red";
-			gpios=<&gpio GPIOA_14 GPIO_ACTIVE_LOW>;
-			default-state ="on";
-		};
-
-		net_green {
-			label="net_green";
-			gpios=<&gpio GPIOA_15 GPIO_ACTIVE_HIGH>;
-			default-state ="on";
-		};
-
-		remote_led {
-			label = "remote_led";
-			gpios = <&gpio_ao GPIOAO_10 GPIO_ACTIVE_LOW>;
-			default-state = "off";
-			linux,default-trigger = "rc_feedback";
-		};
-
 		sys_led {
 			label="sys_led";
-			gpios=<&gpio_ao GPIOAO_11 GPIO_ACTIVE_LOW>;
+			gpios=<&gpio_ao GPIOAO_11 GPIO_ACTIVE_HIGH>;
 			default-state ="on";
 		};
 	};
@@ -1116,10 +1097,45 @@
 };
 
 &i2c3 {
-	status = "disabled";
+	status = "okay";
 	pinctrl-names="default";
 	pinctrl-0=<&i2c3_master_pins2>;
 	clock-frequency = <100000>; /* default 100k */
+
+	/* for led */
+	tlc59116: tlc59116@60 {
+		compatible = "amlogic,tlc59116_led";
+		reg = <0x60>;
+		status = "okay";
+
+		led0 {
+			default_colors = <0 0 0>;
+			r_io_number = <0>;
+			g_io_number = <10>;
+			b_io_number = <5>;
+		};
+
+		led1 {
+			default_colors = <0 0 0>;
+			r_io_number = <1>;
+			g_io_number = <11>;
+			b_io_number = <6>;
+		};
+
+		led2 {
+			default_colors = <0 0 0>;
+			r_io_number = <2>;
+			g_io_number = <12>;
+			b_io_number = <7>;
+		};
+
+		led3 {
+			default_colors = <0 0 0>;
+			r_io_number = <3>;
+			g_io_number = <13>;
+			b_io_number = <8>;
+		};
+	};
 
 	/* for ref board */
 	ad82584f_62: ad82584f_62@31 {

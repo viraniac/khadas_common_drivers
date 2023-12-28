@@ -193,7 +193,7 @@
 
 	gpioleds {
 		compatible = "gpio-leds";
-		status = "disabled";
+		status = "okay";
 
 		bt_led {
 			label="bt_led";

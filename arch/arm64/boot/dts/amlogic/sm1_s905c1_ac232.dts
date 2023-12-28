@@ -195,7 +195,7 @@
 		bt_led {
 			label="bt_led";
 			gpios=<&gpio_ao GPIOAO_11 GPIO_ACTIVE_HIGH>;
-			default-state ="off";
+			default-state ="on";
 		};
 	};
 
