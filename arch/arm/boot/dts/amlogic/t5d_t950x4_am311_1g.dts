@@ -1269,15 +1269,15 @@
 &sd_emmc_c {
 	status = "okay";
 	pinctrl-names = "default", "clk-gate";
-	pinctrl-1 = <&emmc_conf_pull_up &emmc_conf_pull_done>;
-	pinctrl-2 = <&emmc_clk_gate_pins>;
+	pinctrl-0 = <&emmc_conf_pull_up &emmc_conf_pull_done>;
+	pinctrl-1 = <&emmc_clk_gate_pins>;
 
 	bus-width = <8>;
 	cap-mmc-highspeed;
 	//mmc-ddr-1_8v;
-	//mmc-hs200-1_8v;
-	//mmc-hs400-1_8v;
-	max-frequency = <50000000>;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	max-frequency = <200000000>;
 	non-removable;
 	disable-wp;
 	hs4_core_phase = <0>;
