@@ -328,6 +328,9 @@ static struct lcd_clk_data_s lcd_clk_data_c3 = {
 
 	.ss_support = 0,
 
+	.clktree_set = NULL,
+	.clktree_index = {0, 0, 0, 0, 0, 0},
+
 	.clk_parameter_init = NULL,
 	.clk_generate_parameter = lcd_clk_generate_c3,
 	.pll_frac_generate = lcd_pll_frac_generate_c3,
@@ -341,11 +344,6 @@ static struct lcd_clk_data_s lcd_clk_data_c3 = {
 	.clk_set = lcd_clk_set,
 	.vclk_crt_set = lcd_set_vclk_crt,
 	.clk_disable = lcd_clk_disable,
-	.clk_gate_switch = NULL,
-	.clk_gate_optional_switch = NULL,
-	.clktree_set = NULL,
-	.clktree_probe = NULL,
-	.clktree_remove = NULL,
 	.clk_config_init_print = lcd_clk_config_init_print_dft,
 	.clk_config_print = lcd_clk_config_print_c3,
 	.prbs_test = NULL,
