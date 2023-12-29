@@ -94,3 +94,6 @@ dtb-y += g12a_s905x2_u212.dtb
 dtb-y += g12a_s905x2_u215.dtb
 dtb-y += tm2_t962x3_ab301.dtb
 dtb-y += s7_pxp.dtb
+dtb-y += s7_s905y5_bh201.dtb
+dtb-y += s7_s905y5_bh202.dtb
+dtb-y += s7_s905y5_bh209.dtb
