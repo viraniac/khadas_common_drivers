@@ -688,7 +688,8 @@ struct frc_dev_s {
 	u32 dbg_out_reg[MONITOR_REG_MAX];
 	u32 dbg_buf_len;
 	u32 dbg_vf_monitor;
-
+	u16 dbg_mvrd_mode;
+	u16 dbg_mute_disable;
 	u8  little_win;
 	u8  vlock_flag;
 	u8  use_pre_vsync; /* bit_0:120hz_enable , bit_1: 60hz enable */

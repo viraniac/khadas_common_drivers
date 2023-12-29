@@ -767,14 +767,14 @@ int frc_vd_notify_callback(struct notifier_block *block, unsigned long cmd, void
 			== VIDEO_SIZE_CHANGE_EVENT) &&
 			devp->probe_ok && (!devp->in_sts.frc_seamless_en ||
 			(devp->in_sts.frc_seamless_en && devp->in_sts.frc_is_tvin))) {
-			if (devp->frc_sts.state == FRC_STATE_ENABLE) {
+//	if (devp->frc_sts.state == FRC_STATE_ENABLE) {
 				pr_frc(0, "%s start disable frc", __func__);
 				set_frc_enable(false);
 				set_frc_bypass(true);
 				frc_change_to_state(FRC_STATE_DISABLE);
 				//frc_change_to_state(FRC_STATE_BYPASS);
 				frc_state_change_finish(devp);
-			}
+//	}
 			if (devp->frc_sts.frame_cnt != 0) {
 				devp->frc_sts.frame_cnt = 0;
 				pr_frc(1, "%s reset frm_cnt\n", __func__);
@@ -1039,6 +1039,8 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 	devp->other1_flag = 0;
 	devp->other2_flag = 25;  // 16;
 	devp->vlock_flag = 1;
+	devp->dbg_mvrd_mode = 8;
+	devp->dbg_mute_disable = 1;
 	/*input sts initial*/
 	devp->in_sts.have_vf_cnt = 0;
 	devp->in_sts.no_vf_cnt = 0;
@@ -1187,7 +1189,7 @@ static int frc_probe(struct platform_device *pdev)
 	//	PR_ERR("%s: frc_dev kzalloc memory failed\n", __func__);
 	//	goto fail_alloc_dev;
 	// }
-	pr_frc(0, "%s, frc probe start\n", __func__);
+	// pr_frc(0, "%s, frc probe start\n", __func__);
 	memset(frc_devp, 0, (sizeof(struct frc_dev_s)));
 
 	frc_devp->data = NULL;
@@ -1207,7 +1209,7 @@ static int frc_probe(struct platform_device *pdev)
 		PR_ERR("%s: frc_dev->fw_data fail\n", __func__);
 		goto fail_alloc_fw_data_fail;
 	}
-	PR_FRC("%s fw_data st size:%d", __func__, sizeof_frc_fw_data_struct());
+	// PR_FRC("%s fw_data st size:%d", __func__, sizeof_frc_fw_data_struct());
 
 	ret = alloc_chrdev_region(&frc_devp->devno, 0, FRC_DEVNO, FRC_NAME);
 	if (ret < 0) {
@@ -1308,7 +1310,7 @@ static int frc_probe(struct platform_device *pdev)
 #if IS_ENABLED(CONFIG_AMLOGIC_DMC_DEV_ACCESS)
 	frc_dmc_notifier();
 #endif
-	PR_FRC("%s probe st:%d", __func__, frc_devp->probe_ok);
+//	PR_FRC("%s probe st:%d", __func__, frc_devp->probe_ok);
 	return ret;
 fail_dev_create:
 	cdev_del(&frc_devp->cdev);
@@ -1510,7 +1512,7 @@ static int frc_runtime_resume(struct device *dev)
 	devp = get_frc_devp();
 	if (!devp)
 		return -1;
-	PR_FRC("call %s\n", __func__);
+	// PR_FRC("call %s\n", __func__);
 	frc_power_domain_ctrl(devp, 1);
 	if (!devp->power_on_flag)
 		devp->power_on_flag = true;

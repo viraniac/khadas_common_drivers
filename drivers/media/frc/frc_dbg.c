@@ -1021,6 +1021,37 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->use_pre_vsync = val1;
+	}  else if (!strcmp(parm[0], "frc_sus")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0) {
+			if (val1 == 0) {
+				devp->frc_sts.auto_ctrl = false;
+				PR_FRC("call %s\n", __func__);
+				frc_power_domain_ctrl(devp, 0);
+				if (devp->power_on_flag)
+					devp->power_on_flag = false;
+			} else {
+				PR_FRC("call %s\n", __func__);
+				frc_power_domain_ctrl(devp, 1);
+				if (!devp->power_on_flag)
+					devp->power_on_flag = true;
+				set_frc_bypass(ON);
+				devp->frc_sts.auto_ctrl = true;
+				devp->frc_sts.re_config = true;
+			}
+		}
+	} else if (!strcmp(parm[0], "mvrd_mode")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->dbg_mvrd_mode = val1;
+	} else if (!strcmp(parm[0], "mute_dis")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->dbg_mute_disable = val1;
+
 	}
 exit:
 	kfree(buf_orig);

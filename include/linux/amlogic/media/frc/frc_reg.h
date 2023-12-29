@@ -2166,6 +2166,15 @@
  //Bit	7: 6	    reserved
  //Bit	5: 0	    reg_mc_7_flag_line_width  // unsigned ,    RW, default = 4	7 flag line width
 
+#define FRC_MC_MVRD_CTRL                           0x3901
+//Bit 31:9       reserved
+//Bit 8          reg_mc_mv_in_sel    // unsigned,RW,default = 1,1:mv from ddr 0:mv from mevp ports
+//Bit 7 :1       reserved
+//Bit 0          reg_mvrd_mode          // unsigned,RW, default = 0,
+					//only active when reg_mc_mv_in_sel == 1,
+					//1:always read mv from ddr
+					//0:ead mv when mvwr_cnt > mvrd_cnt
+
 #define FRC_MC_SW_RESETS                           0x3904
 //Bit 31:16      reserved
 //Bit 15: 0      reg_mc_sw_resets                 // unsigned ,    RW, default = 0,
@@ -2291,7 +2300,7 @@
 //                                      1=ABH read request burst size 24;
 //                                      2=ABH read request burst size 32;
 //                                      3=ABH read request burst size 48.
-// Bit     1 RW ctrl_sw_reset. 1=Reset RDMA logics except register.
+// Bit     1 RW ctrl_sw_reset. 1=Reset RDMA logic except register.
 // Bit     0 RW ctrl_free_clk_enable. 0=Default, Enable clock gating. 1=No clock gating, enable free clock.
 #define FRC_RDMA_CTRL                              0x3b14
 // Read only.

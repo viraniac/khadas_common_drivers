@@ -296,11 +296,10 @@ void frc_mc_reset(u32 onoff)
 
 void set_frc_enable(u32 en)
 {
-	enum chip_id chip;
-	// u32 temp;
-	chip = get_chip_type();
+	enum chip_id chip = get_chip_type();
+	struct frc_dev_s *devp = get_frc_devp();
 
-	pr_frc(2, "%s set(0817)  %d\n", __func__, en);
+	pr_frc(2, "%s set(1122) %d\n", __func__, en);
 	// temp = en ? 0 : BIT_28;
 	// regdata_top_ctl_0009 = READ_FRC_REG(FRC_REG_TOP_CTRL9);
 	// frc_config_reg_value(temp, BIT_28, &regdata_top_ctl_0009);
@@ -325,8 +324,12 @@ void set_frc_enable(u32 en)
 			frc_mc_reset(0);
 			WRITE_FRC_REG_BY_CPU(FRC_TOP_SW_RESET, 0xFFFF);
 			WRITE_FRC_REG_BY_CPU(FRC_TOP_SW_RESET, 0x0);
+			if (devp->dbg_mvrd_mode > 0)
+				WRITE_FRC_REG_BY_CPU(FRC_MC_MVRD_CTRL, 0x101);
 		}
 	} else {
+		if ((READ_FRC_REG(FRC_REG_TOP_CTRL7) >> 24) > 0)
+			frc_frame_forcebuf_enable(0);
 		gst_frc_param.s2l_en = 0;
 		gst_frc_param.frc_mcfixlines = 0;
 		// WRITE_FRC_REG_BY_CPU(FRC_FRAME_SIZE, 0x0);
@@ -571,7 +574,6 @@ void mc_undone_read(struct frc_dev_s *frc_devp)
 		val = READ_FRC_REG(FRC_RO_MC_STAT);
 		mc_ud_flag = (val >> 12) & 0x1;
 		if (mc_ud_flag != 0) {
-			PR_ERR("FRC_RO_MC_STAT= 0x%08X", val);
 			frc_devp->frc_sts.mc_undone_cnt = (val >> 16) & 0xfff;
 			frc_devp->ud_dbg.mc_undone_err = 1;
 			WRITE_FRC_BITS(FRC_MC_HW_CTRL0, 1, 21, 1);
@@ -2690,7 +2692,7 @@ void frc_internal_initial(struct frc_dev_s *frc_devp)
 	WRITE_FRC_REG_BY_CPU(FRC_OUT_HOLD_CTRL, regdata_outholdctl_0003);
 	frc_config_reg_value(inp_hold_line, 0x1fff, &regdata_inpholdctl_0002);
 	WRITE_FRC_REG_BY_CPU(FRC_INP_HOLD_CTRL, regdata_inpholdctl_0002);
-	frc_set_urgent_cfg(0, 0);
+	frc_set_urgent_cfg(0, 4);
 	frc_set_urgent_cfg(1, 3);
 	frc_set_urgent_cfg(2, 0);
 	// sys_fw_param_frc_init(frc_top->hsize, frc_top->vsize, frc_top->is_me1mc4);
@@ -2719,7 +2721,7 @@ void frc_internal_initial(struct frc_dev_s *frc_devp)
 		frc_top->memc_loss_en = 0x03;
 		frc_cfg_memc_loss(frc_top->memc_loss_en & 0x3);
 		out_frm_dly_num = 0x03000000;
-		WRITE_FRC_BITS(FRC_REG_TOP_RESERVE0, 0x14, 0, 8);
+		WRITE_FRC_BITS(FRC_REG_TOP_RESERVE0, 0x33, 0, 8);
 	}
 	if (frc_devp->ud_dbg.res2_dbg_en == 3) {
 		if (frc_devp->out_sts.out_framerate > 90) {
@@ -2823,6 +2825,9 @@ void frc_get_film_base_vf(struct frc_dev_s *frc_devp)
 		return;
 	if ((pfw_data->frc_top_type.vfp & BIT_7) == BIT_7)
 		return;
+	if ((pfw_data->frc_top_type.vfp & BIT_4) == 0)
+		return;
+	pfw_data->frc_top_type.vfp &= 0xfffffff0;
 	pfw_data->frc_top_type.vfp |= 0x4;
 	pr_frc(1, "get in_rate:%d,out_rate:%d\n", in_frame_rate, outfrmrate);
 	switch (in_frame_rate) {
@@ -2933,7 +2938,7 @@ void frc_set_urgent_cfg(u8 ch, u8 level)
 {
 	u32 shift_1;
 
-	pr_frc(0, "%s set level %d\n", __func__, level);
+	// pr_frc(0, "%s set level %d\n", __func__, level);
 	if (level == 1)
 		shift_1 = 0xF000F000;
 	else if (level == 2)

@@ -252,7 +252,9 @@ irqreturn_t frc_input_isr(int irq, void *dev_id)
 	inp_undone_read(devp);
 	if (devp->dbg_reg_monitor_i)
 		frc_in_reg_monitor(devp);
-
+	if (devp->in_sts.vs_cnt == devp->dbg_mvrd_mode)
+		if ((READ_FRC_REG(FRC_MC_MVRD_CTRL) & BIT_0) == BIT_0)
+			WRITE_FRC_REG_BY_CPU(FRC_MC_MVRD_CTRL, 0x100);
 	tasklet_schedule(&devp->input_tasklet);
 
 	return IRQ_HANDLED;
@@ -662,7 +664,7 @@ enum efrc_event frc_input_sts_check(struct frc_dev_s *devp,
 			devp->frc_sts.re_config);
 		if (devp->frc_sts.out_put_mode_changed ==
 			FRC_EVENT_VF_CHG_IN_SIZE) {
-			devp->frc_sts.re_cfg_cnt = 15;
+			devp->frc_sts.re_cfg_cnt = 5;
 		} else if (devp->frc_sts.out_put_mode_changed ==
 			FRC_EVENT_VOUT_CHG) {
 			devp->frc_sts.re_cfg_cnt = 3;
@@ -902,7 +904,7 @@ void frc_input_vframe_handle(struct frc_dev_s *devp, struct vframe_s *vf,
 				pr_frc(1, "video = video mute");
 			}
 			devp->frc_sts.video_mute_cnt++;
-			no_input = true;
+			no_input = devp->dbg_mute_disable;
 		} else {
 			devp->in_sts.st_flag =
 				devp->in_sts.st_flag & (~FRC_FLAG_MUTE_ST);
@@ -1753,17 +1755,15 @@ int frc_memc_set_level(u8 level)
 	struct frc_dev_s *devp = get_frc_devp();
 	struct frc_fw_data_s *pfw_data;
 
-	if (!devp)
-		return 0;
-	if (!devp->probe_ok)
-		return 0;
-	if (!devp->fw_data)
+	if (!devp || !devp->probe_ok || !devp->fw_data)
 		return 0;
 	pfw_data = (struct frc_fw_data_s *)devp->fw_data;
 	pr_frc(1, "set_memc_level:%d\n", level);
-	pfw_data->frc_top_type.frc_memc_level = level;
-	if (pfw_data->frc_memc_level)
-		pfw_data->frc_memc_level(pfw_data);
+	if (level != pfw_data->frc_top_type.frc_memc_level) {
+		pfw_data->frc_top_type.frc_memc_level = level;
+		if (pfw_data->frc_memc_level)
+			pfw_data->frc_memc_level(pfw_data);
+	}
 	return 1;
 }
 
@@ -1771,17 +1771,23 @@ int frc_fpp_memc_set_level(u8 level, u8 num)
 {
 	struct frc_dev_s *devp = get_frc_devp();
 	struct frc_fw_data_s *pfw_data;
+	int flag = 0;
 
 	if (!devp || !devp->probe_ok || !devp->fw_data)
 		return 0;
-	pfw_data = (struct frc_fw_data_s *)devp->fw_data;
-	pfw_data->frc_top_type.frc_memc_level = level;
-	pfw_data->frc_top_type.frc_memc_level_1 = num;
 	pr_frc(1, "fpp_set_memc_level:%d[%d]\n", level, num);
-	if (pfw_data->frc_memc_level)
+	pfw_data = (struct frc_fw_data_s *)devp->fw_data;
+	if (level != pfw_data->frc_top_type.frc_memc_level) {
+		pfw_data->frc_top_type.frc_memc_level = level;
+		flag = 1;
+	}
+	if (num != pfw_data->frc_top_type.frc_memc_level_1) {
+		pfw_data->frc_top_type.frc_memc_level_1 = num;
+		flag = 1;
+	}
+	if (pfw_data->frc_memc_level && flag)
 		pfw_data->frc_memc_level(pfw_data);
 	return 1;
-
 }
 
 int frc_lge_memc_set_level(struct v4l2_ext_memc_motion_comp_info comp_info)
