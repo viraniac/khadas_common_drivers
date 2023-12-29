@@ -256,11 +256,11 @@
 		 ***************************************************/
 		//post_nub = <9>;
 	};
-#if 0
+
 	aml_dtv_demod {
 		compatible = "amlogic, ddemod-t5d-revB";
 		dev_name = "aml_dtv_demod";
-		status = "disabled";
+		status = "okay";
 		diseqc_name = "sgm_41286";
 		pinctrl-names="if_agc_pins", "diseqc_out", "rf_agc_pins";
 		pinctrl-0=<&dtvdemod_if_agc_pins>;
@@ -273,7 +273,7 @@
 		interrupt-names = "demod_isr";
 
 		power-domains = <&pwrdm PDID_T5_DEMOD>;
-		clocks = <&clkc CLKID_DAC_CLK>;
+		//clocks = <&clkc CLKID_DAC_CLK>;
 		clock-names = "vdac_clk_gate";
 
 		reg = <0xff670000 0x10000	/*dtv demod base*/
@@ -286,7 +286,7 @@
 		cma_mem_size = <16>; // MB
 		//memory-region = <&demod_cma_reserved>;//<&demod_reserved>;
 	};
-#endif
+
 	/* Audio Related start */
 	auge_sound {
 		compatible = "amlogic, auge-sound-card";
@@ -453,10 +453,10 @@
 		dev_name = "dvb-extern";
 		status = "okay";
 
-		fe_num = <0>;
+		fe_num = <1>;
 		fe0_demod = "internal";
 
-		tuner_num = <1>; /* tuner number, multi tuner support */
+		tuner_num = <2>; /* tuner number, multi tuner support */
 		tuner0_name = "mxl661_tuner";
 		tuner0_i2c_adap = <&i2c0>;
 		tuner0_i2c_addr = <0x60>;
