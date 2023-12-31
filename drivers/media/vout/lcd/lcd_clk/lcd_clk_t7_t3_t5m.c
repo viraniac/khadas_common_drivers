@@ -93,7 +93,9 @@ static void lcd_set_pll_ss_level(struct aml_lcd_drv_s *pdrv)
 		ret = lcd_pll_ss_level_generate(cconf);
 		if (ret == 0) {
 			cconf->ss_en = 1;
-			pll_ctrl2 |= ((cconf->ss_dep_sel << 28) | (cconf->ss_str_m << 16));
+			pll_ctrl2 |= ((1 << 15) |
+				      (cconf->ss_dep_sel << 28) |
+				      (cconf->ss_str_m << 16));
 			LCDPR("[%d]: set pll spread spectrum: level %d, %dppm\n",
 				pdrv->index, cconf->ss_level, cconf->ss_ppm);
 		}
