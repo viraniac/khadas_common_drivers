@@ -94,7 +94,6 @@ struct host_shm_info_t {
  * @cur_cnt:          Host health monitor current value
  * @started:          Host suspend flag
  * @init_mbox_chan:   Aocpu mbox chan
- * @mbox_buf:         Aocpu mbox buffer
  * @hang:             Host hang flag
  * @firmware_load:    Host firmware is load
  * @nb:               Host die notifier
@@ -134,6 +133,7 @@ struct host_module {
 	struct delayed_work host_monitor_work;
 	struct delayed_work host_logbuff_work;
 	struct workqueue_struct *host_wq;
+	struct workqueue_struct *host_logbuff_wq;
 	u32 hang;
 	u32 firmware_load;
 	struct host_data *host_data;
