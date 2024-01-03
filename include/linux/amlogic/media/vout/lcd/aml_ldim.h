@@ -142,6 +142,7 @@ struct ldim_drv_data_s {
 #define LDIM_STATE_REMAP_FORCE_UPDATE   BIT(3)
 #define LDIM_STATE_LD_EN                BIT(4)
 #define LDIM_STATE_SPI_SMR_EN           BIT(5)
+#define LDIM_STATE_PQ_INIT              BIT(6)
 
 struct aml_ldim_driver_s {
 	unsigned char valid_flag;

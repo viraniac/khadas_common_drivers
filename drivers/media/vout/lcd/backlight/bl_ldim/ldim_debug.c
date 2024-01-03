@@ -581,6 +581,12 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 		if (parm[1]) {
 			if (kstrtoul(parm[1], 10, &val1) < 0)
 				goto ldim_attr_store_err;
+
+			if ((ldim_drv->state & LDIM_STATE_PQ_INIT) == 0) {
+				LDIMPR("please set pq init first!!, do nothing!\n");
+				goto ldim_attr_store_err;
+			}
+
 			ldim_drv->level_idx = (unsigned char)val1;
 
 			fw->fw_ctrl &= ~0xf;

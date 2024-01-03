@@ -212,7 +212,8 @@ static int ldim_power_off(void)
 	if (ldim_driver.dev_drv && ldim_driver.dev_drv->power_off)
 		ldim_driver.dev_drv->power_off(&ldim_driver);
 
-	if (ldim_driver.dev_drv && ldim_driver.dev_drv->spi_sync == SPI_DMA_TRIG)
+	if (ldim_driver.dev_drv && ldim_driver.dev_drv->spi_dev &&
+		ldim_driver.dev_drv->spi_sync == SPI_DMA_TRIG)
 		ldim_spi_dma_trig_stop(ldim_driver.dev_drv->spi_dev);
 
 	ldim_driver.state &= ~LDIM_STATE_SPI_SMR_EN;
@@ -479,7 +480,7 @@ static void ldim_dev_smr(int update_flag, unsigned int size)
 {
 	struct ldim_dev_driver_s *dev_drv = ldim_driver.dev_drv;
 
-	if (!dev_drv)
+	if (!dev_drv || !dev_drv->spi_dev)
 		return;
 	if (!dev_drv->dev_smr) {
 		if (ldim_driver.dbg_vs_cnt == 0)
@@ -650,12 +651,18 @@ static long ldim_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			LDIMERR("cp pq_init.bin to buf fail\n");
 			return -EFAULT;
 		}
+		ldim_driver.state |= LDIM_STATE_PQ_INIT;
 		break;
 	case AML_LDIM_IOC_NR_GET_LEVEL_IDX:
 		if (copy_to_user(argp, &ldim_driver.level_idx, sizeof(unsigned char)))
 			ret = -EFAULT;
 		break;
 	case AML_LDIM_IOC_NR_SET_LEVEL_IDX:
+		if ((ldim_driver.state & LDIM_STATE_PQ_INIT) == 0) {
+			LDIMPR("please set pq init first!!, do nothing!\n");
+			return -EFAULT;
+		}
+
 		if (copy_from_user(&ldim_driver.level_idx, argp,
 				   sizeof(unsigned char))) {
 			ret = -EFAULT;
