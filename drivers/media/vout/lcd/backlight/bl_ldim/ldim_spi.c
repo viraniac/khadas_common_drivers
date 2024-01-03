@@ -186,12 +186,8 @@ int ldim_spi_init_dma_trig(struct spi_device *spi)
 		LDIMERR("%s: dev_drv->spi_tx_buf is error\n", __func__);
 		goto ldim_init_dma_trig_err1;
 	}
-	dev_drv->spi_rx_buf = dma_alloc_coherent(dev, dev_drv->spi_xlen,
-		&dev_drv->spi_rx_dma, GFP_KERNEL | GFP_DMA);
-	if (!dev_drv->spi_rx_buf) {
-		LDIMERR("%s: dev_drv->spi_rx_buf is error\n", __func__);
-		goto ldim_init_dma_trig_err2;
-	}
+	dev_drv->spi_rx_buf = NULL;
+	dev_drv->spi_rx_dma = (dma_addr_t)0;
 
 	//trig src:1 means vsync  2 line_n
 	ret = cdata->dirspi_dma_trig(spi,
@@ -201,8 +197,6 @@ int ldim_spi_init_dma_trig(struct spi_device *spi)
 
 	return ret;
 
-ldim_init_dma_trig_err2:
-	dma_free_coherent(dev, dev_drv->spi_xlen, dev_drv->spi_tx_buf, dev_drv->spi_tx_dma);
 ldim_init_dma_trig_err1:
 	LDIMERR("%s, dma alloc error!", __func__);
 	return -1;
