@@ -138,7 +138,7 @@ int aml_vrr_state(void)
 	if (!vdrv_active)
 		return 0;
 
-	if (vdrv_active->state & VRR_STATE_EN)
+	if (vdrv_active->enable)
 		ret = 1;
 	else
 		ret = 0;
