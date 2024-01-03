@@ -3047,7 +3047,7 @@ static void rx_phy_suspend(void)
 		rx_pr("don't set phy pddq down\n");
 	} else {
 		/* there's no SDA low issue on MTK box when hpd low */
-		if (hdmi_cec_en && tv_auto_power_on) {
+		if (hdmi_cec_en == 1 && tv_auto_power_on) {
 			if (suspend_pddq_sel == 2) {
 				/* set rxsense pulse */
 				rx_phy_rxsense_pulse(10, 10, 0);
@@ -3069,7 +3069,7 @@ static void rx_phy_resume(void)
 	/* set below rxsense pulse only if hpd = high,
 	 * there's no SDA low issue on MTK box when hpd low
 	 */
-	if (hdmi_cec_en && tv_auto_power_on) {
+	if (hdmi_cec_en == 1 && tv_auto_power_on) {
 		if (suspend_pddq_sel == 1) {
 			/* set rxsense pulse, if delay time between
 			 * rxsense pulse and phy_int shottern than

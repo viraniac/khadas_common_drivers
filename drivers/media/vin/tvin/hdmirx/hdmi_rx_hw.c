@@ -2040,9 +2040,11 @@ int hdmirx_control_clk_range(unsigned long min, unsigned long max)
 }
 
 /*
- * set_scdc_cfg
+ * hdmirx_clr_scdc
+ * en: for chip_id >= T7, clear and recovery are done together
+ *	0: recover scdc; 1: clear scdc
  */
-void set_scdc_cfg(int hpdlow, int pwr_provided, u8 port)
+void hdmirx_clr_scdc(bool en, u8 port)
 {
 	switch (rx_info.chip_id) {
 	case CHIP_ID_TXHD:
@@ -2054,8 +2056,10 @@ void set_scdc_cfg(int hpdlow, int pwr_provided, u8 port)
 	case CHIP_ID_TL1:
 	case CHIP_ID_TM2:
 	case CHIP_ID_T5:
-		hdmirx_wr_dwc(DWC_SCDC_CONFIG,
-			(hpdlow << 1) | (pwr_provided << 0));
+		if (en)
+			hdmirx_wr_dwc(DWC_SCDC_CONFIG, 0x2);
+		else
+			hdmirx_wr_dwc(DWC_SCDC_CONFIG, 0x1);
 		break;
 	case CHIP_ID_T7:
 	case CHIP_ID_T3:
@@ -2063,7 +2067,8 @@ void set_scdc_cfg(int hpdlow, int pwr_provided, u8 port)
 	case CHIP_ID_T5M:
 	case CHIP_ID_TXHD2:
 	default:
-		rx_clr_scdc(port);
+		if (en)
+			rx_clr_scdc(port);
 		break;
 	}
 }
@@ -2855,6 +2860,7 @@ void rx_clr_scdc(u8 port)
 {
 	if (rx_info.chip_id < CHIP_ID_T7)
 		return;
+
 	scdc_dwork.port = port;
 	queue_work(scdc_wq, &scdc_dwork.work_wq);
 }

@@ -3660,7 +3660,7 @@ void fsm_restart(u8 port)
 	hdmi_rx_top_edid_update();
 	hdmirx_hw_config(port);
 	if (rx[port].var.edid_update_flag)
-		set_scdc_cfg(1, 0, port);
+		hdmirx_clr_scdc(true, port);
 	hdmirx_audio_disabled(port);
 	rx[port].var.vic_check_en = false;
 	rx[port].var.dvi_check_en = true;
@@ -4794,7 +4794,7 @@ static void hdmirx_open_main_port(u8 port)
 	(rx_get_cur_hpd_sts(rx_info.main_port) == 0) ||
 	/* when open specific port, force to enable it */
 	(disable_port_en && rx_info.main_port == disable_port_num))) {
-		set_scdc_cfg(1, 0, port);
+		hdmirx_clr_scdc(true, port);
 		rx_esm_reset(1);
 		if (rx[port].state > FSM_HPD_LOW)
 			rx[port].state = FSM_HPD_LOW;
@@ -5190,6 +5190,7 @@ void rx_main_state_machine(void)
 		rx_set_cur_hpd(1, 0, port);
 		rx[port].clk.cable_clk = 0;
 		rx[port].phy.cablesel = 0;
+		hdmirx_clr_scdc(false, port);
 		/* rx[port].hdcp.hdcp_version = HDCP_VER_NONE; */
 		rx[port].state = FSM_WAIT_CLK_STABLE;
 		break;
