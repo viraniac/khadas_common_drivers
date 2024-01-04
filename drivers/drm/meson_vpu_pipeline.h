@@ -212,6 +212,7 @@ struct meson_vpu_osd {
 	struct meson_vpu_block base;
 	struct osd_mif_reg_s *reg;
 	int mif_acc_mode;
+	int viu2_hold_line;
 };
 
 struct osd_zorder_s {

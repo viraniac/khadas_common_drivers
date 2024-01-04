@@ -1016,11 +1016,11 @@ static void t3_osd_afbc_set_state(struct meson_vpu_block *vblk,
 				MESON_DRM_BLOCK("%s, invalid afbc top ctrl index\n", __func__);
 		} else {
 			if (i == 0)
-				meson_vpu_write_reg_bits(VIU_OSD1_PATH_CTRL, 0, 31, 1);
+				reg_ops->rdma_write_reg_bits(VIU_OSD1_PATH_CTRL, 0, 31, 1);
 			else if (i == 1)
-				meson_vpu_write_reg_bits(VIU_OSD2_PATH_CTRL, 0, 31, 1);
+				reg_ops->rdma_write_reg_bits(VIU_OSD2_PATH_CTRL, 0, 31, 1);
 			else if (i == 2)
-				meson_vpu_write_reg_bits(VIU_OSD3_PATH_CTRL, 0, 31, 1);
+				reg_ops->rdma_write_reg_bits(VIU_OSD3_PATH_CTRL, 0, 31, 1);
 			else
 				MESON_DRM_BLOCK("%s, invalid afbc top ctrl index\n", __func__);
 
@@ -1198,18 +1198,18 @@ static void s5_osd_afbc_set_state(struct meson_vpu_block *vblk,
 			reg_ops->rdma_write_reg_bits(afbc_reg->vpu_mafbc_prefetch_cfg_s,
 						reverse_y, 1, 1);
 			if (osd_index == 0)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD1_CTRL, 1, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD1_CTRL, 1, 0, 1);
 			else if (osd_index == 1)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD2_CTRL, 1, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD2_CTRL, 1, 0, 1);
 			else if (osd_index == 2)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD3_CTRL, 1, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD3_CTRL, 1, 0, 1);
 			else
 				MESON_DRM_BLOCK("%s, invalid afbc top ctrl index\n", __func__);
 		} else {
 			if (i == 0)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD1_CTRL, 0, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD1_CTRL, 0, 0, 1);
 			else if (i == 2)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD3_CTRL, 0, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD3_CTRL, 0, 0, 1);
 			else
 				MESON_DRM_BLOCK("%s, invalid afbc top ctrl index\n", __func__);
 
@@ -1387,20 +1387,20 @@ static void t3x_osd_afbc_set_state(struct meson_vpu_block *vblk,
 			reg_ops->rdma_write_reg_bits(afbc_reg->vpu_mafbc_prefetch_cfg_s,
 						reverse_y, 1, 1);
 			if (osd_index == 0)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD1_CTRL, 1, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD1_CTRL, 1, 0, 1);
 			else if (osd_index == 1)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD2_CTRL, 1, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD2_CTRL, 1, 0, 1);
 			else if (osd_index == 2)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD3_CTRL, 1, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD3_CTRL, 1, 0, 1);
 			else
 				MESON_DRM_BLOCK("%s, invalid afbc top ctrl index\n", __func__);
 		} else {
 			if (i == 0)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD1_CTRL, 0, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD1_CTRL, 0, 0, 1);
 			else if (i == 1)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD2_CTRL, 0, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD2_CTRL, 0, 0, 1);
 			else if (i == 2)
-				meson_vpu_write_reg_bits(VPP_INTF_OSD3_CTRL, 0, 0, 1);
+				reg_ops->rdma_write_reg_bits(VPP_INTF_OSD3_CTRL, 0, 0, 1);
 			else
 				MESON_DRM_BLOCK("%s, invalid afbc top ctrl index\n", __func__);
 
@@ -1431,7 +1431,7 @@ static void osd_afbc_dump_register(struct drm_printer *p,
 
 	osd_index = vblk->index;
 	afbc = to_afbc_block(vblk);
-	reg = afbc->afbc_regs;
+	reg = &afbc->afbc_regs[osd_index];
 
 	snprintf(buff, 8, "OSD%d", osd_index + 1);
 	drm_printf(p, "afbc error [%d]\n", afbc_err_cnt);
@@ -1616,26 +1616,22 @@ static void s5_osd_afbc_hw_init(struct meson_vpu_block *vblk)
 
 static void t3x_osd_afbc_hw_init(struct meson_vpu_block *vblk)
 {
-	struct meson_vpu_pipeline *pipeline = vblk->pipeline;
 	struct meson_vpu_afbc *afbc = to_afbc_block(vblk);
 
 	afbc->afbc_regs = &afbc_osd_t3x_regs[0];
 	afbc->status_regs = &afbc_status_t3x_regs[vblk->index];
 	afbc->num_of_4k_osd = 2;
 
-	/* disable osd1 afbc */
-	t7_osd_afbc_enable(vblk, pipeline->subs[0].reg_ops, afbc->status_regs, vblk->index, 0);
-
 	MESON_DRM_BLOCK("%s hw_init called.\n", afbc->base.name);
 }
 #endif
 
-void arm_fbc_start(struct meson_vpu_pipeline_state *pipeline_state)
+void arm_fbc_start(struct meson_vpu_pipeline_state *pipeline_state, struct rdma_reg_ops *reg_ops)
 {
 	if (!pipeline_state->global_afbc && global_afbc_mask) {
-		meson_vpu_write_reg(VPU_MAFBC_IRQ_MASK, 0xf);
-		meson_vpu_write_reg(VPU_MAFBC_IRQ_CLEAR, 0x3f);
-		meson_vpu_write_reg(VPU_MAFBC_COMMAND, 1);
+		reg_ops->rdma_write_reg(VPU_MAFBC_IRQ_MASK, 0xf);
+		reg_ops->rdma_write_reg(VPU_MAFBC_IRQ_CLEAR, 0x3f);
+		reg_ops->rdma_write_reg(VPU_MAFBC_COMMAND, 1);
 		pipeline_state->global_afbc = 1;
 		afbc_err_irq_clear = 1;
 	}

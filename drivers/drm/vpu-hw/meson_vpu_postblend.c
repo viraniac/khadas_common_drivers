@@ -600,6 +600,13 @@ static void s5_postblend_set_state(struct meson_vpu_block *vblk,
 		secure_config(OSD_MODULE, mvps->sec_src, crtc_index);
 #endif
 
+	if (!vblk->init_done) {
+		reg_ops->rdma_write_reg_bits(VPP_INTF_OSD3_CTRL, 0, 1, 1);
+		reg_ops->rdma_write_reg(VPP_MISC_T3X, 0);
+
+		vblk->init_done = 1;
+	}
+
 	vpp_osd1_blend_scope_set(vblk, reg_ops, reg, scope);
 
 	if (amc->blank_enable) {
@@ -643,6 +650,13 @@ static void t3x_postblend_set_state(struct meson_vpu_block *vblk,
 #ifdef CONFIG_AMLOGIC_MEDIA_SECURITY
 	secure_config(OSD_MODULE, mvps->sec_src, crtc_index);
 #endif
+
+	if (!vblk->init_done) {
+		reg_ops->rdma_write_reg_bits(VPP_INTF_OSD3_CTRL, 0, 1, 1);
+		reg_ops->rdma_write_reg(VPP_MISC_T3X, 0);
+
+		vblk->init_done = 1;
+	}
 
 	if (crtc_index == 0) {
 		scope.h_start = 0;
@@ -1194,12 +1208,8 @@ static void t3_postblend_hw_init(struct meson_vpu_block *vblk)
 static void s5_postblend_hw_init(struct meson_vpu_block *vblk)
 {
 	struct meson_vpu_postblend *postblend = to_postblend_block(vblk);
-	struct rdma_reg_ops *reg_ops = vblk->pipeline->subs[0].reg_ops;
 
 	postblend->reg = &s5_postblend_reg;
-
-	reg_ops->rdma_write_reg_bits(VPP_INTF_OSD3_CTRL, 0, 1, 1);
-	reg_ops->rdma_write_reg(VPP_MISC_T3X, 0);
 }
 
 static void t3x_postblend_hw_init(struct meson_vpu_block *vblk)

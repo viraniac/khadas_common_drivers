@@ -238,17 +238,17 @@ static void osd_blend1_size_set(struct meson_vpu_block *vblk,
 }
 
 /*osd blend0 size config*/
-static void osd_dv_core_size_set(u32 h_size, u32 v_size)
+static void osd_dv_core_size_set(u32 h_size, u32 v_size, struct rdma_reg_ops *reg_ops)
 {
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	u32 tmp_h = h_size;
 	u32 tmp_v = v_size;
 
 	update_dvcore2_timing(&tmp_h, &tmp_v);
-	meson_vpu_write_reg(DOLBY_CORE2A_SWAP_CTRL1,
+	reg_ops->rdma_write_reg(DOLBY_CORE2A_SWAP_CTRL1,
 			    ((tmp_h + 0x40) << 16) |
 			     (tmp_v + 0x80));
-	meson_vpu_write_reg(DOLBY_CORE2A_SWAP_CTRL2,
+	reg_ops->rdma_write_reg(DOLBY_CORE2A_SWAP_CTRL2,
 			    (tmp_h << 16) | tmp_v);
 
 	update_graphic_width_height(h_size, v_size, 0);
@@ -256,7 +256,8 @@ static void osd_dv_core_size_set(u32 h_size, u32 v_size)
 }
 
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
-static void osd_dv_core_size_set_s5(u32 h_size, u32 v_size, enum OSD_INDEX index)
+static void osd_dv_core_size_set_s5(u32 h_size, u32 v_size,
+		enum OSD_INDEX index, struct rdma_reg_ops *reg_ops)
 {
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	u32 tmp_h = h_size;
@@ -264,17 +265,17 @@ static void osd_dv_core_size_set_s5(u32 h_size, u32 v_size, enum OSD_INDEX index
 
 	update_dvcore2_timing(&tmp_h, &tmp_v);
 	if (index == OSD1_INDEX) {
-		meson_vpu_write_reg(DOLBY_CORE2A_SWAP_CTRL1_S5,
+		reg_ops->rdma_write_reg(DOLBY_CORE2A_SWAP_CTRL1_S5,
 				    ((tmp_h + 0x40) << 16) |
 				     (tmp_v + 0x80));
-		meson_vpu_write_reg(DOLBY_CORE2A_SWAP_CTRL2_S5,
+		reg_ops->rdma_write_reg(DOLBY_CORE2A_SWAP_CTRL2_S5,
 				    (tmp_h << 16) | tmp_v);
 	}
 	if (index == OSD3_INDEX) {
-		meson_vpu_write_reg(DOLBY_CORE2C_SWAP_CTRL1_S5,
+		reg_ops->rdma_write_reg(DOLBY_CORE2C_SWAP_CTRL1_S5,
 				    ((tmp_h + 0x40) << 16) |
 				     (tmp_v + 0x80));
-		meson_vpu_write_reg(DOLBY_CORE2C_SWAP_CTRL2_S5,
+		reg_ops->rdma_write_reg(DOLBY_CORE2C_SWAP_CTRL2_S5,
 				    (tmp_h << 16) | tmp_v);
 	}
 	update_graphic_width_height(h_size, v_size, index);
@@ -643,7 +644,8 @@ static void osdblend_set_state(struct meson_vpu_block *vblk,
 	/*osd dv core size same with blend0 size*/
 	if (vblk->pipeline->osd_version >= OSD_V1)
 		osd_dv_core_size_set(mvobs->input_width[OSD_SUB_BLEND0],
-				     mvobs->input_height[OSD_SUB_BLEND0]);
+				     mvobs->input_height[OSD_SUB_BLEND0],
+				     state->sub->reg_ops);
 
 	MESON_DRM_BLOCK("%s set_state done.\n", osdblend->base.name);
 }
@@ -772,7 +774,7 @@ static void s5_osdblend_set_state(struct meson_vpu_block *vblk,
 
 	osdblend_hw_update(vblk, state->sub->reg_ops, reg, mvobs);
 
-	meson_vpu_write_reg(OSD_BLEND_DOUT0_SIZE,
+	reg_ops->rdma_write_reg(OSD_BLEND_DOUT0_SIZE,
 			    (mvsps->blend_dout_vsize[OSD_SUB_BLEND0] << 16) |
 			    mvsps->blend_dout_hsize[OSD_SUB_BLEND0]);
 
@@ -822,7 +824,8 @@ static void s5_osdblend_set_state(struct meson_vpu_block *vblk,
 		reg_ops->rdma_write_reg_bits(VIU_OSD1_MISC, 1, 17, 1);
 		osd_enable[OSD1_INDEX] = 1;
 		osd_dv_core_size_set_s5(mvsps->scaler_din_hsize[0],
-					mvsps->scaler_din_vsize[0], OSD1_INDEX);
+					mvsps->scaler_din_vsize[0], OSD1_INDEX,
+					reg_ops);
 	} else {
 		osd_enable[OSD1_INDEX] = 0;
 	}
@@ -831,7 +834,8 @@ static void s5_osdblend_set_state(struct meson_vpu_block *vblk,
 		reg_ops->rdma_write_reg_bits(VIU_OSD3_MISC, 1, 17, 1);
 		osd_enable[OSD3_INDEX] = 1;
 		osd_dv_core_size_set_s5(mvsps->scaler_din_hsize[2],
-					mvsps->scaler_din_vsize[2], OSD3_INDEX);
+					mvsps->scaler_din_vsize[2], OSD3_INDEX,
+					reg_ops);
 	} else {
 		osd_enable[OSD3_INDEX] = 0;
 	}
@@ -966,7 +970,7 @@ static void t3x_osdblend_set_state(struct meson_vpu_block *vblk,
 
 	osdblend_hw_update(vblk, state->sub->reg_ops, reg, mvobs);
 
-	meson_vpu_write_reg(OSD_BLEND_DOUT0_SIZE,
+	reg_ops->rdma_write_reg(OSD_BLEND_DOUT0_SIZE,
 			    (mvsps->blend_dout_vsize[OSD_SUB_BLEND0] << 16) |
 			    mvsps->blend_dout_hsize[OSD_SUB_BLEND0]);
 
@@ -1032,7 +1036,8 @@ static void t3x_osdblend_set_state(struct meson_vpu_block *vblk,
 		reg_ops->rdma_write_reg_bits(VIU_OSD1_MISC, 1, 17, 1);
 		osd_enable[OSD1_INDEX] = 1;
 		osd_dv_core_size_set_s5(mvsps->scaler_din_hsize[0],
-					mvsps->scaler_din_vsize[0], OSD1_INDEX);
+					mvsps->scaler_din_vsize[0], OSD1_INDEX,
+					reg_ops);
 	} else {
 		osd_enable[OSD1_INDEX] = 0;
 	}
@@ -1041,7 +1046,8 @@ static void t3x_osdblend_set_state(struct meson_vpu_block *vblk,
 		reg_ops->rdma_write_reg_bits(VIU_OSD2_MISC, 1, 17, 1);
 		osd_enable[OSD2_INDEX] = 1;
 		osd_dv_core_size_set_s5(mvsps->scaler_din_hsize[1],
-					mvsps->scaler_din_vsize[1], OSD2_INDEX);
+					mvsps->scaler_din_vsize[1], OSD2_INDEX,
+					reg_ops);
 	} else {
 		osd_enable[OSD2_INDEX] = 0;
 	}
@@ -1050,7 +1056,8 @@ static void t3x_osdblend_set_state(struct meson_vpu_block *vblk,
 		reg_ops->rdma_write_reg_bits(VIU_OSD3_MISC, 1, 17, 1);
 		osd_enable[OSD3_INDEX] = 1;
 		osd_dv_core_size_set_s5(mvsps->scaler_din_hsize[2],
-					mvsps->scaler_din_vsize[2], OSD3_INDEX);
+					mvsps->scaler_din_vsize[2], OSD3_INDEX,
+					reg_ops);
 	} else {
 		osd_enable[OSD3_INDEX] = 0;
 	}
