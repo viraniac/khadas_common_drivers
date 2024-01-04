@@ -1580,7 +1580,8 @@ struct lcd_clktree_list_s {
 	size_t offset;
 };
 
-static struct lcd_clktree_list_s clktree_list[10] = {
+static struct lcd_clktree_list_s clktree_list[11] = {
+	{.name = "invalid",           .offset = 0},
 	{.name = "gp0_pll",           .offset = offsetof(struct lcd_clktree_s, gp0_pll)},
 	{.name = "encl_top_gate",     .offset = offsetof(struct lcd_clktree_s, encl_top_gate)},
 	{.name = "encl_int_gate",     .offset = offsetof(struct lcd_clktree_s, encl_int_gate)},
@@ -1642,7 +1643,7 @@ void lcd_clktree_bind(struct aml_lcd_drv_s *pdrv, unsigned char status)
 			break;
 		}
 
-		if (!clk_use)
+		if (!clk_use || !clk_type)
 			continue;
 
 		clk_temp = (struct clk **)(clktree_base + clktree_list[clk_type].offset);
