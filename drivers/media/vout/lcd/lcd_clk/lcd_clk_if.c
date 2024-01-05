@@ -448,7 +448,7 @@ void lcd_clk_gate_switch(struct aml_lcd_drv_s *pdrv, int status)
 #endif
 		lcd_clktree_gate_switch(pdrv, 1);
 	} else {
-		lcd_clktree_gate_switch(pdrv, 1);
+		lcd_clktree_gate_switch(pdrv, 0);
 #ifdef CONFIG_AMLOGIC_VPU
 		vpu_dev_clk_gate_off(pdrv->lcd_vpu_dev);
 #endif

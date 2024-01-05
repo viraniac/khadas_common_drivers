@@ -1607,7 +1607,7 @@ void lcd_clktree_bind(struct aml_lcd_drv_s *pdrv, unsigned char status)
 	cconf = get_lcd_clk_config(pdrv);
 	if (!cconf)
 		return;
-	cconf->clktree.clk_gate_state = status;
+	cconf->clktree.clk_gate_state = 0;
 	clktree_base = (void *)&cconf->clktree;
 
 	for (i = 0; i < MAX_CLKTREE_GATE; i++) {
@@ -1684,11 +1684,8 @@ void lcd_clktree_gate_switch(struct aml_lcd_drv_s *pdrv, unsigned char status)
 			continue;
 
 		clk_temp = (struct clk **)(clktree_base + clktree_list[clk_type].offset);
-		if (IS_ERR_OR_NULL(*clk_temp)) {
-			LCDERR("[%d]: %s : %s failed\n", pdrv->index, status ? "on" : "off",
-				clktree_list[clk_type].name);
+		if (IS_ERR_OR_NULL(*clk_temp))
 			continue;
-		}
 
 		if (status)
 			clk_prepare_enable(*clk_temp);
