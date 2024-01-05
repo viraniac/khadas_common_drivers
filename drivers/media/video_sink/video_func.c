@@ -2510,6 +2510,7 @@ static void set_cur_line_info(u8 index)
 
 	do_gettimeofday(&start);
 	cur_line_info->enc_line_start = get_cur_enc_line();
+	cur_line_info->enc_num_start = get_cur_enc_num();
 	cur_line_info->start = start;
 	cur_line_info->end1 = start;
 	cur_line_info->end2 = start;
@@ -2520,6 +2521,18 @@ static void set_cur_line_info(u8 index)
 struct cur_line_info_t *get_cur_line_info(u8 index)
 {
 	return &g_cur_line_info[index];
+}
+
+u32 get_enc_num_start(u8 index)
+{
+	return g_cur_line_info[index].enc_num_start;
+}
+
+ulong get_enc_time_start(u8 index)
+{
+	struct timeval *t = &g_cur_line_info[index].start;
+
+	return (t->tv_sec * 1000000 + t->tv_usec);
 }
 
 static inline void trace_performance(struct cur_line_info_t *cur_line_info,
@@ -3798,7 +3811,8 @@ bool force_switch_to_2slice(void)
 		/* frc is ready off */
 		/* 4k120hz and frc_n2m_not_worked 2 slice */
 		slice_num = 2;
-		pr_info("%s:slice_num = %d gslice_num = %d\n",
+		if (debug_common_flag & DEBUG_FLAG_COMMON_FRC)
+			pr_info("%s:slice_num = %d gslice_num = %d\n",
 				__func__, slice_num, vd_layer[0].slice_num);
 		if (slice_num != vd_layer[0].slice_num) {
 			vd_layer[0].slice_num = slice_num;
@@ -4874,7 +4888,8 @@ void pre_vsync_process(void)
 	if (cur_pre_func->vd_render_frame)
 		cur_pre_func->vd_render_frame(&vd_layer[0], vinfo);
 	/* do blend set */
-	vpp_blend_update(vinfo, PRE_VSYNC);
+	if (cur_dev->pre_vsync_enable)
+		vpp_blend_update(vinfo, PRE_VSYNC);
 pre_exit_2:
 	if (cur_pre_func->vd_late_process)
 		cur_pre_func->vd_late_process(0, 0);
@@ -5231,7 +5246,8 @@ exit:
 	if (cur_dev->pre_vsync_enable)
 		alpha_win_set(&vd_layer[0]);
 	/* do blend set */
-	vpp_blend_update(vinfo, VPP0);
+	if (!cur_dev->pre_vsync_enable)
+		vpp_blend_update(vinfo, VPP0);
 
 	/* late process */
 	for (i = 0; i < cur_dev->max_vd_layers; i++)
