@@ -1897,7 +1897,7 @@
 		};
 
 		dwc3: dwc3@ff500000 {
-			compatible = "snps,dwc3";
+			compatible = "snps,dwc3-meson";
 			status = "disable";
 			#address-cells = <1>;
 			#size-cells = <1>;

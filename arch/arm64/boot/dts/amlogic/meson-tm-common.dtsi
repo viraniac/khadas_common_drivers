@@ -1924,7 +1924,7 @@
 			status = "disable";
 			#address-cells = <2>;
 			#size-cells = <2>;
-			compatible = "snps,dwc3";
+			compatible = "snps,dwc3-meson";
 			reg = <0x0 0xff500000 0x0 0x100000>;
 			interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
 			dr_mode = "host";
