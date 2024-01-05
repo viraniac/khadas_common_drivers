@@ -26,7 +26,6 @@
 #include <linux/amlogic/media/vout/lcd/lcd_vout.h>
 #include <linux/amlogic/media/vout/lcd/lcd_notify.h>
 #include "lcd_tablet.h"
-#include "mipi_dsi_util.h"
 #include "../lcd_reg.h"
 #include "../lcd_common.h"
 
@@ -82,9 +81,6 @@ void lcd_tablet_config_post_update(struct aml_lcd_drv_s *pdrv)
 {
 	/* update interface timing */
 	switch (pdrv->config.basic.lcd_type) {
-	case LCD_MIPI:
-		lcd_mipi_dsi_config_post(pdrv);
-		break;
 	case LCD_EDP:
 		DPCD_capability_detect(pdrv);
 		dptx_uboot_config_load(pdrv);
@@ -99,8 +95,7 @@ void lcd_tablet_driver_init_pre(struct aml_lcd_drv_s *pdrv)
 {
 	int ret;
 
-	LCDPR("[%d]: tablet driver init(ver %s): %s\n",
-	      pdrv->index, LCD_DRV_VERSION,
+	LCDPR("[%d]: tablet driver init(ver %s): %s\n", pdrv->index, LCD_DRV_VERSION,
 	      lcd_type_type_to_str(pdrv->config.basic.lcd_type));
 	ret = lcd_type_supported(&pdrv->config);
 	if (ret)
@@ -179,7 +174,7 @@ int lcd_tablet_driver_init(struct aml_lcd_drv_s *pdrv)
 	case LCD_MIPI:
 		lcd_phy_set(pdrv, LCD_PHY_ON);
 		lcd_mipi_dphy_set(pdrv, 1);
-		mipi_dsi_tx_ctrl(pdrv, 1);
+		lcd_dsi_tx_ctrl(pdrv, 1);
 		break;
 	case LCD_EDP:
 		lcd_edp_pinmux_set(pdrv, 1);
@@ -227,10 +222,9 @@ void lcd_tablet_driver_disable(struct aml_lcd_drv_s *pdrv)
 		lcd_vbyone_dphy_set(pdrv, 0);
 		break;
 	case LCD_MIPI:
-		mipi_dsi_link_off(pdrv);
+		lcd_dsi_tx_ctrl(pdrv, 1);
 		lcd_phy_set(pdrv, LCD_PHY_OFF);
 		lcd_mipi_dphy_set(pdrv, 0);
-		mipi_dsi_tx_ctrl(pdrv, 0);
 		break;
 	case LCD_EDP:
 		edp_tx_ctrl(pdrv, 0);

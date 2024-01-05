@@ -395,15 +395,12 @@
 				47250000>; /*pixel_clk(unit in Hz)*/
 			mipi_attr = <4 /*lane_num*/
 				300 /*bit_rate_max(MHz)*/
-				0 /*factor(*100, default 0 for auto)*/
+				0 /*unused*/
 				1 /*operation_mode_init(0=video, 1=command)*/
 				0 /*operation_mode_display(0=video, 1=command)*/
-				2 /*
-				   *video_mode_type
-				   *(0=sync_pulse,1=sync_event,2=burst)
-				   */
+				2 /*video_mode_type: 0=sync_pulse,1=sync_event,2=burst)*/
 				1 /*clk_always_hs(0=disable,1=enable)*/
-				0>; /*phy_switch(0=auto,1=standard,2=slow)*/
+				0>; /*unused*/
 
 			/* dsi_init: data_type, num, data... */
 			dsi_init_on = <0x05 1 0x11
@@ -447,15 +444,12 @@
 				74250000>; /*pixel_clk(unit in Hz)*/
 			mipi_attr = <4 /*lane_num*/
 				550 /*bit_rate_max(MHz)*/
-				0 /*factor(*100, default 0 for auto)*/
+				0 /*unused*/
 				1 /*operation_mode_init(0=video, 1=command)*/
 				0 /*operation_mode_display(0=video, 1=command)*/
-				0 /*
-				   *video_mode_type
-				   *(0=sync_pulse,1=sync_event,2=burst)
-				   */
+				0 /*video_mode_type: 0=sync_pulse,1=sync_event,2=burst)*/
 				1 /*clk_always_hs(0=disable,1=enable)*/
-				0>; /*phy_switch(0=auto,1=standard,2=slow)*/
+				0>; /*unused*/
 				/* dsi_init: data_type, num, data... */
 			dsi_init_on = <
 				0x05 1 0x11
@@ -496,7 +490,7 @@
 					67800000>; /*pixel_clk(unit in Hz)*/
 			mipi_attr = <4 /*lane_num*/
 					480 /*bit_rate_max(MHz)*/
-					0 /*factor(*100, default 0 for auto)*/
+					0 /*unused*/
 					1 /*operation_mode_init(0=video, 1=command)*/
 					0 /*operation_mode_display(0=video, 1=command)*/
 					2 /*
@@ -504,7 +498,7 @@
 					   *(0=sync_pulse,1=sync_event,2=burst)
 					   */
 					1 /*clk_always_hs(0=disable,1=enable)*/
-					0>; /*phy_switch(0=auto,1=standard,2=slow)*/
+					0>; /*unused*/
 			/* dsi_init: data_type, num, data... */
 			dsi_init_on = <0xFF 0>;	/*ending*/
 			init_off = <0xff 0>;	/*ending*/
@@ -534,7 +528,7 @@
 				   161000460>; /*pixel_clk(unit in Hz)*/
 			mipi_attr = <4 /*lane_num*/
 				   1000 /*bit_rate_max(MHz)*/
-				   0 /*factor(*100, default 0 for auto)*/
+				   0 /*unused*/
 				   1 /*operation_mode_init(0=video, 1=command)*/
 				   0 /*operation_mode_display(0=video, 1=command)*/
 				   2 /*
@@ -542,7 +536,7 @@
 				      *(0=sync_pulse,1=sync_event,2=burst)
 				      */
 				   1 /*clk_always_hs(0=disable,1=enable)*/
-				   0>; /*phy_switch(0=auto,1=standard,2=slow)*/
+				   0>; /*unused*/
 			/* dsi_init: data_type, num, data... */
 			dsi_init_on = <0xff 0xff>; /* ending flag */
 			dsi_init_off = <0xff 0xff>; /* ending flag */
@@ -1500,15 +1494,12 @@
 				47250000>; /*pixel_clk(unit in Hz)*/
 			mipi_attr = <4 /*lane_num*/
 				300 /*bit_rate_max(MHz)*/
-				0 /*factor(*100, default 0 for auto)*/
+				0 /*unused*/
 				1 /*operation_mode_init(0=video, 1=command)*/
 				0 /*operation_mode_display(0=video, 1=command)*/
-				2 /*
-				   *video_mode_type
-				   *(0=sync_pulse,1=sync_event,2=burst)
-				   */
+				2 /*video_mode_type: 0=sync_pulse,1=sync_event,2=burst)*/
 				1 /*clk_always_hs(0=disable,1=enable)*/
-				0>; /*phy_switch(0=auto,1=standard,2=slow)*/
+				0>; /*unused*/
 
 			/* dsi_init: data_type, num, data... */
 			dsi_init_on = <0x05 1 0x11
@@ -1552,15 +1543,12 @@
 				74250000>; /*pixel_clk(unit in Hz)*/
 			mipi_attr = <4 /*lane_num*/
 				550 /*bit_rate_max(MHz)*/
-				0 /*factor(*100, default 0 for auto)*/
+				0 /*unused*/
 				1 /*operation_mode_init(0=video, 1=command)*/
 				0 /*operation_mode_display(0=video, 1=command)*/
-				0 /*
-				   *video_mode_type
-				   *(0=sync_pulse,1=sync_event,2=burst)
-				   */
+				0 /*video_mode_type: 0=sync_pulse,1=sync_event,2=burst)*/
 				1 /*clk_always_hs(0=disable,1=enable)*/
-				0>; /*phy_switch(0=auto,1=standard,2=slow)*/
+				0>; /*unused*/
 				/* dsi_init: data_type, num, data... */
 			dsi_init_on = <
 				0x05 1 0x11

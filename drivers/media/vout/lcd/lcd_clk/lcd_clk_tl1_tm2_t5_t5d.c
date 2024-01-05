@@ -453,12 +453,12 @@ static void lcd_set_vid_pll_div_txhd2(struct aml_lcd_drv_s *pdrv)
 	lcd_combo_dphy_setb(pdrv, COMBO_DPHY_VID_PLL0_DIV_TXHD2, 0, 15, 1);
 
 	i = 0;
-	while (lcd_clk_div_table[i][0] != CLK_DIV_SEL_MAX) {
+	while (lcd_clk_div_table[i][0] < cconf->data->div_sel_max) {
 		if (cconf->div_sel == lcd_clk_div_table[i][0])
 			break;
 		i++;
 	}
-	if (lcd_clk_div_table[i][0] == CLK_DIV_SEL_MAX)
+	if (lcd_clk_div_table[i][0] == cconf->data->div_sel_max)
 		LCDERR("invalid clk divider\n");
 	shift_val = lcd_clk_div_table[i][1];
 	shift_sel = lcd_clk_div_table[i][2];
@@ -480,9 +480,13 @@ static void lcd_set_vid_pll_div_txhd2(struct aml_lcd_drv_s *pdrv)
 
 static void lcd_set_dsi_phy_clk(struct aml_lcd_drv_s *pdrv)
 {
+	struct lcd_clk_config_s *cconf = get_lcd_clk_config(pdrv);
+
+	if (!cconf)
+		return;
 	if (lcd_debug_print_flag & LCD_DBG_PR_ADV2)
 		LCDPR("[%d]: %s\n", pdrv->index, __func__);
-	lcd_clk_setb(HHI_MIPIDSI_PHY_CLK_CNTL, 0, 0, 7);
+	lcd_clk_setb(HHI_MIPIDSI_PHY_CLK_CNTL, cconf->phy_div - 1, 0, 7);
 	lcd_clk_setb(HHI_MIPIDSI_PHY_CLK_CNTL, 0, 12, 3);
 	lcd_clk_setb(HHI_MIPIDSI_PHY_CLK_CNTL, 1, 8, 1);
 }
@@ -1142,6 +1146,10 @@ static struct lcd_clk_data_s lcd_clk_data_tl1 = {
 	.fifo_clk_msr_id = 129,
 	.tcon_clk_msr_id = 128,
 
+	.div_sel_max = CLK_DIV_SEL_MAX,
+	.xd_max = 256,
+	.phy_div_max = 256,
+
 	.ss_support = 1,
 	.ss_level_max = 30,
 	.ss_freq_max = 6,
@@ -1205,6 +1213,10 @@ static struct lcd_clk_data_s lcd_clk_data_tm2 = {
 	.fifo_clk_msr_id = 129,
 	.tcon_clk_msr_id = 128,
 
+	.div_sel_max = CLK_DIV_SEL_MAX,
+	.xd_max = 256,
+	.phy_div_max = 256,
+
 	.ss_support = 1,
 	.ss_level_max = 30,
 	.ss_freq_max = 6,
@@ -1266,6 +1278,10 @@ static struct lcd_clk_data_s lcd_clk_data_t5 = {
 	.enc_clk_msr_id = 9,
 	.fifo_clk_msr_id = 129,
 	.tcon_clk_msr_id = 128,
+
+	.div_sel_max = CLK_DIV_SEL_MAX,
+	.xd_max = 256,
+	.phy_div_max = 256,
 
 	.ss_support = 1,
 	.ss_level_max = 30,
@@ -1329,6 +1345,10 @@ static struct lcd_clk_data_s lcd_clk_data_t5d = {
 	.fifo_clk_msr_id = 129,
 	.tcon_clk_msr_id = 128,
 
+	.div_sel_max = CLK_DIV_SEL_MAX,
+	.xd_max = 256,
+	.phy_div_max = 256,
+
 	.ss_support = 1,
 	.ss_level_max = 30,
 	.ss_freq_max = 6,
@@ -1385,6 +1405,10 @@ static struct lcd_clk_data_s lcd_clk_data_txhd2 = {
 	.have_tcon_div = 1,
 	.have_pll_div = 1,
 	.phy_clk_location = 0,
+
+	.div_sel_max = CLK_DIV_SEL_MAX,
+	.xd_max = 256,
+	.phy_div_max = 256,
 
 	.ss_support = 1,
 	.ss_level_max = 60,

@@ -54,9 +54,6 @@ unsigned int lcd_get_encl_line_cnt(struct aml_lcd_drv_s *pdrv)
 	if (!pdrv)
 		return 0;
 
-	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
-		LCDPR("[%d]: %s\n", pdrv->index, __func__);
-
 	lcnt = lcd_venc_op.get_encl_line_cnt(pdrv);
 	return lcnt;
 }

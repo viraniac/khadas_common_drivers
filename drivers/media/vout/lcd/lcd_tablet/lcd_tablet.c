@@ -32,7 +32,6 @@
 #include "lcd_tablet.h"
 #include "../lcd_reg.h"
 #include "../lcd_common.h"
-#include "mipi_dsi_util.h"
 
 /* **************************************************
  * vout server api

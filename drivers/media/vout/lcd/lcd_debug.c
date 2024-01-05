@@ -24,10 +24,6 @@
 #ifdef CONFIG_AMLOGIC_VPU
 #include <linux/amlogic/media/vpu/vpu.h>
 #endif
-#ifdef CONFIG_AMLOGIC_LCD_TABLET
-#include <linux/amlogic/media/vout/lcd/lcd_mipi.h>
-#include "lcd_tablet/mipi_dsi_util.h"
-#endif
 #include "./lcd_clk/lcd_clk_config.h"
 #include "lcd_reg.h"
 #include "lcd_common.h"
@@ -416,7 +412,7 @@ static int lcd_info_print_mipi(struct aml_lcd_drv_s *pdrv, char *buf, int offset
 	int len = 0;
 
 #ifdef CONFIG_AMLOGIC_LCD_TABLET
-	mipi_dsi_print_info(&pdrv->config);
+	lcd_dsi_info_print(&pdrv->config);
 #endif
 
 	return len;
@@ -626,12 +622,12 @@ static int lcd_info_basic_print(struct aml_lcd_drv_s *pdrv, char *buf, int offse
 		pconf->timing.hstart, pconf->timing.vstart);
 
 	n = lcd_debug_info_len(len + offset);
-	len += snprintf((buf + len), n, "timing range:\n"
-		"h_period        %d ~ %d\n"
-		"v_period        %d ~ %d\n"
-		"frame_rate      %d ~ %d\n"
-		"pixel_clk       %d ~ %d\n"
-		"vrr_range       %d ~ %d\n\n",
+	len += snprintf((buf + len), n, "Timing range:\n"
+		"  h_period  : %4d ~ %4d\n"
+		"  v_period  : %4d ~ %4d\n"
+		"  frame_rate: %4d ~ %4d\n"
+		"  pixel_clk : %4d ~ %4d\n"
+		"  vrr_range : %4d ~ %4d\n\n",
 		pconf->timing.act_timing.h_period_min,
 		pconf->timing.act_timing.h_period_max,
 		pconf->timing.act_timing.v_period_min,
@@ -1196,73 +1192,59 @@ static int lcd_reg_print_mipi(struct aml_lcd_drv_s *pdrv, char *buf, int offset)
 	len += snprintf((buf + len), n, "\nmipi_dsi regs:\n");
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_TOP_CNTL;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_TOP_CNTL               [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_TOP_CNTL               [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_TOP_CLK_CNTL;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_TOP_CLK_CNTL           [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_TOP_CLK_CNTL           [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_PWR_UP_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_PWR_UP_OS          [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_PWR_UP_OS          [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_PCKHDL_CFG_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_PCKHDL_CFG_OS      [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_PCKHDL_CFG_OS      [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_LPCLK_CTRL_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_LPCLK_CTRL_OS      [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_LPCLK_CTRL_OS      [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_CMD_MODE_CFG_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_CMD_MODE_CFG_OS    [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_CMD_MODE_CFG_OS    [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_VID_MODE_CFG_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_VID_MODE_CFG_OS    [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_VID_MODE_CFG_OS    [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_MODE_CFG_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_MODE_CFG_OS        [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_MODE_CFG_OS        [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_PHY_STATUS_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_PHY_STATUS_OS      [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_PHY_STATUS_OS      [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_INT_ST0_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_INT_ST0_OS         [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_INT_ST0_OS         [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_DWC_INT_ST1_OS;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_DWC_INT_ST1_OS         [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_DWC_INT_ST1_OS         [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_TOP_STAT;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_TOP_STAT               [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_TOP_STAT               [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_TOP_INTR_CNTL_STAT;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_TOP_INTR_CNTL_STAT     [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_TOP_INTR_CNTL_STAT     [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 	n = lcd_debug_info_len(len + offset);
 	reg = MIPI_DSI_TOP_MEM_PD;
-	len += snprintf((buf + len), n,
-		"MIPI_DSI_TOP_MEM_PD             [0x%04x] = 0x%08x\n",
+	len += snprintf((buf + len), n, "MIPI_DSI_TOP_MEM_PD             [0x%04x] = 0x%08x\n",
 		reg, dsi_host_read(pdrv, reg));
 
 	return len;
@@ -3148,27 +3130,20 @@ static ssize_t lcd_debug_change_store(struct device *dev, struct device_attribut
 			if (ret == 8) {
 				pctrl->mipi_cfg.lane_num = (unsigned char)val[0];
 				pctrl->mipi_cfg.bit_rate_max = val[1];
-				pctrl->mipi_cfg.factor_numerator = val[2];
-				pctrl->mipi_cfg.operation_mode_init =
-					(unsigned char)val[3];
-				pctrl->mipi_cfg.operation_mode_display =
-					(unsigned char)val[4];
-				pctrl->mipi_cfg.video_mode_type =
-					(unsigned char)val[5];
+				pctrl->mipi_cfg.operation_mode_init = (unsigned char)val[3];
+				pctrl->mipi_cfg.operation_mode_display = (unsigned char)val[4];
+				pctrl->mipi_cfg.video_mode_type = (unsigned char)val[5];
 				pctrl->mipi_cfg.clk_always_hs = (unsigned char)val[6];
-				pctrl->mipi_cfg.phy_switch = (unsigned char)val[7];
 				pr_info("change mipi_dsi config:\n"
-			"lane_num=%d, bit_rate_max=%dMhz, factor_numerator=%d\n"
+			"lane_num=%d, bit_rate_max=%dMhz\n"
 			"operation_mode_init=%d, operation_mode_display=%d\n"
-			"video_mode_type=%d, clk_always_hs=%d, phy_switch=%d\n",
+			"video_mode_type=%d, clk_always_hs=%d\n",
 					pctrl->mipi_cfg.lane_num,
 					pctrl->mipi_cfg.bit_rate_max,
-					pctrl->mipi_cfg.factor_numerator,
 					pctrl->mipi_cfg.operation_mode_init,
 					pctrl->mipi_cfg.operation_mode_display,
 					pctrl->mipi_cfg.video_mode_type,
-					pctrl->mipi_cfg.clk_always_hs,
-					pctrl->mipi_cfg.phy_switch);
+					pctrl->mipi_cfg.clk_always_hs);
 				lcd_debug_change_clk_change(pdrv);
 				pconf->change_flag = 1;
 			} else {
@@ -4628,7 +4603,7 @@ static const char *lcd_rgb_debug_usage_str = {
 "Usage:\n"
 "    echo <type> <clk_pol> <de_valid> <sync_valid> <rb_swpa> <bit_swap> > rgb ; set rgb config\n"
 "data format:\n"
-"    <tpe>          : 0=rgb888\n"
+"    <type>         : 0=rgb888\n"
 "    <clk_pol>      : 0=negative, 1=positive\n"
 "    <de_valid>     : for DE, 0=invalid, 1=valid\n"
 "    <sync_valid>   : for hvsync, 0=invalid, 1=valid\n"
@@ -4686,16 +4661,14 @@ static const char *lcd_vbyone_debug_usage_str = {
 
 static const char *lcd_mipi_debug_usage_str = {
 "Usage:\n"
-"    echo <lane_num> <bit_rate_max> <factor> <op_mode_init> <op_mode_disp> <vid_mode_type> <clk_always_hs> <phy_switch> > mipi ; set mpi config\n"
+"    echo <lane_num> <bit_rate_max> 0 <op_mode_init> <op_mode_disp> <vid_mode_type> <clk_always_hs> 0 > mipi ; set mpi config\n"
 "data format:\n"
-"    <lane_num>          : 1/2/3/4\n"
-"    <bit_rate_max>      : unit in MHz\n"
-"    <factor>:           : special adjust, 0 for default\n"
-"    <op_mode_init>      : operation mode for init (0=video mode, 1=command mode)\n"
-"    <op_mode_disp>      : operation mode for display (0=video mode, 1=command mode)\n"
-"    <vid_mode_type>     : video mode type (0=sync_pulse, 1=sync_event, 2=burst)\n"
-"    <clk_always_hs>     : 0=disable, 1=enable\n"
-"    <phy_switch>        : 0=auto, 1=standard, 2=slow\n"
+"    <lane_num>      : 1/2/3/4\n"
+"    <bit_rate_max>  : unit in MHz\n"
+"    <op_mode_init>  : operation mode for init (0=video mode, 1=command mode)\n"
+"    <op_mode_disp>  : operation mode for display (0=video mode, 1=command mode)\n"
+"    <vid_mode_type> : video mode type (0=sync_pulse, 1=sync_event, 2=burst)\n"
+"    <clk_always_hs> : 0=disable, 1=enable\n"
 "\n"
 };
 
@@ -5144,25 +5117,10 @@ static ssize_t lcd_mipi_debug_show(struct device *dev,
 {
 	int len = 0;
 	struct aml_lcd_drv_s *pdrv = dev_get_drvdata(dev);
-	struct dsi_config_s *dsi_conf;
+	lcd_dsi_info_print(&pdrv->config);
 
-	dsi_conf = &pdrv->config.control.mipi_cfg;
-
-	len += sprintf(buf + len, "mipi_dsi config: lane_num=%d, ",
-		dsi_conf->lane_num);
-	len += sprintf(buf + len, "bit_rate_max=%dMhz, factor_numerator=%d, ",
-		dsi_conf->bit_rate_max, dsi_conf->factor_numerator);
-	len += sprintf(buf + len,
-		"operation_mode_init=%d, operation_mode_display=%d, ",
-		dsi_conf->operation_mode_init,
-		dsi_conf->operation_mode_display);
-	len += sprintf(buf + len,
-		"video_mode_type=%d, clk_always_hs=%d, phy_switch=%d\n\n",
-		dsi_conf->video_mode_type, dsi_conf->clk_always_hs,
-		dsi_conf->phy_switch);
-	len += sprintf(buf + len, "%s\n", lcd_mipi_debug_usage_str);
-
-	return len;
+	len = sprintf(buf, "%s\n", lcd_mipi_debug_usage_str);
+	return 0;
 }
 
 static ssize_t lcd_mipi_debug_store(struct device *dev, struct device_attribute *attr,
@@ -5180,25 +5138,23 @@ static ssize_t lcd_mipi_debug_store(struct device *dev, struct device_attribute 
 	if (ret >= 2) {
 		dsi_conf->lane_num = (unsigned char)val[0];
 		dsi_conf->bit_rate_max = val[1];
-		dsi_conf->factor_numerator = val[2];
 		dsi_conf->operation_mode_init = (unsigned char)val[3];
 		dsi_conf->operation_mode_display = (unsigned char)val[4];
 		dsi_conf->video_mode_type = (unsigned char)val[5];
 		dsi_conf->clk_always_hs = (unsigned char)val[6];
-		dsi_conf->phy_switch = (unsigned char)val[7];
 		pr_info("set mipi_dsi config:\n"
-			"lane_num=%d, bit_rate_max=%dMhz, factor_numerator=%d\n"
-			"operation_mode_init=%d, operation_mode_display=%d\n"
-			"video_mode_type=%d\n"
-			"clk_always_hs=%d, phy_switch=%d\n\n",
+			"  lane_num=%d,\n"
+			"  bit_rate_max=%dMhz,\n"
+			"  operation_mode_init=%d,\n"
+			"  operation_mode_display=%d\n"
+			"  video_mode_type=%d\n"
+			"  clk_always_hs=%d\n\n",
 			dsi_conf->lane_num,
 			dsi_conf->bit_rate_max,
-			dsi_conf->factor_numerator,
 			dsi_conf->operation_mode_init,
 			dsi_conf->operation_mode_display,
 			dsi_conf->video_mode_type,
-			dsi_conf->clk_always_hs,
-			dsi_conf->phy_switch);
+			dsi_conf->clk_always_hs);
 		lcd_debug_config_update(pdrv);
 	} else {
 		pr_info("invalid data\n");
@@ -5218,152 +5174,72 @@ static ssize_t lcd_mipi_cmd_debug_store(struct device *dev, struct device_attrib
 					const char *buf, size_t count)
 {
 	struct aml_lcd_drv_s *pdrv = dev_get_drvdata(dev);
-	unsigned char *cmd_table = NULL;
-	unsigned int para[24];
+	unsigned char wr_c[24];
 	int ret = 0;
-	int i;
 
 	ret = sscanf(buf,
-		"%x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x",
-		&para[0], &para[1], &para[2], &para[3], &para[4], &para[5],
-		&para[6], &para[7], &para[8], &para[9], &para[10], &para[11],
-		&para[12], &para[13], &para[14], &para[15], &para[16],
-		&para[17], &para[18], &para[19], &para[20], &para[21],
-		&para[22], &para[23]);
-
+		"%hhx %hhu %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx"
+		"%hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx",
+		&wr_c[0],  &wr_c[1],  &wr_c[2],  &wr_c[3],  &wr_c[4],  &wr_c[5],
+		&wr_c[6],  &wr_c[7],  &wr_c[8],  &wr_c[9],  &wr_c[10], &wr_c[11],
+		&wr_c[12], &wr_c[13], &wr_c[14], &wr_c[15], &wr_c[16], &wr_c[17],
+		&wr_c[18], &wr_c[19], &wr_c[20], &wr_c[21], &wr_c[22], &wr_c[23]);
 	if (ret < 2) {
-		pr_info("invalid mipi cmd\n");
+		pr_info("invalid data\n");
 		return count;
 	}
-	if (ret < (2 + para[1])) {
-		pr_info("invalid data num\n");
-		return count;
-	}
-
-	cmd_table = kcalloc((2 + para[1] + 2), sizeof(unsigned char), GFP_KERNEL);
-	if (!cmd_table) {
-		pr_err("error for mipi cmd\n");
-		return -ENOMEM;
-	}
-	for (i = 0; i < (2 + para[1]); i++)
-		cmd_table[i] = (unsigned char)para[i];
-	cmd_table[2 + para[1]] = 0xff;
-	cmd_table[2 + para[1] + 1] = 0xff;
 
 #ifdef CONFIG_AMLOGIC_LCD_TABLET
-	dsi_write_cmd(pdrv, cmd_table);
+	lcd_dsi_write_cmd(pdrv, &wr_c[0]);
 #endif
-
-	kfree(cmd_table);
 
 	return count;
 }
 
-#define MIPI_RD_RET_CODE_MAX    5
-static char *mipi_read_ret_code_table[] = {
-	"success",
-	"read null",
-	"read error",
-	"read back cnt is wrong",
-	"timeout",
-	"unknown error",
-};
-
-static struct dsi_read_s dread = {
-	.flag = 0,
-	.reg = 0xff,
-	.cnt = 0,
-	.value = NULL,
-	.ret_code = 4,
-
-	.line_start = 0x1fff,
-	.line_end = 0x1fff,
-};
+u8 wr_c[24] = {0};
 
 static ssize_t lcd_mipi_read_debug_show(struct device *dev,
 					struct device_attribute *attr, char *buf)
 {
+	u8 rd_c[4] = {0, 0, 0, 0};
 	struct aml_lcd_drv_s *pdrv = dev_get_drvdata(dev);
-	unsigned int i = 0, len;
+	int temp = 0, offset;
 
-	if ((pdrv->status & LCD_STATUS_IF_ON) == 0)
-		return sprintf(buf, "error: panel is disabled\n");
-
-	if (dread.reg == 0xff)
-		return sprintf(buf, "error: reg address is invalid\n");
-	if (dread.cnt == 0)
-		return sprintf(buf, "error: read count is invalid\n");
-
-	if (dread.cnt > DSI_READ_CNT_MAX)
-		return sprintf(buf, "error: mipi read cnt is out of support\n");
-
-	dread.line_start = 0x1fff;
-	dread.line_end = 0x1fff;
-	dread.ret_code = 4;
+	if (!wr_c[0])
+		return sprintf(buf, "lcd[%d]: mipi dsi read command buffer empty\n", pdrv->index);
 
 #ifdef CONFIG_AMLOGIC_LCD_TABLET
-	dread.value = kcalloc(dread.cnt, sizeof(unsigned char), GFP_KERNEL);
-	if (!dread.value)
-		return sprintf(buf, "error: mipi read return value is null\n");
-	if (pdrv->config.control.mipi_cfg.current_mode == 0) {
-		dread.flag = 1;
-		while (i++ < 5000) {
-			if (dread.flag == 0)
-				break;
-			lcd_delay_us(20);
-		}
-	} else {
-		lcd_mipi_test_read(pdrv, &dread);
-	}
+	temp = lcd_dsi_read(pdrv, &wr_c[0], &rd_c[0], 4);
 #endif
 
-	if (dread.ret_code) {
-		kfree(dread.value);
-		dread.value = NULL;
-		dread.ret_code = (dread.ret_code >= MIPI_RD_RET_CODE_MAX) ?
-					MIPI_RD_RET_CODE_MAX : dread.ret_code;
-		return sprintf(buf, "read error: %s(%d)\n",
-			mipi_read_ret_code_table[dread.ret_code],
-			dread.ret_code);
-	}
+	if (temp <= 0 || temp > 4)
+		return sprintf(buf, "lcd[%d]: mipi dsi read failed\n", pdrv->index);
 
-	len = sprintf(buf, "read reg 0x%02x: ", dread.reg);
-	for (i = 0; i < dread.cnt; i++) {
-		if (i == 0)
-			len += sprintf(buf + len, "0x%02x", dread.value[i]);
-		else
-			len += sprintf(buf + len, ",0x%02x", dread.value[i]);
-	}
+	offset = sprintf(buf, "lcd[%d] mipi dsi read %d: ", pdrv->index, temp);
+		while (temp) {
+			offset += sprintf(buf + offset, "0x%02x ", rd_c[temp - 1]);
+			temp--;
+		}
+	offset += sprintf(buf + offset - 1, "\n");
 
-	len += sprintf(buf + len, "\nread line start=%d, end=%d\n",
-		dread.line_start, dread.line_end);
-
-	kfree(dread.value);
-	dread.value = NULL;
-	return len;
+	return offset - 1;
 }
 
 static ssize_t lcd_mipi_read_debug_store(struct device *dev, struct device_attribute *attr,
 					 const char *buf, size_t count)
 {
-	unsigned int para[2];
-	int ret = 0;
+	int ret;
 
-	ret = sscanf(buf, "%x %d", &para[0], &para[1]);
-	if (ret < 2) {
-		dread.reg = 0xff;
-		dread.cnt = 0;
+	memset(wr_c, 0, sizeof(u8) * 24);
+
+	ret = sscanf(buf, "%hhx %hhu %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx"
+		"%hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx %hhx",
+		&wr_c[0],  &wr_c[1],  &wr_c[2],  &wr_c[3],  &wr_c[4],  &wr_c[5],
+		&wr_c[6],  &wr_c[7],  &wr_c[8],  &wr_c[9],  &wr_c[10], &wr_c[11],
+		&wr_c[12], &wr_c[13], &wr_c[14], &wr_c[15], &wr_c[16], &wr_c[17],
+		&wr_c[18], &wr_c[19], &wr_c[20], &wr_c[21], &wr_c[22], &wr_c[23]);
+	if (ret < 2)
 		pr_info("invalid data\n");
-		return count;
-	}
-	dread.reg = (unsigned char)para[0];
-	dread.cnt = (unsigned char)para[1];
-	if (dread.cnt > DSI_READ_CNT_MAX) {
-		LCDERR("mipi read cnt is out of support\n");
-		return count;
-	}
-
-	pr_info("set mipi read reg: 0x%02x, cnt: %d\n", dread.reg, dread.cnt);
 
 	return count;
 }
@@ -5381,20 +5257,6 @@ static ssize_t lcd_mipi_state_debug_show(struct device *dev,
 		pdrv->config.control.mipi_cfg.check_state,
 		pdrv->config.control.mipi_cfg.check_en,
 		state_save);
-}
-
-static ssize_t lcd_mipi_mode_debug_show(struct device *dev,
-					struct device_attribute *attr, char *buf)
-{
-	struct aml_lcd_drv_s *pdrv = dev_get_drvdata(dev);
-	unsigned char mode;
-
-	if ((pdrv->status & LCD_STATUS_IF_ON) == 0)
-		return sprintf(buf, "error: panel is disabled\n");
-
-	mode = pdrv->config.control.mipi_cfg.current_mode;
-	return sprintf(buf, "current mipi-dsi operation mode: %s(%d)\n",
-		(mode ? "command" : "video"), mode);
 }
 
 static ssize_t lcd_mipi_mode_debug_store(struct device *dev, struct device_attribute *attr,
@@ -5417,7 +5279,7 @@ static ssize_t lcd_mipi_mode_debug_store(struct device *dev, struct device_attri
 	}
 	mode = (unsigned char)temp;
 #ifdef CONFIG_AMLOGIC_LCD_TABLET
-	dsi_set_operation_mode(pdrv, mode);
+	lcd_dsi_set_operation_mode(pdrv, mode);
 #endif
 
 	return count;
@@ -5694,12 +5556,12 @@ static struct device_attribute lcd_debug_attrs_p2p[] = {
 };
 
 static struct device_attribute lcd_debug_attrs_mipi[] = {
-	__ATTR(mipi,     0644, lcd_mipi_debug_show, lcd_mipi_debug_store),
-	__ATTR(mpcmd,    0644, lcd_mipi_cmd_debug_show, lcd_mipi_cmd_debug_store),
-	__ATTR(mpread,   0644, lcd_mipi_read_debug_show, lcd_mipi_read_debug_store),
-	__ATTR(mpstate,  0444, lcd_mipi_state_debug_show, NULL),
-	__ATTR(mpmode,   0644, lcd_mipi_mode_debug_show, lcd_mipi_mode_debug_store),
-	__ATTR(null,     0644, NULL, NULL)
+	__ATTR(mipi,    0644, lcd_mipi_debug_show,       lcd_mipi_debug_store),
+	__ATTR(mpcmd,   0644, lcd_mipi_cmd_debug_show,   lcd_mipi_cmd_debug_store),
+	__ATTR(mpread,  0644, lcd_mipi_read_debug_show,  lcd_mipi_read_debug_store),
+	__ATTR(mpstate, 0444, lcd_mipi_state_debug_show, NULL),
+	__ATTR(mpmode,  0200, NULL,                      lcd_mipi_mode_debug_store),
+	__ATTR(null,    0644, NULL,                      NULL)
 };
 
 static struct device_attribute lcd_debug_attrs_edp[] = {
