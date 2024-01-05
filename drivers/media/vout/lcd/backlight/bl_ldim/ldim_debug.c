@@ -899,7 +899,7 @@ static ssize_t ldim_debug_store(struct class *class, struct class_attribute *att
 				for (j = 0; j < seg_size; j++)
 					ldim_drv->test_matrix[j] = 0;
 				ldim_drv->test_matrix[i] = 4095;
-				msleep(500);
+				lcd_delay_ms(500);
 			}
 			ldim_drv->test_bl_en = 0;
 			goto ldim_debug_store_end;

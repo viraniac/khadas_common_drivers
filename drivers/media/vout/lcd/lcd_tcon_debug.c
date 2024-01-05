@@ -880,7 +880,7 @@ ssize_t lcd_tcon_debug_store(struct device *dev, struct device_attribute *attr,
 				}
 			} else if (strcmp(parm[1], "clr") == 0) {
 				pdrv->tcon_isr_bypass = 1;
-				msleep(100);
+				lcd_delay_ms(100);
 				lcd_tcon_dbg_trace_clear();
 				pdrv->tcon_isr_bypass = 0;
 				goto lcd_tcon_debug_store_end;
@@ -893,7 +893,7 @@ ssize_t lcd_tcon_debug_store(struct device *dev, struct device_attribute *attr,
 					temp = 0x1;
 				}
 				pdrv->tcon_isr_bypass = 1;
-				msleep(100);
+				lcd_delay_ms(100);
 				lcd_tcon_dbg_trace_print(temp);
 				pdrv->tcon_isr_bypass = 0;
 				goto lcd_tcon_debug_store_end;

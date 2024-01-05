@@ -557,7 +557,7 @@ static void lcd_module_reset(struct aml_lcd_drv_s *pdrv)
 	pdrv->status &= ~LCD_STATUS_ON;
 	lcd_power_ctrl(pdrv, 0);
 
-	msleep(500);
+	lcd_delay_ms(500);
 
 	pdrv->driver_init_pre(pdrv);
 	lcd_power_ctrl(pdrv, 1);

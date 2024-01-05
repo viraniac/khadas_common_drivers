@@ -83,7 +83,7 @@ void edp_tx_init(struct aml_lcd_drv_s *pdrv)
 		LCDERR("[%d]: eDP sink power up link failed.....\n", pdrv->index);
 		return;
 	}
-	msleep(30);
+	lcd_delay_ms(30);
 
 	dptx_reg_write(pdrv, EDP_TX_MAIN_STREAM_ENABLE, 0x0);
 

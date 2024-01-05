@@ -924,7 +924,7 @@ static void lcd_clk_prbs_test(struct aml_lcd_drv_s *pdrv, unsigned int ms, unsig
 		}
 
 		lcd_prbs_config_clk(pdrv, lcd_prbs_mode);
-		msleep(20);
+		lcd_delay_ms(20);
 
 		lcd_ana_write(reg0, 0x000000c0);
 		lcd_ana_setb(reg0, 0xfff, 16, 12);

@@ -964,7 +964,7 @@ int lcd_tcon_data_common_parse_set(struct aml_lcd_drv_s *pdrv,
 			if (data_part.delay->delay_us > 20000) {
 				m = data_part.delay->delay_us / 1000;
 				n = data_part.delay->delay_us % 1000;
-				msleep(m);
+				lcd_delay_ms(m);
 				if (n > 20)
 					usleep_range(n, n + 1);
 				else if (n > 0)
@@ -1395,7 +1395,7 @@ int lcd_tcon_disable_tl1(struct aml_lcd_drv_s *pdrv)
 			lcd_tcon_setb_byte(pdrv, reg, 0, bit, 1);
 		else
 			lcd_tcon_setb(pdrv, reg, 0, bit, 1);
-		msleep(100);
+		lcd_delay_ms(100);
 	}
 
 	/* disable all ctrl signal */
@@ -1593,7 +1593,7 @@ int lcd_tcon_disable_t5(struct aml_lcd_drv_s *pdrv)
 
 	/* disable od ddr_if */
 	lcd_tcon_setb(pdrv, 0x263, 0, 31, 1);
-	msleep(100);
+	lcd_delay_ms(100);
 
 	/* top reset */
 	lcd_tcon_write(pdrv, TCON_RST_CTRL, 0x003f);
@@ -1613,7 +1613,7 @@ int lcd_tcon_disable_t3(struct aml_lcd_drv_s *pdrv)
 
 	/* disable od ddr_if */
 	lcd_tcon_setb(pdrv, 0x263, 0, 31, 1);
-	msleep(100);
+	lcd_delay_ms(100);
 
 	/* top reset */
 	lcd_tcon_write(pdrv, TCON_RST_CTRL, 0x003f);

@@ -113,7 +113,7 @@ static void lcd_vbyone_force_lock(struct aml_lcd_drv_s *pdrv)
 	}
 
 	lcd_vcbus_setb(reg_insgn_ctrl, 7, 0, 4);
-	msleep(100);
+	lcd_delay_ms(100);
 	lcd_vcbus_setb(reg_insgn_ctrl, 5, 0, 4);
 }
 
@@ -1574,7 +1574,7 @@ void lcd_vbyone_debug_cdr(struct aml_lcd_drv_s *pdrv)
 
 	lcd_vbyone_force_cdr(pdrv);
 
-	msleep(100);
+	lcd_delay_ms(100);
 	state = lcd_vbyone_get_fsm_state(pdrv);
 	LCDPR("vbyone cdr: fsm state: 0x%02x\n", state);
 }
@@ -1591,7 +1591,7 @@ void lcd_vbyone_debug_lock(struct aml_lcd_drv_s *pdrv)
 
 	lcd_vbyone_force_lock(pdrv);
 
-	msleep(20);
+	lcd_delay_ms(20);
 	state = lcd_vbyone_get_fsm_state(pdrv);
 	LCDPR("vbyone cdr: fsm state: 0x%02x\n", state);
 }
@@ -1614,7 +1614,7 @@ void lcd_vbyone_debug_reset(struct aml_lcd_drv_s *pdrv)
 	vx1_conf->intr_en = intr_en;
 	vx1_conf->vsync_intr_en = vintr_en;
 	lcd_vbyone_interrupt_enable(pdrv, vx1_conf->intr_state);
-	msleep(200);
+	lcd_delay_ms(200);
 	state = lcd_vbyone_get_fsm_state(pdrv);
 	LCDPR("vbyone reset: fsm state: 0x%02x\n", state);
 }

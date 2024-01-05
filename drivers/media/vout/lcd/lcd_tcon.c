@@ -901,7 +901,7 @@ int lcd_tcon_od_set(struct aml_lcd_drv_s *pdrv, int flag)
 	else
 		lcd_tcon_setb(pdrv, reg, temp, bit, 1);
 
-	msleep(100);
+	lcd_delay_ms(100);
 	LCDPR("%s: %d\n", __func__, flag);
 
 	return 0;

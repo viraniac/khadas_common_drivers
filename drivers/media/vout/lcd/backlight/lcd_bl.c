@@ -397,7 +397,7 @@ static void bl_power_on(struct aml_bl_drv_s *bdrv)
 			/* step 1: power on enable */
 			bl_power_en_ctrl(bdrv, 1);
 			if (bconf->pwm_on_delay > 0)
-				msleep(bconf->pwm_on_delay);
+				lcd_delay_ms(bconf->pwm_on_delay);
 			/* step 2: power on pwm */
 			bl_pwm_ctrl(bconf->bl_pwm, 1);
 			bl_pwm_pinmux_set(bdrv, 1);
@@ -406,7 +406,7 @@ static void bl_power_on(struct aml_bl_drv_s *bdrv)
 			bl_pwm_ctrl(bconf->bl_pwm, 1);
 			bl_pwm_pinmux_set(bdrv, 1);
 			if (bconf->pwm_on_delay > 0)
-				msleep(bconf->pwm_on_delay);
+				lcd_delay_ms(bconf->pwm_on_delay);
 			/* step 2: power on enable */
 			bl_power_en_ctrl(bdrv, 1);
 		}
@@ -416,7 +416,7 @@ static void bl_power_on(struct aml_bl_drv_s *bdrv)
 			/* step 1: power on enable */
 			bl_power_en_ctrl(bdrv, 1);
 			if (bconf->pwm_on_delay > 0)
-				msleep(bconf->pwm_on_delay);
+				lcd_delay_ms(bconf->pwm_on_delay);
 			/* step 2: power on pwm_combo */
 			bl_pwm_ctrl(bconf->bl_pwm_combo0, 1);
 			bl_pwm_ctrl(bconf->bl_pwm_combo1, 1);
@@ -427,7 +427,7 @@ static void bl_power_on(struct aml_bl_drv_s *bdrv)
 			bl_pwm_ctrl(bconf->bl_pwm_combo1, 1);
 			bl_pwm_pinmux_set(bdrv, 1);
 			if (bconf->pwm_on_delay > 0)
-				msleep(bconf->pwm_on_delay);
+				lcd_delay_ms(bconf->pwm_on_delay);
 			/* step 2: power on enable */
 			bl_power_en_ctrl(bdrv, 1);
 		}
@@ -534,7 +534,7 @@ static void bl_power_off(struct aml_bl_drv_s *bdrv)
 			bl_pwm_pinmux_set(bdrv, 0);
 			bl_pwm_ctrl(bconf->bl_pwm, 0);
 			if (bconf->pwm_off_delay > 0)
-				msleep(bconf->pwm_off_delay);
+				lcd_delay_ms(bconf->pwm_off_delay);
 			/* step 2: power off enable */
 			bl_power_en_ctrl(bdrv, 0);
 		} else {
@@ -542,7 +542,7 @@ static void bl_power_off(struct aml_bl_drv_s *bdrv)
 			bl_power_en_ctrl(bdrv, 0);
 			/* step 2: power off pwm */
 			if (bconf->pwm_off_delay > 0)
-				msleep(bconf->pwm_off_delay);
+				lcd_delay_ms(bconf->pwm_off_delay);
 			bl_pwm_pinmux_set(bdrv, 0);
 			bl_pwm_ctrl(bconf->bl_pwm, 0);
 		}
@@ -554,7 +554,7 @@ static void bl_power_off(struct aml_bl_drv_s *bdrv)
 			bl_pwm_ctrl(bconf->bl_pwm_combo0, 0);
 			bl_pwm_ctrl(bconf->bl_pwm_combo1, 0);
 			if (bconf->pwm_off_delay > 0)
-				msleep(bconf->pwm_off_delay);
+				lcd_delay_ms(bconf->pwm_off_delay);
 			/* step 2: power off enable */
 			bl_power_en_ctrl(bdrv, 0);
 		} else {
@@ -562,7 +562,7 @@ static void bl_power_off(struct aml_bl_drv_s *bdrv)
 			bl_power_en_ctrl(bdrv, 0);
 			/* step 2: power off pwm_combo */
 			if (bconf->pwm_off_delay > 0)
-				msleep(bconf->pwm_off_delay);
+				lcd_delay_ms(bconf->pwm_off_delay);
 			bl_pwm_pinmux_set(bdrv, 0);
 			bl_pwm_ctrl(bconf->bl_pwm_combo0, 0);
 			bl_pwm_ctrl(bconf->bl_pwm_combo1, 0);
@@ -1715,7 +1715,7 @@ static void bl_on_function(struct aml_bl_drv_s *bdrv)
 	case 1:
 		BLPR("bl_step_on level: %d\n", bconf->level_default);
 		aml_bl_init_level(bdrv, bconf->level_default);
-		msleep(120);
+		lcd_delay_ms(120);
 		if (bdrv->brightness_bypass) {
 			switch (bconf->method) {
 			case BL_CTRL_PWM:
@@ -1742,7 +1742,7 @@ static void bl_on_function(struct aml_bl_drv_s *bdrv)
 	case 2:
 		BLPR("bl_step_on level: %d\n", bconf->level_uboot);
 		aml_bl_init_level(bdrv, bconf->level_uboot);
-		msleep(120);
+		lcd_delay_ms(120);
 		if (bdrv->brightness_bypass) {
 			switch (bconf->method) {
 			case BL_CTRL_PWM:
