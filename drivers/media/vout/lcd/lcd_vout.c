@@ -707,13 +707,6 @@ static inline void lcd_vsync_handler(struct aml_lcd_drv_s *pdrv)
 		}
 	}
 	spin_unlock_irqrestore(&pdrv->isr_lock, flags);
-
-	if (!(pdrv->vsync_cnt % LCD_DEBUG_VSYNC_INTERVAL)) {
-		if (lcd_debug_print_flag & LCD_DBG_PR_ISR) {
-			LCDPR("[%d]: %s: viu_sel: %d, mute_count: %d\n",
-			      pdrv->index, __func__, pdrv->viu_sel, pdrv->mute_count);
-		}
-	}
 }
 
 static irqreturn_t lcd_vsync_isr(int irq, void *data)

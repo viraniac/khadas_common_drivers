@@ -44,6 +44,7 @@
 #include "lcd_reg.h"
 #include "lcd_tcon.h"
 #include "lcd_tcon_pdf.h"
+#include "lcd_tcon_swpdf.h"
 
 enum {
 	TCON_AXI_MEM_TYPE_OD = 0,
@@ -1844,6 +1845,8 @@ void lcd_tcon_vsync_isr(struct aml_lcd_drv_s *pdrv)
 
 	if (tcon_pdf->vs_handler)
 		tcon_pdf->vs_handler(tcon_pdf);
+	else if (pdrv->config.customer_sw_pdf)
+		lcd_swpdf_vs_handle();
 
 	if (tcon_fw->vsync_isr)
 		tcon_fw->vsync_isr(tcon_fw);
@@ -3300,6 +3303,7 @@ static int lcd_tcon_get_config(struct aml_lcd_drv_s *pdrv)
 		lcd_tcon_load_init_data_from_unifykey(pdrv);
 
 	lcd_tcon_pdf_init(pdrv);
+	//lcd_swpdf_init(pdrv);
 
 	lcd_tcon_bin_load(pdrv);
 	pdrv->tcon_status = tcon_mm_table.valid_flag;
