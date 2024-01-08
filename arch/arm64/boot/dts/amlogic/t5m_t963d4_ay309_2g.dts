@@ -126,7 +126,7 @@
 			reusable;
 			size = <0x0 0x0>;
 			alignment = <0x0 0x400000>;
-			alloc-ranges = <0x0 0x00000000 0x0 0x23000000>;
+			alloc-ranges = <0x0 0x00000000 0x0 0x1d400000>;
 		};
 		dmaheap_fb_reserved:heap-fb {
 			compatible = "shared-dma-pool";
@@ -134,7 +134,7 @@
 			/* 1080p TV androidT size 36M */
 			size = <0x0 0x2400000>;
 			alignment = <0x0 0x400000>;
-			alloc-ranges = <0x0 0x00000000 0x0 0x23000000>;
+			alloc-ranges = <0x0 0x00000000 0x0 0x1d400000>;
 		};
 
 		/*  vdin0 CMA pool */
@@ -156,7 +156,7 @@
 			 */
 			size = <0x0 0x01400000>;
 			alignment = <0x0 0x400000>;
-			alloc-ranges = <0x0 0x00000000 0x0 0x23000000>;
+			alloc-ranges = <0x0 0x00000000 0x0 0x1d400000>;
 		};
 
 		codec_mm_cma:linux,codec_mm_cma {
@@ -183,7 +183,7 @@
 			size = <0x0 0x000000>;
 			//size = <0x0 0x0>;
 			alignment = <0x0 0x400000>;
-			alloc-ranges = <0x0 0x00000000 0x0 0x23000000>;
+			alloc-ranges = <0x0 0x00000000 0x0 0x1d400000>;
 		};
 		/* codec shared reserved */
 		codec_mm_reserved:linux,codec_mm_reserved {
@@ -198,7 +198,7 @@
 			no-map;
 			size = <0x0 0x1000000>;
 			alignment = <0x0 0x100000>;
-			alloc-ranges = <0x0 0x00000000 0x0 0x23000000>;
+			alloc-ranges = <0x0 0x00000000 0x0 0x1d400000>;
 		};
 
 		frc_cma_reserved:linux,frc_cma {
@@ -248,7 +248,7 @@
 			reusable;
 			size = <0x0 0x800000>;
 			alignment = <0x0 0x400000>;
-			alloc-ranges = <0x0 0x0 0x0 0x23000000>;
+			alloc-ranges = <0x0 0x0 0x0 0x1d400000>;
 			linux,cma-default;
 		};
 
