@@ -204,6 +204,18 @@ static void hdr_proc(struct vframe_s *vf,
 		process_id[2] = index;
 }
 
+int get_max_slice(void)
+{
+	int slice_max = 1;
+
+	if (is_meson_t3x_cpu())
+		slice_max = 2;
+	else if (is_meson_s5_cpu())
+		slice_max = 4;
+
+	return slice_max;
+}
+
 static void hdr_proc_multi_slices(struct vframe_s *vf,
 	      enum hdr_module_sel module_sel,
 	      u32 hdr_process_select,
@@ -212,14 +224,16 @@ static void hdr_proc_multi_slices(struct vframe_s *vf,
 	      s32 slice_mode,
 	      enum vpp_index_e vpp_index)
 {
+	u32 slice_max = 0;
+
 	if (module_sel != VD1_HDR) {
 		pr_csc(8, "am_vecm: hdr module=%s %d has no multi-slice\n",
 			module_str[module_sel], module_sel);
 		return;
 	}
 
-	pr_csc(8, "am_vecm: hdr module=%s %d, slice_num = %d\n",
-		module_str[module_sel], module_sel, slice_mode);
+	pr_csc(8, "am_vecm: hdr module=%s %d, sel %d, slice_num = %d\n",
+		module_str[module_sel], module_sel, hdr_process_select, slice_mode);
 
 	if (slice_mode == VD1_1SLICE) {
 		hdr_proc(vf, VD1_HDR, hdr_process_select, vinfo, gmt_mtx, vpp_index);
@@ -231,6 +245,21 @@ static void hdr_proc_multi_slices(struct vframe_s *vf,
 		hdr_proc(vf, S5_VD1_SLICE1, hdr_process_select, vinfo, gmt_mtx, vpp_index);
 		hdr_proc(vf, S5_VD1_SLICE2, hdr_process_select, vinfo, gmt_mtx, vpp_index);
 		hdr_proc(vf, S5_VD1_SLICE3, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+	} else if (slice_mode == 0) {/*vd1 off, still need to handle vd1 process*/
+		slice_max = get_max_slice();
+		pr_csc(8, "am_vecm: hdr module=%s %d, slice_max %d\n",
+			module_str[module_sel], module_sel, slice_max);
+		if (slice_max == 1) {
+			hdr_proc(vf, VD1_HDR, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+		} else if (slice_max == 2) {
+			hdr_proc(vf, VD1_HDR, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+			hdr_proc(vf, S5_VD1_SLICE1, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+		} else if (slice_max == 4) {
+			hdr_proc(vf, VD1_HDR, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+			hdr_proc(vf, S5_VD1_SLICE1, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+			hdr_proc(vf, S5_VD1_SLICE2, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+			hdr_proc(vf, S5_VD1_SLICE3, hdr_process_select, vinfo, gmt_mtx, vpp_index);
+		}
 	}
 }
 #endif
