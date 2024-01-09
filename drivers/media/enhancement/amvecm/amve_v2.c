@@ -697,6 +697,7 @@ void post_gainoff_cfg(struct tcon_rgb_ogo_s *p,
 	unsigned int reg_ctl2;
 	unsigned int reg_ctl3;
 	unsigned int reg_ctl4;
+	int t;
 
 	reg_ctl0 = VPP_GAINOFF_CTRL0 + pst_reg_ofst[slice];
 	reg_ctl1 = VPP_GAINOFF_CTRL1 + pst_reg_ofst[slice];
@@ -704,10 +705,15 @@ void post_gainoff_cfg(struct tcon_rgb_ogo_s *p,
 	reg_ctl3 = VPP_GAINOFF_CTRL3 + pst_reg_ofst[slice];
 	reg_ctl4 = VPP_GAINOFF_CTRL4 + pst_reg_ofst[slice];
 
+	if (chip_type_id == chip_t3x)
+		t = 0;
+	else
+		t = 1;
+
 	if (mode == WR_VCB) {
 		WRITE_VPP_REG(reg_ctl0,
 			((p->en << 31) & 0x80000000) |
-			((1 << 30) & 0x40000000) |
+			((t << 30) & 0x40000000) |
 			((p->r_gain << 16) & 0x07ff0000) |
 			((p->g_gain <<  0) & 0x000007ff));
 		WRITE_VPP_REG(reg_ctl1,
@@ -724,7 +730,7 @@ void post_gainoff_cfg(struct tcon_rgb_ogo_s *p,
 	} else if (mode == WR_DMA) {
 		VSYNC_WRITE_VPP_REG_VPP_SEL(reg_ctl0,
 			((p->en << 31) & 0x80000000) |
-			((1 << 30) & 0x40000000) |
+			((t << 30) & 0x40000000) |
 			((p->r_gain << 16) & 0x07ff0000) |
 			((p->g_gain <<	0) & 0x000007ff),
 			vpp_index);
