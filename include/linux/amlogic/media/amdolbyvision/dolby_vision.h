@@ -49,6 +49,12 @@ struct vframe_s;
 #define AV1_SEI 0x14000000 /*for both dv and hdr10plus*/
 #define HDR10P 0x02000000
 
+enum py_level {
+	PY_SIX_LEVEL = 0,
+	PY_SEVEN_LEVEL = 1,
+	PY_NO_LEVEL  = 2
+};
+
 extern unsigned int debug_dolby;
 extern struct apo_value_s apo_value;
 

@@ -470,7 +470,7 @@ MODULE_PARM_DESC(lightsense_test_mode, "\n lightsense_test_mode\n");
 struct ambient_cfg_s ambient_darkdetail = {16, 0, 0, 0, 0, 0, 1};
 
 u32 content_fps = 60000;
-u32 num_downsamplers;
+u32 num_downsamplers = 2;/*default 1/4 dw*/
 int gd_rf_adjust;
 int enable_vf_check;
 static u32 last_vf_valid_crc;
@@ -13170,7 +13170,8 @@ EXPORT_SYMBOL(amdolby_vision_process);
  */
 bool is_amdv_on(void)
 {
-	pr_dv_dbg("is_amdv_on %d %d\n", amdv_wait_on, dolby_vision_on);
+	if (debug_dolby & 0x400000)
+		pr_dv_dbg("is_amdv_on %d %d\n", amdv_wait_on, dolby_vision_on);
 	return dolby_vision_on ||
 		amdv_wait_on ||
 		amdv_on_in_uboot;
@@ -16493,24 +16494,36 @@ static ssize_t amdolby_vision_inst_status_show
 	int fmt;
 	char *str1 = {"dv inst status:"};
 	char *str2 = {"dv core status:"};
+	u32 cfg_enable_top1;
 
 	if (!multi_dv_mode && is_aml_hw5()) {
 		len += sprintf(buf + len, "enable: %d, on: %d\n",
 			dolby_vision_enable, dolby_vision_on);
 
-		if (tv_hw5_setting && tv_hw5_setting->pq_config) {
-			len += sprintf(buf + len, "cur controlpath cfg:precision %d %d,l1l4:%d\n",
+		if (tv_hw5_setting) {
+			cfg_enable_top1 = (check_cfg_enabled_top1() |
+				check_dynamic_cfg_enabled_top1());
+			len += sprintf(buf + len, "cfg:precision %d,l1l4:%d\n",
+				cfg_enable_top1 & 1, cfg_enable_top1 & 2);
+		}
+		if (tv_hw5_setting && tv_hw5_setting->pq_config)
+			len += sprintf(buf + len, "cur cp cfg:precision %d %d,l1l4:%d\n",
 			tv_hw5_setting->pq_config->tdc.pr_config.supports_precision_rendering,
 			tv_hw5_setting->pq_config->tdc.pr_config.precision_rendering_strength,
 			tv_hw5_setting->pq_config->tdc.ana_config.enalbe_l1l4_gen);
-		}
-		len += sprintf(buf + len, "pyramid:wr=%d rd=%d level=%s,pd=%d,l1l4=%d %d\n",
+		len += sprintf(buf + len, "pd:wr=%d rd=%d level_%s,pr_enabled=%d,l1l4=%d %d\n",
 			py_wr_id, py_rd_id,
 			py_level == 0 ? "6" : (py_level == 1 ? "7" : "0"),
 			py_enabled, l1l4_enabled, l1l4_distance);
 
 		len += sprintf(buf + len, "==========TOP1=========\n");
-		len += sprintf(buf + len, "top1 enable: %d\n", enable_top1);
+		len += sprintf(buf + len, "top1 enable: %d, 0d01:0x%x\n", enable_top1,
+			READ_VPP_DV_REG(0x0d01));
+		len += sprintf(buf + len, "force_bypass_precision: %d\n", force_bypass_precision);
+		len += sprintf(buf + len, "force_bypass_precision_once: %d\n",
+			force_bypass_precision_once);
+		len += sprintf(buf + len, "miss_top1_and_bypass_pr_once: %d\n",
+			miss_top1_and_bypass_pr_once);
 		len += sprintf(buf + len, "top1 on: %d\n", top1_info.core_on);
 		len += sprintf(buf + len, "top1 on cnt: %d\n", top1_info.core_on_cnt);
 		len += sprintf(buf + len, "top1 video: %d\n",

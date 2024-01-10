@@ -5696,7 +5696,11 @@ s32 update_vframe_src_fmt(struct vframe_s *vf,
 	vf->src_fmt.sei_ptr = sei;
 	vf->src_fmt.sei_size = size;
 	vf->src_fmt.dual_layer = false;
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	vf->src_fmt.pr_done = false;
+	vf->src_fmt.py_level = PY_NO_LEVEL;
+	vf->src_fmt.downsamplers = 2;
+#endif
 	if (debug_flag & DEBUG_FLAG_OMX_DV_DROP_FRAME) {
 		pr_info("===update vf %p, sei %p, size %d, dual_layer %d play_id = %d ===\n",
 			vf, sei, size, dual_layer,

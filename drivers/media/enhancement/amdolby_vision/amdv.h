@@ -733,12 +733,6 @@ enum cpu_id_e {
 	_CPU_MAJOR_ID_UNKNOWN,
 };
 
-enum phy_level {
-	SIX_LEVEL = 0,
-	SEVEN_LEVEL = 1,
-	NO_LEVEL  = 2
-};
-
 enum top2_source {
 	FROM_VDIN0 = 0,
 	FROM_VD1 = 1,
@@ -931,6 +925,8 @@ extern u32 vpp_vsync_id;
 extern int force_vsync_id;
 extern bool top1_enable_changed;
 extern bool force_bypass_precision;
+extern bool force_bypass_precision_once;
+extern bool miss_top1_and_bypass_pr_once;
 /************/
 
 #define pr_dv_dbg(fmt, args...)\
@@ -1063,6 +1059,8 @@ struct dv5_top1_vd_info {
 
 	u32 plane;
 	u32 blk_mode;
+	u32 linear_mode;
+	u32 burst_len;
 	ulong canvasaddr[3];
 	ulong compHeadAddr;
 	ulong compBodyAddr;
@@ -1285,7 +1283,8 @@ int tv_top_set(u64 *top1_reg,
 			     bool hdr10,
 			     bool reset,
 			     bool toggle,
-			     bool pr_done);
+			     bool pr_done,
+			     u32 level);
 void dolby5_bypass_ctrl(unsigned int en);
 int load_reg_and_lut_file(char *fw_name, void **dst_buf);
 void read_txt_to_buf(char *reg_txt, void *reg_buf, int reg_num, bool is_reg);

@@ -375,6 +375,8 @@ struct vframe_src_fmt_s {
 	int dv_id;
 	bool pr_done;/*mark pyramid status*/
 	bool hdmi_new_frame;
+	u32 py_level;
+	u32 downsamplers;
 };
 
 enum pic_mode_provider_e {
