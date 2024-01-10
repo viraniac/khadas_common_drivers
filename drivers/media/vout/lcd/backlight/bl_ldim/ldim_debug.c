@@ -497,11 +497,10 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 					fw->fw_print_frequent);
 				goto ldim_attr_store_end;
 			}
-			if (kstrtouint(parm[1], 10,
+			if (kstrtouint(parm[1], 0,
 				       &fw->fw_print_frequent) < 0) {
 				goto ldim_attr_store_err;
 			}
-			cus_fw->fw_print_frequent = fw->fw_print_frequent;
 		}
 		pr_info("fw_print_frequent = %d\n", fw->fw_print_frequent);
 	} else if (!strcmp(parm[0], "fw_print")) {
@@ -511,16 +510,45 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 					fw->fw_print_lv);
 				goto ldim_attr_store_end;
 			}
-			if (kstrtouint(parm[1], 10, &fw->fw_print_lv) < 0)
+			if (kstrtouint(parm[1], 0, &fw->fw_print_lv) < 0)
 				goto ldim_attr_store_err;
-			cus_fw->fw_print_lv = fw->fw_print_lv;
 		}
 		pr_info("fw_print_lv = %d\n", fw->fw_print_lv);
-	} else if (!strcmp(parm[0], "cus_fw_param")) {
-		if (parm[2]) {
-			if (kstrtouint(parm[1], 10, &i) < 0)
+	} else if (!strcmp(parm[0], "cus_fw_print_frequent")) {
+		if (!cus_fw)
+			goto ldim_attr_store_err;
+		if (parm[1]) {
+			if (!strcmp(parm[1], "r")) {
+				pr_info("for_tool:%d\n",
+					cus_fw->fw_print_frequent);
+				goto ldim_attr_store_end;
+			}
+			if (kstrtouint(parm[1], 0,
+				       &cus_fw->fw_print_frequent) < 0) {
 				goto ldim_attr_store_err;
-			if (kstrtouint(parm[2], 10, &j) < 0)
+			}
+		}
+		pr_info("cus_fw_print_frequent = %d\n", cus_fw->fw_print_frequent);
+	} else if (!strcmp(parm[0], "cus_fw_print")) {
+		if (!cus_fw)
+			goto ldim_attr_store_err;
+		if (parm[1]) {
+			if (!strcmp(parm[1], "r")) {
+				pr_info("for_tool:%d\n",
+					cus_fw->fw_print_lv);
+				goto ldim_attr_store_end;
+			}
+			if (kstrtouint(parm[1], 0, &cus_fw->fw_print_lv) < 0)
+				goto ldim_attr_store_err;
+		}
+		pr_info("cus_fw_print_lv = %d\n", cus_fw->fw_print_lv);
+	} else if (!strcmp(parm[0], "cus_fw_param")) {
+		if (!cus_fw)
+			goto ldim_attr_store_err;
+		if (parm[2]) {
+			if (kstrtouint(parm[1], 0, &i) < 0)
+				goto ldim_attr_store_err;
+			if (kstrtouint(parm[2], 0, &j) < 0)
 				goto ldim_attr_store_err;
 
 			if (cus_fw->fw_alg_frm)
