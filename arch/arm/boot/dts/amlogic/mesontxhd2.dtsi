@@ -1007,7 +1007,7 @@
 
 	jtag {
 		compatible = "amlogic, jtag";
-		status = "okay";
+		status = "disabled";
 		select = "disable"; /* disable/apao */
 		interrupts = <GIC_SPI 208 IRQ_TYPE_EDGE_RISING>;
 		pinctrl-names="jtag_a_pins", "jtag_b_pins";
@@ -1632,6 +1632,7 @@
 			compatible = "amlogic,aml_txlx_dma";
 			reg = <0xff63e000 0x48>;
 			interrupts = <0 180 1>;
+			status = "disabled";
 
 			aml_aes {
 				compatible = "amlogic,aes_g12a_dma";
