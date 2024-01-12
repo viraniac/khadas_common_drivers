@@ -547,5 +547,12 @@ void mmc_sd_update_dataline_timing(void *data, struct mmc_card *card, int *err);
 /* Host attributes */
 #define AML_USE_64BIT_DMA        BIT(0)
 
+/* Set to 1 for no timeout */
+#define SD_EMMC_CMD_NO_TIMEOUT 1
+/* Set to 32.768s for max timeout */
+#define SD_EMMC_CMD_MAX_TIMEOUT (32768)
+/* Port from block.c */
+#define MMC_EXTRACT_INDEX_FROM_ARG(x) (((x) & 0x00FF0000) >> 16)
+
 #endif /*__AML_SD_H__*/
 
