@@ -423,7 +423,7 @@
 		};
 	};/*meson cooling devices end*/
 
-	thermal-zones {
+	thermal_zones: thermal-zones {
 		soc_thermal: soc_thermal {
 			polling-delay = <1000>;
 			polling-delay-passive = <100>;
