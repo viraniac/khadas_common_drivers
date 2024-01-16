@@ -46,6 +46,7 @@
 #include "../../gdc/inc/api/gdc_api.h"
 #ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
 #include <linux/amlogic/media/di/di_interface.h>
+#include <linux/amlogic/media/di/di.h>
 #endif
 
 #include "videodisplay.h"
@@ -1719,6 +1720,8 @@ static struct vframe_s *get_vf_from_file(struct composer_dev *dev,
 	struct vframe_s *di_vf = NULL;
 	bool is_dec_vf = false;
 	struct file_private_data *file_private_data = NULL;
+	bool enable_prelink = false;
+	bool dec_is_i = false;
 
 	if (IS_ERR_OR_NULL(dev) || IS_ERR_OR_NULL(file_vf)) {
 		vc_print(dev->index, PRINT_ERROR,
@@ -1743,15 +1746,20 @@ static struct vframe_s *get_vf_from_file(struct composer_dev *dev,
 			"vframe_type = 0x%x, vframe_flag = 0x%x.\n",
 			vf->type,
 			vf->flag);
+		dec_is_i = vf->type & VIDTYPE_INTERLACE;
 		if (di_vf && (vf->flag & VFRAME_FLAG_CONTAIN_POST_FRAME)) {
+#ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
+			enable_prelink = dim_get_pre_link();
+#endif
 			vc_print(dev->index, PRINT_OTHER,
-				"di_vf->type = 0x%x, di_vf->org = 0x%x.\n",
+				"di_vf->type = 0x%x, di_vf->org = 0x%x, enable_prelink = %d\n",
 				di_vf->type,
-				di_vf->type_original);
+				di_vf->type_original,
+				enable_prelink);
 			if (!need_dw ||
 			    (need_dw && di_vf->width != 0 &&
 				di_vf->canvas0_config[0].phy_addr != 0 &&
-				!vf_is_pre_link(di_vf))) {
+				((!dec_is_i && !enable_prelink) || dec_is_i))) {
 				vc_print(dev->index, PRINT_OTHER,
 					"use di vf\n");
 				/* link uvm vf into di_vf->vf_ext */
@@ -4249,7 +4257,7 @@ static void set_frames_info(struct composer_dev *dev,
 				vf->source_type == VFRAME_SOURCE_TYPE_CVBS)
 				tv_fence_creat_count++;
 			vc_print(dev->index, PRINT_FENCE | PRINT_PATTERN,
-				 "received_cnt=%lld,new_cnt=%lld,i=%d,z=%d,omx_index=%d, fence_fd=%d, fc_no=%d, index_disp=%d,pts=%lld,vf=%p\n",
+				 "received_cnt=%lld,new_cnt=%lld,i=%d,z=%d,omx_index=%d, fence_fd=%d, fc_no=%d, index_disp=%d,pts=%lld,vf=%px\n",
 				 dev->received_count + 1,
 				 dev->received_new_count,
 				 i,

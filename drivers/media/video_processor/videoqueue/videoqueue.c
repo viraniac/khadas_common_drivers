@@ -499,7 +499,7 @@ static int do_file_thread(struct video_queue_dev *dev)
 	}
 
 	if (!kfifo_peek(&dev->file_q, &ready_file)) {
-		vq_print(dev->inst, P_ERROR, "peek err, file_q is empty\n");
+		vq_print(dev->inst, P_SYNC, "file_q is empty.\n");
 		return -1;
 	}
 	vf = vf_peek(dev->vf_receiver_name);

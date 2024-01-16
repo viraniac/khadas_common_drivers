@@ -855,7 +855,8 @@ static struct vframe_s *vc_vf_get(void *op_arg)
 			 vf->duration);
 
 		vc_print(dev->index, PRINT_FENCE,
-			"%s: vf: %px, vf_type: 0x%x.\n", __func__, vf, vf->type);
+			"%s: vf: %px, vf_ext: %px, vf_type: 0x%x.\n", __func__,
+			vf, vf->vf_ext, vf->type);
 
 		vc_print(dev->index, PRINT_DEWARP,
 			 "get:vf_w: %d, vf_h: %d\n", vf->width, vf->height);
@@ -908,7 +909,7 @@ static void vc_vf_put(struct vframe_s *vf, void *op_arg)
 	if (!vf)
 		return;
 
-	vc_print(dev->index, PRINT_FENCE, "%s: vf is %px.\n", __func__, vf);
+	vc_print(dev->index, PRINT_FENCE, "%s: vf: %px, vf_ext: %px.\n", __func__, vf, vf->vf_ext);
 
 	if (dev->is_drm_enable) {
 		if (vf->flag & VFRAME_FLAG_FAKE_FRAME) {
