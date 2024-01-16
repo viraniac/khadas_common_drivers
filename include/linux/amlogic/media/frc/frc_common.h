@@ -206,7 +206,8 @@ struct frc_top_type_s {
 	u8  frc_out_frm_rate;  // = frc_other_reserved;
 	u8  frc_in_frm_rate;
 	u16 video_duration;
-	u16 frc_reserved;
+	u8  frc_deblur_level;
+	u8  frc_reserved;
 
 };
 

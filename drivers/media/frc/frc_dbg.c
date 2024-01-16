@@ -510,8 +510,7 @@ ssize_t frc_debug_buf_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "dump_fixed_reg\t: dump fixed table\n");
 	len += sprintf(buf + len, "dump_buf_reg\t: dump buffer register\n");
 	len += sprintf(buf + len, "dump_data addr size\t: dump cma buf data\n");
-	len += sprintf(buf + len,
-		"buf_num val\t: val(1 - 16) frc and logo frame buffer number\n");
+	len += sprintf(buf + len, "buf_num\t\t:%d\n", devp->buf.frm_buf_num);
 	len += sprintf(buf + len,
 		"dc_set\t: x x x(me:mc_y:mc_c) set frc me,mc_y and mc_c comprate\n");
 	len += sprintf(buf + len,

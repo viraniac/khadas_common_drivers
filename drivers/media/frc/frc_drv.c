@@ -240,12 +240,12 @@ static long frc_ioctl(struct file *file,
 			ret = -EFAULT;
 		break;
 
-	case FRC_IOC_SET_INPUT_VS_RATE:
+	case FRC_IOC_SET_DEBLUR_LEVEL:
 		if (copy_from_user(&data, argp, sizeof(u32))) {
 			ret = -EFAULT;
 			break;
 		}
-		pr_frc(1, "SET_INPUT_VS_RATE:%d\n", data);
+		frc_memc_set_deblur(data);
 		break;
 
 	case FRC_IOC_SET_MEMC_ON_OFF:
@@ -464,7 +464,7 @@ void frc_power_domain_ctrl(struct frc_dev_s *devp, u32 onoff)
 #define K_MEMC_CLK_DIS
 
 	if (devp->power_on_flag == onoff) {
-		pr_frc(0, "warning: same pw state\n");
+		// pr_frc(0, "warning: same pw state\n");
 		return;
 	}
 	if (!onoff) {
@@ -591,11 +591,11 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 	of_node = pdev->dev.of_node;
 	of_id = of_match_device(frc_dts_match, &pdev->dev);
 	if (of_id) {
-		PR_FRC("%s\n", of_id->compatible);
+		// PR_FRC("%s\n", of_id->compatible);
 		frc_data = frc_devp->data;
 		pfw_data = (struct frc_fw_data_s *)frc_devp->fw_data;
 		frc_data->match_data = of_id->data;
-		PR_FRC("chip id:%d\n", frc_data->match_data->chip);
+		PR_FRC("%s\tchip id:%d\n", of_id->compatible, frc_data->match_data->chip);
 		pfw_data->frc_top_type.chip = (u8)frc_data->match_data->chip;
 	}
 
@@ -617,7 +617,7 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 	/*get irq number from dts*/
 	frc_devp->in_irq = of_irq_get_byname(of_node, "irq_frc_in");
 	snprintf(frc_devp->in_irq_name, sizeof(frc_devp->in_irq_name), "frc_input_irq");
-	PR_FRC("%s=%d\n", frc_devp->in_irq_name, frc_devp->in_irq);
+//	PR_FRC("%s=%d\n", frc_devp->in_irq_name, frc_devp->in_irq);
 	if (frc_devp->in_irq > 0) {
 		ret = request_irq(frc_devp->in_irq, frc_input_isr, IRQF_SHARED,
 				  frc_devp->in_irq_name, (void *)frc_devp);
@@ -629,7 +629,7 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 
 	frc_devp->out_irq = of_irq_get_byname(of_node, "irq_frc_out");
 	snprintf(frc_devp->out_irq_name, sizeof(frc_devp->out_irq_name), "frc_out_irq");
-	PR_FRC("%s=%d\n", frc_devp->out_irq_name, frc_devp->out_irq);
+	//	PR_FRC("%s=%d\n", frc_devp->out_irq_name, frc_devp->out_irq);
 	if (frc_devp->out_irq > 0) {
 		ret = request_irq(frc_devp->out_irq, frc_output_isr, IRQF_SHARED,
 				  frc_devp->out_irq_name, (void *)frc_devp);
@@ -642,7 +642,7 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 	frc_devp->axi_crash_irq = of_irq_get_byname(of_node, "irq_axi_crash");
 	snprintf(frc_devp->axi_crash_irq_name,
 			sizeof(frc_devp->axi_crash_irq_name), "axi_crash_irq");
-	PR_FRC("%s=%d\n", frc_devp->axi_crash_irq_name, frc_devp->axi_crash_irq);
+	//	PR_FRC("%s=%d\n", frc_devp->axi_crash_irq_name, frc_devp->axi_crash_irq);
 	if (frc_devp->axi_crash_irq > 0) {
 		ret = request_irq(frc_devp->axi_crash_irq, frc_axi_crash_isr, IRQF_SHARED,
 				  frc_devp->axi_crash_irq_name, (void *)frc_devp);
@@ -653,20 +653,22 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 	} else {
 		PR_ERR("axi_crash irq is not enabled\n");
 	}
-
 	frc_devp->rdma_irq = of_irq_get_byname(of_node, "irq_frc_rdma");
 	snprintf(frc_devp->rdma_irq_name, sizeof(frc_devp->rdma_irq_name), "frc_rdma_irq");
-	PR_FRC("%s=%d\n", frc_devp->rdma_irq_name, frc_devp->rdma_irq);
-// #ifdef CONFIG_AMLOGIC_MEDIA_FRC_RDMA
+	PR_FRC("%s=%d\t%s=%d\t%s=%d\t%s=%d\n", frc_devp->in_irq_name, frc_devp->in_irq,
+			frc_devp->out_irq_name, frc_devp->out_irq,
+			frc_devp->axi_crash_irq_name, frc_devp->axi_crash_irq,
+			frc_devp->rdma_irq_name, frc_devp->rdma_irq);
+	// #ifdef CONFIG_AMLOGIC_MEDIA_FRC_RDMA
 	if (frc_devp->rdma_irq > 0) {
 		ret = request_irq(frc_devp->rdma_irq, frc_rdma_isr, IRQF_SHARED,
-				  frc_devp->rdma_irq_name, (void *)frc_devp);
+				frc_devp->rdma_irq_name, (void *)frc_devp);
 		if (ret)
 			PR_ERR("request rdma irq fail\n");
 		else
 			disable_irq(frc_devp->rdma_irq);
 	}
-// #endif
+	// #endif
 	/*register map*/
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "frc_reg");
 	if (res) {
@@ -678,14 +680,11 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 		} else {
 			frc_devp->reg = (void *)base;
 			frc_base = frc_devp->reg;
-			pr_frc(0, "frc reg base 0x%lx -> 0x%lx, map size:0x%lx\n",
-			       (ulong)res->start, (ulong)frc_base, (ulong)(res->end - res->start));
 		}
 	} else {
 		frc_devp->reg = NULL;
 		frc_base = NULL;
 	}
-
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "frc_clk_reg");
 	if (res) {
 		base = devm_ioremap(&pdev->dev, res->start, res->end - res->start);
@@ -696,9 +695,6 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 		} else {
 			frc_devp->clk_reg = (void *)base;
 			frc_clk_base = frc_devp->clk_reg;
-			pr_frc(0, "clk reg base 0x%lx -> 0x%lx, map size:0x%lx\n",
-			       (ulong)res->start, (ulong)frc_clk_base,
-			       (ulong)(res->end - res->start));
 		}
 	} else {
 		frc_devp->clk_reg = NULL;
@@ -715,8 +711,6 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 		} else {
 			frc_devp->vpu_reg = (void *)base;
 			vpu_base = frc_devp->vpu_reg;
-			pr_frc(0, "vpu reg base 0x%lx -> 0x%lx, map size:0x%lx\n",
-			       (ulong)res->start, (ulong)vpu_base, (ulong)(res->end - res->start));
 		}
 	} else {
 		frc_devp->vpu_reg = NULL;
@@ -730,7 +724,6 @@ static int frc_dts_parse(struct frc_dev_s *frc_devp)
 		frc_devp->buf.cma_mem_size = 0;
 	}
 	frc_devp->buf.cma_mem_size = dma_get_cma_size_int_byte(&pdev->dev);
-	pr_frc(0, "cma_mem_size=0x%x\n", frc_devp->buf.cma_mem_size);
 
 	frc_devp->clk_frc = clk_get(&pdev->dev, "clk_frc");
 	frc_devp->clk_me = clk_get(&pdev->dev, "clk_me");
@@ -1050,7 +1043,6 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 	struct frc_fw_data_s *fw_data;
 	u32 i;
 
-	pr_frc(0, "%s\n", __func__);
 	if (!devp)
 		return;
 
@@ -1116,8 +1108,6 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 	fw_data->holdline_parm.inp_hold_line = 4;
 	fw_data->holdline_parm.reg_post_dly_vofst = 0;/*fixed*/
 	fw_data->holdline_parm.reg_mc_dly_vofst0 = 1;/*fixed*/
-
-	fw_data->frc_top_type.frc_fb_num = FRC_TOTAL_BUF_NUM;
 
 	if (fw_data->frc_top_type.chip != 0)
 		memcpy(&devp->frm_dly_set[0],

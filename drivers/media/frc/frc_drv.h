@@ -115,9 +115,10 @@
 // frc_20240116 frc rdma process optimisation
 // frc_20240306 high-priority task and timestamp debug
 // frc_20240312 frc protect badedit effect
+// frc20240319 frc sync alg macro
 
-#define FRC_FW_VER			"2024-0319 frc sync alg macro"
-#define FRC_KERDRV_VER                  3205
+#define FRC_FW_VER			"2024-0315 buf num configure"
+#define FRC_KERDRV_VER		3205
 
 #define FRC_DEVNO	1
 #define FRC_NAME	"frc"
@@ -140,26 +141,31 @@ extern int frc_dbg_en;
 #define FRC_COMPRESS_RATE_50_SIZE       (180 * 1024 * 1024)    // Need 176.4MB  4MB Align
 #define FRC_COMPRESS_RATE_55_SIZE       (196 * 1024 * 1024)    // Need 192.7MB  4MB Align
 // mc-y 48%  mc-c 39%  me 60%
-#define FRC_COMPRESS_RATE_MC_Y		46
-#define FRC_COMPRESS_RATE_MC_C		36
+#define FRC_COMPRESS_RATE_MC_Y		45
+#define FRC_COMPRESS_RATE_MC_C		35
 #define FRC_COMPRESS_RATE_MC_Y_T3X	78 // 48 // 100
 #define FRC_COMPRESS_RATE_MC_C_T3X	36 // 80 // 0
 
 #define FRC_COMPRESS_RATE_ME_T3		60
 #define FRC_COMPRESS_RATE_ME_T5M	100
 
-#define FRC_COMPRESS_RATE_MCDW_Y	80 // 48
-#define FRC_COMPRESS_RATE_MCDW_C	39 // 80 // 39
+#define FRC_COMPRESS_RATE_MCDW_Y	78 // 48
+#define FRC_COMPRESS_RATE_MCDW_C	36 // 80 // 39
 
 #define FRC_INFO_BUF_FACTOR_T3		2
 #define FRC_INFO_BUF_FACTOR_T5M		2
 #define FRC_INFO_BUF_FACTOR_T3X		32
 
+#define FRC_COMPRESS_RATE_MARGIN    2
+
 #define FRC_TOTAL_BUF_NUM		16
+#define FRC_BUF_NUM_T3		FRC_TOTAL_BUF_NUM
+#define FRC_BUF_NUM_T5M		FRC_TOTAL_BUF_NUM //  / 2
+#define FRC_BUF_NUM_T3X		FRC_TOTAL_BUF_NUM
+
 #define FRC_MEMV_BUF_NUM		6
 #define FRC_MEMV2_BUF_NUM		7
 #define FRC_MEVP_BUF_NUM		2
-#define FRC_MC_MARGIN			102 //(1+0.02)*100
 
 #define FRC_SLICER_NUM			4
 
@@ -311,6 +317,9 @@ struct st_frc_buf {
 	phys_addr_t cma_mem_paddr_start;
 	u8  cma_mem_alloced;
 	u8  secured;
+	u8  frm_buf_num;
+	u8  logo_buf_num;
+	u8  rate_margin;
 	u8  addr_shft_bits;
 	u8  mcdw_size_rate;
 

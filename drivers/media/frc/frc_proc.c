@@ -2060,6 +2060,24 @@ void frc_lge_memc_init(void)
 	pr_frc(0, "frc lge memc init done\n");
 }
 
+int frc_memc_set_deblur(u8 level)
+{
+	struct frc_dev_s *devp = get_frc_devp();
+	// struct frc_fw_alg_ctrl_s *pfrc_fw_alg_ctrl;
+	struct frc_fw_data_s *pfw_data;
+
+	if (!devp || !devp->probe_ok || !devp->fw_data)
+		return 0;
+	pfw_data = (struct frc_fw_data_s *)devp->fw_data;
+	pr_frc(1, "set_deblur_level:%d\n", level);
+	if (level != pfw_data->frc_top_type.frc_deblur_level) {
+		pfw_data->frc_top_type.frc_deblur_level = level;
+		if (pfw_data->frc_memc_level)
+			pfw_data->frc_memc_level(pfw_data);
+	}
+	return 1;
+}
+
 int frc_memc_set_demo(u8 setdemo)
 {
 	struct frc_dev_s *devp = get_frc_devp();
