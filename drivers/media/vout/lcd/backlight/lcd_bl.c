@@ -2599,7 +2599,7 @@ static ssize_t bl_debug_pwm_info_show(struct device *dev,
 				       "pwm_max:            %d\n"
 				       "pwm_min:            %d\n"
 				       "pwm_level:          %d\n"
-				       "pwm_mapping:		%d_%d_%d_%d_%d %d_%d\n",
+				       "pwm_mapping:		%d_%d_%d_%d_%d %d_%d_%d\n",
 				       bl_pwm->index,
 				       bl_pwm_num_to_str(bl_pwm->pwm_port),
 				       bl_pwm->pwm_port,
@@ -2617,7 +2617,8 @@ static ssize_t bl_debug_pwm_info_show(struct device *dev,
 				       bl_pwm->pwm_mapping[3],
 				       bl_pwm->pwm_mapping[4],
 				       bl_pwm->pwm_mapping[5],
-				       bl_pwm->pwm_mapping[6]);
+				       bl_pwm->pwm_mapping[6],
+					   bl_pwm->pwm_mapping[7]);
 			if (bl_pwm->pwm_duty_max > 100) {
 				len += sprintf(buf + len,
 					       "pwm_duty:           %d(%d%%)\n",
@@ -2706,7 +2707,7 @@ static ssize_t bl_debug_pwm_info_show(struct device *dev,
 				       "pwm_0_max:          %d\n"
 				       "pwm_0_min:          %d\n"
 				       "pwm_0_level:        %d\n"
-				       "pwm_0_mapping:		%d_%d_%d_%d_%d %d_%d\n",
+				       "pwm_0_mapping:		%d_%d_%d_%d_%d %d_%d_%d\n",
 				       bl_pwm->index,
 				       bl_pwm_num_to_str(bl_pwm->pwm_port),
 				       bl_pwm->pwm_port,
@@ -2724,7 +2725,8 @@ static ssize_t bl_debug_pwm_info_show(struct device *dev,
 				       bl_pwm->pwm_mapping[3],
 				       bl_pwm->pwm_mapping[4],
 				       bl_pwm->pwm_mapping[5],
-				       bl_pwm->pwm_mapping[6]);
+					   bl_pwm->pwm_mapping[6],
+				       bl_pwm->pwm_mapping[7]);
 			if (bl_pwm->pwm_duty_max > 100) {
 				len += sprintf(buf + len,
 					       "pwm_0_duty:         %d(%d%%)\n",
@@ -2808,7 +2810,7 @@ static ssize_t bl_debug_pwm_info_show(struct device *dev,
 				       "pwm_1_max:          %d\n"
 				       "pwm_1_min:          %d\n"
 				       "pwm_1_level:        %d\n"
-				       "pwm_1_mapping:		%d_%d_%d_%d_%d %d_%d\n",
+				       "pwm_1_mapping:		%d_%d_%d_%d_%d %d_%d_%d\n",
 				       bl_pwm->index,
 				       bl_pwm_num_to_str(bl_pwm->pwm_port),
 				       bl_pwm->pwm_port,
@@ -2826,7 +2828,8 @@ static ssize_t bl_debug_pwm_info_show(struct device *dev,
 				       bl_pwm->pwm_mapping[3],
 				       bl_pwm->pwm_mapping[4],
 				       bl_pwm->pwm_mapping[5],
-				       bl_pwm->pwm_mapping[6]);
+					   bl_pwm->pwm_mapping[6],
+				       bl_pwm->pwm_mapping[7]);
 			if (bl_pwm->pwm_duty_max > 100) {
 				len += sprintf(buf + len,
 					       "pwm_1_duty:         %d(%d%%)\n",
@@ -3121,7 +3124,7 @@ static ssize_t bl_debug_pwm_store(struct device *dev,
 	struct aml_bl_drv_s *bdrv = dev_get_drvdata(dev);
 	unsigned int ret;
 	unsigned int index = 0, val = 0;
-	unsigned int val1 = 0, val2 = 0, val3 = 0, val4 = 0, val5 = 0, val6 = 0;
+	unsigned int val1 = 0, val2 = 0, val3 = 0, val4 = 0, val5 = 0, val6 = 0, val7 = 0;
 	struct bl_config_s *bconf = &bdrv->bconf;
 	struct bl_pwm_config_s *bl_pwm = NULL;
 
@@ -3199,9 +3202,9 @@ static ssize_t bl_debug_pwm_store(struct device *dev,
 		}
 		break;
 	case 'c': /* curve */
-		ret = sscanf(buf, "curve %d %d %d %d %d %d %d %d",
-			&index, &val, &val1, &val2, &val3, &val4, &val5, &val6);
-		if (ret == 8) {
+		ret = sscanf(buf, "curve %d %d %d %d %d %d %d %d %d",
+			&index, &val, &val1, &val2, &val3, &val4, &val5, &val6, &val7);
+		if (ret == 9) {
 			switch (bconf->method) {
 			case BL_CTRL_PWM:
 				bl_pwm = bconf->bl_pwm;
@@ -3224,6 +3227,7 @@ static ssize_t bl_debug_pwm_store(struct device *dev,
 				bl_pwm->pwm_mapping[4] = val4;
 				bl_pwm->pwm_mapping[5] = val5;
 				bl_pwm->pwm_mapping[6] = val6;
+				bl_pwm->pwm_mapping[7] = val7;
 			}
 		} else {
 			BLERR("invalid parameters\n");
