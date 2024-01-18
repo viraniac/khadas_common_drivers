@@ -260,7 +260,8 @@ static long frc_ioctl(struct file *file,
 //			} else if (!devp->frc_sts.auto_ctrl) {
 			if (!devp->frc_sts.auto_ctrl) {
 				devp->frc_sts.auto_ctrl = true;
-				devp->frc_sts.re_config = true;
+//				devp->frc_sts.re_config = true;
+				frc_change_to_state(FRC_STATE_ENABLE);
 				pr_frc(1, "set memc_autoctrl-2:%d\n", data);
 			}
 		} else {
