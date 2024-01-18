@@ -1013,7 +1013,11 @@ int frc_rdma_init(void)
 
 	if (frc_rdma->buf_alloced) {
 		fw_data->frc_top_type.rdma_en = 0;  // alg init rdma off
-		frc_rdma->rdma_en = 1;              // drv rdma en
+		if (chip == ID_T3 || chip == ID_T5M)
+			frc_rdma->rdma_en = 0;              // drv rdma off
+		else if (chip == ID_T3X)
+			frc_rdma->rdma_en = 1;              // drv rdma en
+
 		if (is_rdma_enable())
 			pr_frc(0, "frc rdma ready.\n");
 		else
