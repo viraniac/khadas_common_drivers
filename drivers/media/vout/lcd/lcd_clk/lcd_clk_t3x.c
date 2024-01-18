@@ -227,7 +227,6 @@ static int _lcd_set_pll_by_cconf(struct aml_lcd_drv_s *pdrv, struct lcd_clk_conf
 
 	if (lcd_debug_print_flag & LCD_DBG_PR_ADV2)
 		LCDPR("[%d]: %s\n", pdrv->index, __func__);
-	cconf = get_lcd_clk_config(pdrv);
 	if (!cconf)
 		return 0;
 
@@ -291,7 +290,7 @@ set_pll_retry:
 	if (ret) {
 		if (cnt++ < PLL_RETRY_MAX)
 			goto set_pll_retry;
-		LCDERR("[%d]: pll lock failed\n", pdrv->index);
+		LCDERR("[%d]: pll%d lock failed\n", pdrv->index, cconf->pll_id);
 	} else {
 		udelay(100);
 		lcd_ana_setb(reg_ctrl2, 1, 5, 1);
