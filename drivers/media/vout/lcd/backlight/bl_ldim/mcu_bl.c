@@ -550,3 +550,18 @@ int ldim_dev_blmcu_remove(struct aml_ldim_driver_s *ldim_drv)
 
 	return 0;
 }
+
+int ldim_set_pdim(unsigned int pdim)
+{
+	if (!bl_mcu) {
+		LDIMERR("%s: bl_mcu is null\n", __func__);
+		return -1;
+	}
+
+	bl_mcu->pdim = pdim;
+
+	if (ldim_debug_print)
+		LDIMPR("%s: pdim %d\n", __func__, pdim);
+
+	return 0;
+}

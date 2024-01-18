@@ -19,6 +19,7 @@
 /*#define LDIM_DEBUG_INFO*/
 #define LDIMPR(fmt, args...)     pr_info("ldim: " fmt "", ## args)
 #define LDIMERR(fmt, args...)    pr_err("ldim: error: " fmt "", ## args)
+#define LDIMWARN(fmt, args...)    pr_warn("ldim: warning: " fmt "", ## args)
 
 #define LD_DATA_DEPTH   12
 #define LD_DATA_MIN     10
@@ -177,6 +178,7 @@ struct aml_ldim_driver_s {
 	unsigned int pwm_vs_irq_cnt;
 	unsigned long long arithmetic_time[10];
 	unsigned long long xfer_time[10];
+	unsigned int level_curve[5][2];
 
 	struct ldim_drv_data_s *data;
 	struct ldim_config_s *conf;
@@ -208,6 +210,7 @@ int aml_ldim_get_config_dts(struct device_node *child);
 int aml_ldim_get_config_unifykey(unsigned char *buf);
 int aml_ldim_probe(struct platform_device *pdev);
 int aml_ldim_remove(void);
+int ldim_set_pdim(unsigned int pdim);
 
 #endif
 
