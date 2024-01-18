@@ -1656,6 +1656,41 @@
 	};
 };
 
+&CPU0 {
+	operating-points-v2 = <&a55_single_opp_table0>,
+				<&a55_single_opp_table1>,
+				<&a55_single_opp_table2>,
+				<&a55_single_opp_table3>;
+};
+
+&CPU1 {
+	operating-points-v2 = <&a55_single_opp_table0>,
+				<&a55_single_opp_table1>,
+				<&a55_single_opp_table2>,
+				<&a55_single_opp_table3>;
+};
+
+&CPU2 {
+	operating-points-v2 = <&a55_single_opp_table0>,
+				<&a55_single_opp_table1>,
+				<&a55_single_opp_table2>,
+				<&a55_single_opp_table3>;
+};
+
+&CPU3 {
+	operating-points-v2 = <&a76_single_opp_table0>,
+				<&a76_single_opp_table1>,
+				<&a76_single_opp_table2>,
+				<&a76_single_opp_table3>;
+};
+
+&CPU4 {
+	operating-points-v2 = <&a76_single_opp_table0>,
+				<&a76_single_opp_table1>,
+				<&a76_single_opp_table2>,
+				<&a76_single_opp_table3>;
+};
+
 &csiphy2 {
 	port {
 		csiphy2_ep: endpoint {
