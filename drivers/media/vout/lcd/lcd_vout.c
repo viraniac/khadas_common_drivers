@@ -1809,6 +1809,15 @@ static void lcd_config_default(struct aml_lcd_drv_s *pdrv)
 	pdrv->init_flag = 0;
 
 	init_state = lcd_get_venc_init_config(pdrv);
+	pdrv->config.timing.base_timing.h_active = pdrv->config.timing.act_timing.h_active;
+	pdrv->config.timing.dft_timing.h_active = pdrv->config.timing.act_timing.h_active;
+	pdrv->config.timing.base_timing.v_active = pdrv->config.timing.act_timing.v_active;
+	pdrv->config.timing.dft_timing.v_active = pdrv->config.timing.act_timing.v_active;
+	pdrv->config.timing.base_timing.h_period = pdrv->config.timing.act_timing.h_period;
+	pdrv->config.timing.dft_timing.h_period = pdrv->config.timing.act_timing.h_period;
+	pdrv->config.timing.base_timing.v_period = pdrv->config.timing.act_timing.v_period;
+	pdrv->config.timing.dft_timing.v_period = pdrv->config.timing.act_timing.v_period;
+
 	if (init_state) {
 		switch (pdrv->boot_ctrl->init_level) {
 		case LCD_INIT_LEVEL_NORMAL:
@@ -1863,6 +1872,8 @@ static void lcd_bootup_config_init(struct aml_lcd_drv_s *pdrv)
 	pdrv->config.basic.lcd_type = pdrv->boot_ctrl->lcd_type;
 	pdrv->config.timing.clk_mode = pdrv->boot_ctrl->clk_mode;
 	pdrv->config.timing.dft_timing.frame_rate = pdrv->boot_ctrl->base_frame_rate;
+	pdrv->config.timing.dft_timing.frame_rate_min = pdrv->boot_ctrl->base_frame_rate;
+	pdrv->config.timing.dft_timing.frame_rate_max = pdrv->boot_ctrl->base_frame_rate;
 	pdrv->config.timing.base_timing.frame_rate = pdrv->boot_ctrl->base_frame_rate;
 	pdrv->config.timing.act_timing.frame_rate = pdrv->boot_ctrl->base_frame_rate;
 	switch (pdrv->boot_ctrl->ppc) {
