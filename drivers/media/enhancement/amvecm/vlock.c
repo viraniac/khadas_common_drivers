@@ -2181,17 +2181,15 @@ void vlock_status_init(void)
 {
 	struct stvlock_sig_sts *pvlock;
 	u32 i, max_enc_num;
-	u32 offset_vlck;
 	u32 offset_enc;
-	struct vinfo_s *vinfo;
 
-	if (chip_type_id == chip_s5)
+	if (chip_type_id == chip_s5 ||
+		chip_cls_id == AD_CHIP)
 		return;
 
 	/*config vlock mode*/
 	/*todo:txlx & g9tv support auto pll,*/
 	/*but support not good,need vlsi support optimize*/
-	vinfo = get_current_vinfo();
 	vlock_dev_param_init();
 	pvlock = vlock_tab[VLOCK_ENC0];
 	if (pvlock->dtdata->vlk_chip == vlock_chip_t7)
@@ -2212,7 +2210,6 @@ void vlock_status_init(void)
 			pvlock->offset_encl = 0x800;
 			pvlock->offset_vlck = 0x80;
 		}
-		offset_vlck = pvlock->offset_vlck;
 		offset_enc = pvlock->offset_encl;
 		/*initial pll register address*/
 		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
