@@ -742,11 +742,11 @@ extern struct meson_plane_supported_formats osd_formats_t5m;
 extern struct meson_plane_supported_formats osd_formats_s1a;
 extern struct meson_plane_supported_formats video_formats;
 
-#ifdef CONFIG_DEBUG_FS
 extern u32 overwrite_reg[256];
 extern u32 overwrite_val[256];
 extern int overwrite_enable;
 extern int reg_num;
+#ifdef CONFIG_DEBUG_FS
 void meson_crtc_debugfs_late_init(struct drm_crtc *crtc);
 #endif
 

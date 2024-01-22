@@ -28,6 +28,10 @@ static const char crtc1_group_name[] = "crtc1";
 static const char crtc2_group_name[] = "crtc2";
 int crtc_index[MESON_MAX_POSTBLEND] = {0, 1, 2};
 u32 pages;
+u32 overwrite_reg[256];
+u32 overwrite_val[256];
+int overwrite_enable;
+int reg_num;
 //EXPORT_SYMBOL_GPL(vpu_group_name);
 
 static u8 *am_meson_drm_vmap(ulong addr, u32 size, bool *bflg)
