@@ -610,6 +610,12 @@ struct video_layer_s {
 	u32 frc_v_size_pre;
 };
 
+struct video_save_s {
+	struct vframe_s *save_vf;
+	struct vframe_s *toggle_vf;
+	bool save_vf_en;
+};
+
 enum {
 	ONLY_CORE0,
 	ONLY_CORE1,

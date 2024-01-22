@@ -176,6 +176,7 @@ static struct device *amvideo_poll_dev;
 static const char video_dev_id[] = "amvideo-dev";
 static struct amvideo_device_data_s amvideo_meson_dev;
 static struct dentry *video_debugfs_root;
+static struct video_save_s video_save;
 
 static int video_vsync = -ENXIO;
 static int video_vsync_viu2 = -ENXIO;
@@ -1050,6 +1051,9 @@ static void video_vf_unreg_provider(void)
 	videopeek = 0;
 	nopostvideostart = false;
 	hold_property_changed = 0;
+	video_save.save_vf_en = false;
+	video_save.save_vf = NULL;
+	video_save.toggle_vf = NULL;
 
 	atomic_inc(&video_unreg_flag);
 	while (atomic_read(&video_inirq_flag) > 0)
@@ -3709,6 +3713,43 @@ static struct vframe_s *vsync_toggle_frame(struct vframe_s *vf, int line)
 	return cur_dispbuf[0];
 }
 
+static struct vframe_s *save_toggle_frame(struct vframe_s *vf)
+{
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
+	if (get_top1_onoff()) {
+		if (video_save.save_vf_en && video_save.save_vf) {
+			/* need toggle */
+			video_save.toggle_vf = video_save.save_vf;
+			video_save.save_vf = vf;
+			vf = video_save.toggle_vf;
+		} else {
+			/* save frame, not toggle */
+			video_save.save_vf = vf;
+			video_save.toggle_vf = NULL;
+			vf = NULL;
+			video_save.save_vf_en = true;
+		}
+		if (debug_flag & DEBUG_FLAG_PRINT_FRAME_DETAIL)
+			pr_info("%s: save_vf_en=%d, vf=%p, save_vf=%p, toggle_vf=%p\n",
+				__func__,
+				video_save.save_vf_en, vf,
+				video_save.save_vf ?
+				video_save.save_vf : NULL,
+				video_save.toggle_vf ?
+				video_save.toggle_vf : NULL);
+	} else {
+		video_save.toggle_vf = vf;
+		if (video_save.save_vf) {
+			if (!amvideo_vf_put(video_save.save_vf))
+				video_save.save_vf = NULL;
+		}
+		video_save.save_vf_en = false;
+	}
+	vf = video_save.toggle_vf;
+#endif
+	return vf;
+}
+
 struct vframe_s *amvideo_toggle_frame(s32 *vd_path_id)
 {
 	struct vframe_s *path0_new_frame = NULL;
@@ -4112,6 +4153,7 @@ struct vframe_s *amvideo_toggle_frame(s32 *vd_path_id)
 							       __LINE__);
 						break;
 					}
+					vf = save_toggle_frame(vf);
 					path0_new_frame = vsync_toggle_frame(vf, __LINE__);
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 					if (vd_path_id[0] == VFM_PATH_AMVIDEO ||

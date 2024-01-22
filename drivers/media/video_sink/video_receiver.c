@@ -213,6 +213,9 @@ static void common_vf_unreg_provider(struct video_recv_s *ins)
 	ins->switch_vf = false;
 	ins->last_switch_state = false;
 	ins->frame_count = 0;
+	ins->save_vf_en = false;
+	ins->save_vf = NULL;
+	ins->toggle_vf = NULL;
 	if (!strcmp(ins->recv_name, "video_render.0"))
 		clear_vsync_2to1_info();
 
@@ -714,14 +717,45 @@ static struct vframe_s *recv_common_dequeue_frame(struct video_recv_s *ins,
 			}
 #endif
 			vf = common_vf_get(ins);
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
+			if (get_top1_onoff()) {
+				if (ins->save_vf_en && ins->save_vf) {
+					/* need toggle */
+					ins->toggle_vf = ins->save_vf;
+					ins->save_vf = vf;
+					vf = ins->toggle_vf;
+				} else {
+					/* save frame, not toggle */
+					ins->save_vf = vf;
+					ins->toggle_vf = NULL;
+					vf = NULL;
+					ins->save_vf_en = true;
+				}
+				if (debug_flag & DEBUG_FLAG_PRINT_FRAME_DETAIL) {
+					pr_info("%s: save_vf_num=%d, vf=%p, save_vf=%p, toggle_vf=%p\n",
+						__func__,
+						ins->save_vf_en, vf,
+						ins->save_vf ? ins->save_vf : NULL,
+						ins->toggle_vf ? ins->toggle_vf : NULL);
+				}
+			} else {
+				ins->toggle_vf = vf;
+				if (ins->save_vf) {
+					kfifo_put(&ins->put_q, ins->save_vf);
+					ins->save_vf = NULL;
+				}
+				ins->save_vf_en = false;
+			}
+			vf = ins->toggle_vf;
+#endif
 			if (vf) {
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM
 				amvecm_process(path_id, ins, vf);
 #endif
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 				/*top1 enable, need check one more frame*/
-				if (is_amdv_enable() && get_top1_onoff()) {/*todo*/
-					vf_top1 = common_vf_peek(ins);
+				if (get_top1_onoff()) {/*todo*/
+					vf_top1 = ins->save_vf;//common_vf_peek(ins);
 					/*wait next new Fn+1 for top1, proc top2 Fn + top1 Fn+1*/
 					/*if no new frame, proc top2 Fn + repeat Top1 Fn*/
 					if (!vf_top1 &&
