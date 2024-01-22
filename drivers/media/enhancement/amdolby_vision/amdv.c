@@ -568,8 +568,10 @@ static bool mel_mode;
 static bool osd_update;
 static bool enable_fel;
 static bool enable_mel;
-u32 tv_backlight;
-bool tv_backlight_changed;
+struct backlight_info tv_backlight[MAX_BL_COUNT];
+u32 bl_rd_id;
+u32 bl_wr_id;
+u32 last_backlight;
 bool tv_backlight_force_update;
 static int force_disable_dv_backlight;
 static bool dv_control_backlight_status;
@@ -579,16 +581,18 @@ static bool use_12b_bl = true;/*12bit backlight interface*/
 static bool enable_vpu_probe;
 int use_target_lum_from_cfg = true;
 
-u32 bl_delay_cnt;
 static int set_backlight_delay_vsync = 1;
 module_param(set_backlight_delay_vsync, int, 0664);
 MODULE_PARM_DESC(set_backlight_delay_vsync,    "\n set_backlight_delay_vsync\n");
 
-u32 enable_update_gdbs_delay;/*update delay according fps*/
+u32 enable_update_gdbs_delay = 1;/*update delay according fps*/
 module_param(enable_update_gdbs_delay, int, 0664);
 MODULE_PARM_DESC(enable_update_gdbs_delay,    "\n enable_update_gdbs_delay\n");
 
 u32 final_backlight_delay_vsync = 1;
+bool enable_frc_delay = true;
+
+#define MAX_DELAY 0xFFFFFFFF
 
 int debug_cp_res;
 s16 brightness_off[8][2] = {
@@ -1900,6 +1904,13 @@ void reset_dv_param(void)
 	force_bypass_from_prebld_to_vadj1 = 0;
 	setting_update_count = 0;
 	crc_count = 0;
+
+	bl_rd_id = 0;
+	bl_wr_id = 0;
+	last_backlight = 0;
+	for (i = 0; i < MAX_BL_COUNT; i++)
+		tv_backlight[i].set_flag = true;
+
 	if (multi_dv_mode) {
 		for (i = 0; i < NUM_INST; i++) {
 			dv_inst[i].amdv_src_format = 0;
@@ -3306,7 +3317,7 @@ void update_pwm_control(void)
 			if ((debug_dolby & 1) || (debug_dolby & 0x100))
 				pr_dv_dbg("%s: %s, src %d, gd_en %d, bl %d\n",
 				     __func__, get_cur_pic_mode_name(),
-				     top2_v_info.amdv_src_format, gd_en, tv_backlight);
+				     top2_v_info.amdv_src_format, gd_en, last_backlight);
 		} else {
 			if (pq_config_fake &&
 			    ((struct pq_config *)pq_config_fake)
@@ -3318,7 +3329,7 @@ void update_pwm_control(void)
 			if ((debug_dolby & 1) || (debug_dolby & 0x100))
 				pr_dv_dbg("%s: %s, src %d, gd_en %d, bl %d\n",
 				     __func__, get_cur_pic_mode_name(),
-				     amdv_src_format, gd_en, tv_backlight);
+				     amdv_src_format, gd_en, last_backlight);
 		}
 
 #ifdef CONFIG_AMLOGIC_LCD
@@ -7334,6 +7345,7 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 	bool vf_changed = true;
 	char *dvel_provider = NULL;
 	struct ambient_cfg_s *p_ambient = NULL;
+	int frc_latency = 0;
 
 	memset(&req, 0, (sizeof(struct provider_aux_req_s)));
 	memset(&el_req, 0, (sizeof(struct provider_aux_req_s)));
@@ -7359,22 +7371,50 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 	}
 
 	if (is_aml_tvmode()) {
-		if (vf && enable_update_gdbs_delay) {
-			/*duration:800(120fps) 801(119.88fps) 960(100fps) 1600(60fps) 1920(50fps)*/
-			/*3200(30fps) 3203(29.97) 3840(25fps) 4000(24fps) 4004(23.976fps)*/
-			if (vf->duration == 4000 && vf->source_type == VFRAME_SOURCE_TYPE_OTHERS)
-				final_backlight_delay_vsync = 2;
-			else if (vf->duration == 1920 && w < 3840 &&
-				vf->source_type == VFRAME_SOURCE_TYPE_OTHERS)
-				final_backlight_delay_vsync = 2;
-			else
-				final_backlight_delay_vsync = 1;
-			if (debug_dolby & 0x1)
-				pr_dv_dbg("duration %d, delay %d\n", vf->duration,
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+		frc_latency = enable_frc_delay ? frc_get_video_latency_for_gd1() : 0;
+#endif
+		if (frc_latency == -2) {/*frc unstable, not update backlight*/
+			final_backlight_delay_vsync = MAX_DELAY;
+		} else if (frc_latency > 0) {
+			final_backlight_delay_vsync = frc_latency + 1;
+			if (vf && enable_update_gdbs_delay) {
+				/*800(120fps) 801(119.88fps) 960(100fps) 1600(60fps) 1920(50fps)*/
+				/*3200(30fps) 3203(29.97) 3840(25fps) 4000(24fps) 4004(23.976fps)*/
+				if ((vf->duration == 1600 || vf->duration == 1599) &&
+					vf->source_type == VFRAME_SOURCE_TYPE_OTHERS)/*ott 60fps*/
+					final_backlight_delay_vsync += 1;
+				else if (vf->duration == 1920 &&
+					vf->source_type == VFRAME_SOURCE_TYPE_OTHERS)/*ott 50fps*/
+					final_backlight_delay_vsync += 1;
+				else if (vf->duration == 1600)/*hdmi 60fps*/
+					final_backlight_delay_vsync += 1;
+				if (debug_dolby & 0x1)
+					pr_dv_dbg("duration %d, delay %d\n", vf->duration,
 					final_backlight_delay_vsync);
-		} else {
-			final_backlight_delay_vsync = set_backlight_delay_vsync;
+			}
+		} else {/*no frc*/
+			if (vf && enable_update_gdbs_delay) {
+				/*800(120fps) 801(119.88fps) 960(100fps) 1600(60fps) 1920(50fps)*/
+				/*3200(30fps) 3203(29.97) 3840(25fps) 4000(24fps) 4004(23.976fps)*/
+				if (vf->duration == 4000 &&
+					vf->source_type == VFRAME_SOURCE_TYPE_OTHERS)
+					final_backlight_delay_vsync = 2;
+				else if (vf->duration == 1920 && w < 3840 &&
+					vf->source_type == VFRAME_SOURCE_TYPE_OTHERS)
+					final_backlight_delay_vsync = 2;
+				else
+					final_backlight_delay_vsync = 1;
+				if (debug_dolby & 0x1)
+					pr_dv_dbg("duration %d, delay %d\n", vf->duration,
+						final_backlight_delay_vsync);
+			} else {
+				final_backlight_delay_vsync = set_backlight_delay_vsync;
+			}
 		}
+		if (debug_dolby & 0x1)
+			pr_dv_dbg("frc_latency %d, final delay %d\n", frc_latency,
+				final_backlight_delay_vsync);
 	}
 
 	if (is_aml_tvmode() && vf &&
@@ -8401,6 +8441,9 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 						 flag,
 						 total_md_size);
 				}
+				if (debug_dolby & 1)
+					pr_dv_dbg("ko get backlight %d\n",
+					tv_dovi_setting->backlight);
 				dump_tv_setting(tv_dovi_setting,
 					frame_count, debug_dolby);
 				mel_mode = mel_flag;
@@ -12102,21 +12145,6 @@ int amdolby_vision_process_v1(struct vframe_s *vf,
 					pr_dv_dbg("first frame reset %d\n",
 						     reset_flag);
 				enable_amdv(1);
-				if (tv_dovi_setting->backlight !=
-				    tv_backlight ||
-				    (amdv_setting_video_flag &&
-				    amdv_on_count == 0) ||
-				    tv_backlight_force_update) {
-					pr_dv_dbg("backlight %d -> %d\n",
-						tv_backlight,
-						tv_dovi_setting->backlight);
-					tv_backlight =
-						tv_dovi_setting->backlight;
-					tv_backlight_changed = true;
-					bl_delay_cnt = 0;
-					tv_backlight_force_update = false;
-				}
-
 				tv_dovi_setting_change_flag = false;
 				core1_disp_hsize = h_size;
 				core1_disp_vsize = v_size;
@@ -13514,22 +13542,62 @@ void amdv_update_backlight(void)
 {
 #ifdef CONFIG_AMLOGIC_LCD
 	u32 new_bl = 0;
+	u32 cur_bl;
+	u32 i;
 
-	if (is_aml_tvmode()) {
-		if (!force_disable_dv_backlight) {
-			bl_delay_cnt++;
-			if (debug_dolby & 1)
-				pr_dv_dbg("bl_delay_cnt %d\n", bl_delay_cnt);
-			if (tv_backlight_changed &&
-			    final_backlight_delay_vsync == bl_delay_cnt) {
-				new_bl = use_12b_bl ? tv_backlight << 4 :
-					tv_backlight;
+	if (is_aml_tvmode() && !force_disable_dv_backlight && dolby_vision_on) {
+		if (tv_hw5_setting && is_aml_hw5())
+			tv_backlight[bl_wr_id % MAX_BL_COUNT].value =
+			tv_hw5_setting->backlight;
+		else if (tv_dovi_setting)
+			tv_backlight[bl_wr_id % MAX_BL_COUNT].value =
+			tv_dovi_setting->backlight;
+
+		tv_backlight[bl_wr_id % MAX_BL_COUNT].set_flag = true;
+		bl_wr_id = (bl_wr_id + 1) % MAX_BL_COUNT;
+
+		bl_rd_id = (bl_wr_id + MAX_BL_COUNT - final_backlight_delay_vsync) % MAX_BL_COUNT;
+		if (debug_dolby & 2) {
+			for (i = 0; i < MAX_BL_COUNT; i += 10)
+				pr_info("%03d %03d %03d %03d %03d %03d %03d %03d %03d %03d\n",
+						tv_backlight[i].value,
+						tv_backlight[i + 1].value,
+						tv_backlight[i + 2].value,
+						tv_backlight[i + 3].value,
+						tv_backlight[i + 4].value,
+						tv_backlight[i + 5].value,
+						tv_backlight[i + 6].value,
+						tv_backlight[i + 7].value,
+						tv_backlight[i + 8].value,
+						tv_backlight[i + 9].value);
+		}
+
+		if (debug_dolby & 1) {
+			if (bl_rd_id < MAX_BL_COUNT)
+				pr_dv_dbg("backlight info:wr %d,rd %d,flag %d,cur %d,last %d\n",
+				bl_wr_id, bl_rd_id,
+				tv_backlight[bl_rd_id].set_flag,
+				tv_backlight[bl_rd_id].value,
+				last_backlight);
+			else
+				pr_dv_dbg("backlight info:wr %d,rd %d\n",
+				bl_wr_id, bl_rd_id);
+		}
+
+		if (bl_rd_id < MAX_BL_COUNT && tv_backlight[bl_rd_id].set_flag &&
+			final_backlight_delay_vsync < MAX_BL_COUNT) {
+			tv_backlight[bl_rd_id].set_flag = false;
+			cur_bl = tv_backlight[bl_rd_id].value;
+
+			if (cur_bl != last_backlight) {
+				new_bl = use_12b_bl ? cur_bl << 4 :
+					cur_bl;
 				if (debug_dolby & 1)
-					pr_dv_dbg("dv set backlight %d %d\n", new_bl, tv_backlight);
+					pr_dv_dbg("dv set backlight %d %d\n", cur_bl, new_bl);
 				aml_lcd_atomic_notifier_call_chain
 					(LCD_EVENT_BACKLIGHT_GD_DIM,
 					 &new_bl);
-				tv_backlight_changed = false;
+				last_backlight = cur_bl;
 			}
 		}
 	}

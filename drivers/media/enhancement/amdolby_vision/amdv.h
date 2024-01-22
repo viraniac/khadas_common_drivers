@@ -685,6 +685,12 @@ struct top1_stats_info {
 	bool enable;
 };
 
+struct backlight_info {
+	u32 value;
+	bool set_flag;
+};
+
+#define MAX_BL_COUNT 30
 #define PREFIX_SEI_NUT_NAL 39
 #define SUFFIX_SEI_NUT_NAL 40
 #define SEI_ITU_T_T35 4
@@ -810,7 +816,7 @@ extern u32 dolby_vision_ll_policy;
 extern u32 last_dolby_vision_ll_policy;
 extern bool amdv_setting_video_flag;
 extern u32 bl_delay_cnt;
-extern u32 tv_backlight;
+extern struct backlight_info tv_backlight[MAX_BL_COUNT];
 extern bool tv_backlight_changed;
 extern bool tv_backlight_force_update;
 extern u32 crc_count;
@@ -1320,4 +1326,7 @@ bool get_top1_onoff(void);
 void fixed_buf_config(void);
 bool is_dv_unique_drm(struct vframe_s *vf);
 void dump_top1_frame(int force_w, int force_h);
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+int frc_get_video_latency_for_gd1(void);
+#endif
 #endif

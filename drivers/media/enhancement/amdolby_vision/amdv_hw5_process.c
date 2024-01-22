@@ -2887,6 +2887,8 @@ int amdv_hw5_control_path(struct vframe_s *vf, struct vd_proc_info_t *vd_proc_in
 				 tv_hw5_setting->top2.in_comp_size,
 				 tv_hw5_setting->force_num_slices);
 		}
+		if (debug_dolby & 1)
+			pr_dv_dbg("ko get backlight %d\n", tv_hw5_setting->backlight);
 		dump_tv_setting(tv_hw5_setting,
 			v_inst_info->frame_count, debug_dolby);
 		ret = 0; /* setting updated */
@@ -3324,24 +3326,8 @@ int amdolby_vision_process_hw5(struct vframe_s *vf_top1,
 						vf_top1, vf_top1->src_fmt.pr_done);
 				vf_top1->src_fmt.pr_done = true;
 			}
-			if (tv_hw5_setting) {
-				if (tv_hw5_setting->backlight !=
-				    tv_backlight ||
-				    (top2_info.amdv_setting_video_flag &&
-				    top2_info.run_mode_count == 0) ||
-				    tv_backlight_force_update) {
-					if (debug_dolby & 0x100)
-						pr_dv_dbg("backlight %d -> %d\n",
-							tv_backlight,
-							tv_hw5_setting->backlight);
-					tv_backlight =
-						tv_hw5_setting->backlight;
-					tv_backlight_changed = true;
-					bl_delay_cnt = 0;
-					tv_backlight_force_update = false;
-				}
+			if (tv_hw5_setting)
 				update_amdv_status(tv_hw5_setting->top2.src_format);
-			}
 			top2_v_info.tv_dovi_setting_change_flag = false;
 			if (tv_hw5_setting && last_tv_hw5_setting)
 				memcpy(last_tv_hw5_setting, tv_hw5_setting,
