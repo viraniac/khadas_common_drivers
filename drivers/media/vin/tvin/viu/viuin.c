@@ -732,12 +732,6 @@ static int viuin_open(struct tvin_frontend_s *fe, enum tvin_port_e port,
 	} else if (is_meson_t3x_cpu()) {
 		wr_viu(VPU_VIU2VDIN0_BUF_SIZE_T3X,
 			(devp->parm.v_active << 16) | (devp->parm.h_active << 0));
-		wr_viu(VPP_POST_HOLD_CTRL_T3X,	(1 << 31)    |
-						(1 << 30)    |
-						((devp->parm.h_active - 1) << 16) |
-						(4 << 8)     |
-						(1 << 4)     |
-						(2 << 0));
 	} else
 #endif
 	{
