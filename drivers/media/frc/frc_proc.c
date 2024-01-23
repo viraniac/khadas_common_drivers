@@ -967,24 +967,11 @@ void frc_input_vframe_handle(struct frc_dev_s *devp, struct vframe_s *vf,
 				devp->in_sts.st_flag & (~FRC_FLAG_PIC_MODE);
 		}
 
-		if (vf->height < FRC_V_LIMIT || vf->width < FRC_H_LIMIT) {
-			if ((devp->in_sts.st_flag & FRC_FLAG_LIMIT_SIZE) !=
-						FRC_FLAG_LIMIT_SIZE) {
-				devp->in_sts.st_flag =
-				devp->in_sts.st_flag | FRC_FLAG_LIMIT_SIZE;
-				pr_frc(1, "video = limit_size");
-			}
-			no_input = true;
-		} else {
-			devp->in_sts.st_flag =
-				devp->in_sts.st_flag & (~FRC_FLAG_LIMIT_SIZE);
-		}
-
 		if (!cur_video_sts) {
 			pr_frc(1, "vpp_frame_par_s is NULL");
 			no_input = true;
-		} else if (cur_video_sts->frc_h_size == 0 ||
-				cur_video_sts->frc_v_size == 0) {
+		} else if (cur_video_sts->frc_h_size < FRC_H_LIMIT ||
+				cur_video_sts->frc_v_size < FRC_V_LIMIT) {
 			if ((devp->in_sts.st_flag & FRC_FLAG_INSIZE_ERR) !=
 						FRC_FLAG_INSIZE_ERR) {
 				devp->in_sts.st_flag =
@@ -1108,8 +1095,10 @@ void frc_input_vframe_handle(struct frc_dev_s *devp, struct vframe_s *vf,
 	if (cur_in_sts.vf_sts) {
 		devp->frc_sts.vs_data_cnt++;
 		if (devp->frc_sts.vs_data_cnt < 50)
-			pr_frc(2, "vpp vsync (data) idx : %d\n",
-				devp->frc_sts.vs_data_cnt);
+			pr_frc(2, "vpp vsync (data) idx =%d, 0x1a1c =0x%x, 0x3f01 =0x%x\n",
+				devp->frc_sts.vs_data_cnt,
+				vpu_reg_read(devp->vpu_byp_frc_reg_addr),
+				READ_FRC_REG(0x3f01));
 	}
 	frc_update_in_sts(devp, &cur_in_sts, vf, cur_video_sts);
 

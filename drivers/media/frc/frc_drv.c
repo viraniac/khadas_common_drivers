@@ -1133,8 +1133,16 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 	memset(&devp->force_size, 0, sizeof(struct frc_force_size_s));
 	devp->ud_dbg.res2_dbg_en = 3;  // t3x_revB test
 	devp->ud_dbg.align_dbg_en = 0;  // t3x_revB test
-	if (get_chip_type() == ID_T3X)
+	if (get_chip_type() == ID_T3X) {
 		devp->in_sts.boot_timestamp_en = 1;
+		devp->vpu_byp_frc_reg_addr = VIU_FRC_MISC;
+	} else if (get_chip_type() == ID_T5M) {
+		devp->vpu_byp_frc_reg_addr = VPU_FRC_TOP_CTRL;
+	} else if (get_chip_type() == ID_T3) {
+		devp->vpu_byp_frc_reg_addr = VPU_FRC_TOP_CTRL;
+	} else {
+		devp->vpu_byp_frc_reg_addr = VPU_FRC_TOP_CTRL;
+	}
 }
 
 void get_vout_info(struct frc_dev_s *frc_devp)

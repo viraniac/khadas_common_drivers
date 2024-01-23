@@ -250,19 +250,13 @@ void frc_init_config(struct frc_dev_s *devp)
 	chip = get_chip_type();
 	/*1: before postblend, 0: after postblend*/
 	if (devp->frc_hw_pos == FRC_POS_AFTER_POSTBLEND) {
-		if (chip == ID_T3X)
-			vpu_reg_write_bits(VIU_FRC_MISC, 0, 4, 1);
-		else
-			vpu_reg_write_bits(VPU_FRC_TOP_CTRL, 0, 4, 1);
+		vpu_reg_write_bits(devp->vpu_byp_frc_reg_addr, 0, 4, 1);
 		frc_config_reg_value(0x02, 0x02, &regdata_blkscale_012c);
 		WRITE_FRC_REG_BY_CPU(FRC_REG_BLK_SCALE, regdata_blkscale_012c);
 		frc_config_reg_value(0x800000, 0xF00000, &regdata_iplogo_en_0503);
 		WRITE_FRC_REG_BY_CPU(FRC_IPLOGO_EN, regdata_iplogo_en_0503);
 	} else {
-		if (chip == ID_T3X)
-			vpu_reg_write_bits(VIU_FRC_MISC, 1, 4, 1);
-		else
-			vpu_reg_write_bits(VPU_FRC_TOP_CTRL, 1, 4, 1);
+		vpu_reg_write_bits(devp->vpu_byp_frc_reg_addr, 1, 4, 1);
 		frc_config_reg_value(0x0, 0x02, &regdata_blkscale_012c);
 		WRITE_FRC_REG_BY_CPU(FRC_REG_BLK_SCALE, regdata_blkscale_012c);
 		frc_config_reg_value(0x0, 0xF00000, &regdata_iplogo_en_0503);

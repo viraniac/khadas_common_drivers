@@ -234,7 +234,7 @@ extern int frc_dbg_en;
 #define FRC_FLAG_PC_MODE		0x02
 #define FRC_FLAG_PIC_MODE		0x04
 #define FRC_FLAG_HIGH_BW		0x08
-#define FRC_FLAG_LIMIT_SIZE		0x10
+#define FRC_FLAG_LIMIT_SIZE		0x10 // out of use
 #define FRC_FLAG_VLOCK_ST		0x20
 #define FRC_FLAG_INSIZE_ERR		0x40
 #define FRC_FLAG_HIGH_FREQ		0x80
@@ -719,6 +719,8 @@ struct frc_dev_s {
 	u32 film_mode_det;/*0: hw detect, 1: sw detect*/
 	u32 auto_n2m;
 	u32 out_line;/*ctl mc out line for user*/
+
+	u32 vpu_byp_frc_reg_addr;
 
 	struct tasklet_struct input_tasklet;
 	struct tasklet_struct output_tasklet;
