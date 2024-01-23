@@ -61,7 +61,7 @@
 		logo_reserved:linux,meson-fb {
 			compatible = "amlogic, meson-fb";
 			alignment = <0x400000>;
-			reg = <0x3f800000 0x800000>;
+			reg = <0x3f800000 0x400000>;
 		};
 
 		lcd_tcon_reserved:linux,lcd_tcon {
