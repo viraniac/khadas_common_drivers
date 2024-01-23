@@ -109,7 +109,7 @@
 		super:super
 		{
 			pname = "super";
-			size = <0x0 0x6AE00000>;
+			size = <0x0 0x64000000>;
 			mask = <0x101>;
 		};
 		cache:cache
