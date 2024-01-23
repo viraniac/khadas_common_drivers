@@ -8,7 +8,7 @@
 #include "mesontxhd2.dtsi"
 #include "mesontxhd2_drm.dtsi"
 #include "meson_txhd2-panel.dtsi"
-#include "partition_mbox_ab.dtsi"
+#include "partition_mbox_normal_dynamic.dtsi"
 #include "mesontxhd2_audio.dtsi"
 / {
 	amlogic-dt-id = "txhd2_t950s_be301";

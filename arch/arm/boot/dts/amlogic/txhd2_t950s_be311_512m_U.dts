@@ -11,8 +11,8 @@
 #include "partition_mbox_normal_dynamic.dtsi"
 #include "mesontxhd2_audio.dtsi"
 / {
-	amlogic-dt-id = "txhd2_t950s_be311";
-	compatible = "txhd2_t950s_be311";
+	amlogic-dt-id = "txhd2_t950s_be311-512m";
+	compatible = "txhd2_t950s_be311-512m";
 	interrupt-parent = <&gic>;
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -33,7 +33,7 @@
 
 	memory@00000000 {
 		device_type = "memory";
-		linux,usable-memory = <0x00000000 0x40000000>;
+		linux,usable-memory = <0x00000000 0x20000000>;
 	};
 
 	/* Audio Related start */
@@ -233,7 +233,7 @@
 
 		dmc_reserved:linux,dmc_monitor {
 			compatible = "amlogic,dmc_monitor-reserved";
-			reg = <0x0 0x80000>;
+			reg = <0x0 0x0>;
 		};
 
 		debug_reserved:linux,iotrace {
@@ -277,7 +277,6 @@
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x3f000000>;
 		};
 
 		ion_fb_reserved:linux,ion-fb {
@@ -285,18 +284,17 @@
 			reusable;
 			size = <0x1000000>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x3f000000>;
 		};
 
 		logo_reserved:linux,meson-fb {
 			compatible = "amlogic, meson-fb";
 			alignment = <0x400000>;
-			reg = <0x3f800000 0x400000>;
+			reg = <0x1f800000 0x400000>;
 		};
 
 		lcd_tcon_reserved:linux,lcd_tcon {
 			compatible = "amlogic, lcd_tcon";
-			reg = <0x3f000000 0x00502840>;
+			reg = <0x1f000000 0x00800000>;
 			no-map;
 		};
 
@@ -327,10 +325,9 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			/* ion_codec_mm max can alloc size 80M */
-			size = <0xa800000>;
+			size = <0x7c00000>;
 			alignment = <0x400000>;
 			linux,contiguous-region;
-			alloc-ranges = <0x30000000 0x10000000>;
 		};
 
 		/* codec shared reserved */
@@ -741,7 +738,7 @@
 	dvb-demux {
 		compatible = "amlogic, dvb-demux";
 		dev_name = "dvb-demux";
-		status = "disabled";
+		status = "okay";
 
 		dmx = <&demux>;
 		key_endia = <1>;
