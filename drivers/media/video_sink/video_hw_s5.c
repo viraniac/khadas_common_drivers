@@ -11837,7 +11837,9 @@ void set_video_slice_policy(struct video_layer_s *layer,
 			vinfo->sync_duration_den > 60)) {
 			if (vf->duration < 1500 ||
 				vinfo->sync_duration_num / vinfo->sync_duration_den == 144 ||
-				vinfo->sync_duration_num / vinfo->sync_duration_den == 288) {
+				vinfo->sync_duration_num / vinfo->sync_duration_den == 288 ||
+				(vf->flag & VFRAME_FLAG_GAME_MODE) ||
+				(vf->flag & VFRAME_FLAG_PC_MODE)) {
 				/* input frame rate > 60(ref vf_rate_table) frc always disable */
 				/* output is 144hz or 288hz frc always disable */
 				slice_num = 2;
@@ -11845,6 +11847,11 @@ void set_video_slice_policy(struct video_layer_s *layer,
 				if (is_aisr_enable(layer)) {
 					layer->property_changed = true;
 					layer->aisr_mif_setting.aisr_enable = 0;
+				}
+				/* if vd1 mute internal by frc, unmute it */
+				if (get_video_mute_val(VPP_INTERNAL)) {
+					layer->slice_num = 2;
+					set_video_mute_info(VPP_INTERNAL, false);
 				}
 			} else {
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
@@ -11869,7 +11876,6 @@ void set_video_slice_policy(struct video_layer_s *layer,
 				}
 				if (frc_muted_frames == frc_mute_frames)
 					set_video_mute_info(VPP_INTERNAL, true);
-
 				if (frc_muted_frames == 0) {
 					/* mute slice_num = 2, unmute must 2 */
 					layer->slice_num = 2;
