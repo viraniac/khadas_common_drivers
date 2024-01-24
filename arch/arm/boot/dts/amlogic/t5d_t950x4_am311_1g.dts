@@ -260,7 +260,7 @@
 	aml_dtv_demod {
 		compatible = "amlogic, ddemod-t5d-revB";
 		dev_name = "aml_dtv_demod";
-		status = "okay";
+		status = "disable";
 		diseqc_name = "sgm_41286";
 		pinctrl-names="if_agc_pins", "diseqc_out", "rf_agc_pins";
 		pinctrl-0=<&dtvdemod_if_agc_pins>;
@@ -283,7 +283,7 @@
 			>;
 
 		spectrum = <1>;
-		cma_mem_size = <16>; // MB
+		cma_mem_size = <0>; // MB
 		//memory-region = <&demod_cma_reserved>;//<&demod_reserved>;
 	};
 
