@@ -143,7 +143,7 @@
 			reusable;
 			/* 420 mode:1280x720x2x4=8MB */
 			/* 444 mode:1280x720x3x4=12MB */
-			size = <0x800000>;
+			size = <0x000000>;
 			alignment = <0x400000>;
 			alloc-ranges = <0x0 0x3f400000>;
 		};
