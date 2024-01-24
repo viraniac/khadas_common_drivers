@@ -1262,6 +1262,14 @@
 			pinctrl_audio: pinctrl {
 				compatible = "amlogic, audio-pinctrl";
 			};
+
+			extn:extn {
+				compatible = "amlogic, t5m-snd-extn";
+				#sound-dai-cells = <0>;
+				interrupts = <GIC_SPI 42 IRQ_TYPE_EDGE_RISING>;
+				interrupt-names = "irq_frhdmirx";
+				status = "okay";
+			};
 		};/* end of audiobus*/
 
 		vpu: vpu {
@@ -1418,7 +1426,7 @@
 			#size-cells = <2>;
 			ranges = <0x0 0x0 0x0 0xfe333000 0x0 0x1000>;
 			earc: earc@0 {
-				compatible = "amlogic, t3-snd-earc";
+				compatible = "amlogic, t5m-snd-earc";
 				#sound-dai-cells = <0>;
 
 				status = "disabled";
