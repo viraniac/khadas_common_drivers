@@ -22,6 +22,7 @@
 #include <uapi/linux/sched/types.h>
 #include <linux/amlogic/cpu_version.h>
 #include <linux/amlogic/media/vfm/vframe_provider.h>
+#include <linux/amlogic/media/resource_mgr/resourcemanage.h>
 #ifdef CONFIG_AMLOGIC_MEDIA_VIDEO
 #include <linux/amlogic/media/video_sink/v4lvideo_ext.h>
 #endif
@@ -39,6 +40,7 @@
 #include "../../common/vfm/vfm.h"
 #include "videoqueue.h"
 #include "../videotunnel/videotunnel.h"
+#include "../common/video_pp_common.h"
 
 #define RECEIVER_NAME "videoqueue"
 #define videoqueue_DEVICE_NAME "videoqueue"
@@ -258,6 +260,39 @@ static void videoqueue_devlist_unlock(unsigned long flags)
 }
 
 static LIST_HEAD(videoqueue_devlist);
+
+void debug_vq_print_flag(const char *module, int debug_flags)
+{
+	if (debug_flags >= 0)
+		print_flag = debug_flags;
+	else
+		pr_info("vq print_flag is %d\n", print_flag);
+}
+EXPORT_SYMBOL(debug_vq_print_flag);
+
+void debug_vq_game_mode(const char *module, int debug_flags)
+{
+	if (!vq_dev) {
+		pr_info("videoqueue is not enabled\n");
+		return;
+	}
+	if (debug_flags >= 0)
+		vq_dev->game_mode = debug_flags;
+	else
+		pr_info("vq game mode is %d\n", vq_dev->game_mode);
+}
+EXPORT_SYMBOL(debug_vq_game_mode);
+
+void debug_vq_vframe_delay(const char *module, int debug_flags)
+{
+	if (!vq_dev) {
+		pr_info("videoqueue is not enabled\n");
+		return;
+	}
+	if (debug_flags)
+		pr_info("vq: vframe get delay is %lld\n", vq_dev->vframe_get_delay);
+}
+EXPORT_SYMBOL(debug_vq_vframe_delay);
 
 static void file_pop_display_q(struct video_queue_dev *dev,
 	struct file *disp_file)
@@ -2138,7 +2173,9 @@ static int video_queue_probe(struct platform_device *pdev)
 		pr_err("videoqueue: error %d while loading driver\n", ret);
 		goto error1;
 	}
-
+#ifdef CONFIG_AMLOGIC_MEDIA_RESMANAGE
+	resman_register_debug_callback("Display_VQ", set_vq_config);
+#endif
 	return 0;
 error1:
 	unregister_chrdev(VIDEOQUEUE_MAJOR, videoqueue_DEVICE_NAME);

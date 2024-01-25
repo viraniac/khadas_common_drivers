@@ -45,7 +45,9 @@
 #include <linux/ctype.h>
 #include <linux/amlogic/media/registers/cpu_version.h>
 #include <linux/amlogic/media/vfm/amlogic_fbc_hook_v1.h>
+#include <linux/amlogic/media/resource_mgr/resourcemanage.h>
 #include "../../gdc/inc/api/gdc_api.h"
+#include "../common/video_pp_common.h"
 #ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
 #include <linux/amlogic/media/di/di_interface.h>
 #include <linux/amlogic/media/di/di.h>
@@ -447,6 +449,31 @@ int ge2d_context_config_ex(struct ge2d_context_s *context,
 	return -1;
 }
 #endif
+
+void debug_vc_print_flag(const char *module, int debug_flags)
+{
+	print_flag = debug_flags;
+}
+EXPORT_SYMBOL(debug_vc_print_flag);
+
+void debug_vc_transform(const char *module, int debug_flags)
+{
+	transform = debug_flags;
+}
+EXPORT_SYMBOL(debug_vc_transform);
+
+void debug_vc_force_composer(const char *module, int debug_flags)
+{
+	force_composer = debug_flags;
+}
+EXPORT_SYMBOL(debug_vc_force_composer);
+
+void debug_vc_get_count(const char *module, int debug_flags)
+{
+	if (debug_flags)
+		pr_info("total_get_count: %d\n", total_get_count);
+}
+EXPORT_SYMBOL(debug_vc_get_count);
 
 static void *video_timeline_create(struct composer_dev *dev)
 {
@@ -4500,6 +4527,9 @@ static int video_composer_init(struct composer_dev *dev)
 	sprintf(render_layer, "video_render.%d", dev->video_render_index);
 	set_video_path_select(render_layer, dev->index);
 	dev_get_vinfo(dev);
+#ifdef CONFIG_AMLOGIC_MEDIA_RESMANAGE
+	resman_register_debug_callback("Display_VC", set_vc_config);
+#endif
 	return ret;
 }
 
