@@ -816,6 +816,7 @@ extern u32 crc_count;
 extern u32 setting_update_count;
 extern void *pq_config_fake;
 extern void *pq_config_dvp_fake;
+extern void *pq_config_dvp_fake_top1;
 extern struct dv_inst_s dv_inst[NUM_INST];
 extern int hdmi_path_id;
 extern u32 dv_cert_graphic_width;

@@ -547,6 +547,7 @@ struct tv_hw5_setting_s *tv_hw5_setting;
 struct tv_hw5_setting_s *last_tv_hw5_setting;
 struct tv_hw5_setting_s *invalid_hw5_setting;
 void *pq_config_dvp_fake;
+void *pq_config_dvp_fake_top1;
 
 bool pq_config_set_flag;
 
@@ -1295,6 +1296,8 @@ void amdv_update_pq_config(char *pq_config_buf)
 {
 	if (is_aml_hw5()) {
 		memcpy((struct pq_config_dvp *)pq_config_dvp_fake,
+			pq_config_buf, sizeof(struct pq_config_dvp));
+		memcpy((struct pq_config_dvp *)pq_config_dvp_fake_top1,
 			pq_config_buf, sizeof(struct pq_config_dvp));
 		pr_info("update_pq_config[%zu] %x %x %x %x\n",
 			sizeof(struct pq_config_dvp),
@@ -13170,8 +13173,8 @@ EXPORT_SYMBOL(amdolby_vision_process);
  */
 bool is_amdv_on(void)
 {
-	if (debug_dolby & 0x400000)
-		pr_dv_dbg("is_amdv_on %d %d\n", amdv_wait_on, dolby_vision_on);
+	//if (debug_dolby & 0x400000)
+		//pr_dv_dbg("is_amdv_on %d %d\n", amdv_wait_on, dolby_vision_on);
 	return dolby_vision_on ||
 		amdv_wait_on ||
 		amdv_on_in_uboot;
@@ -14120,10 +14123,20 @@ int register_dv_functions(const struct dolby_vision_func_s *func)
 				return -ENOMEM;
 			pq_config_dvp_fake =
 				(struct pq_config *)pq_cfg_dvp;
+			pq_cfg_dvp = vmalloc(sizeof(*pq_cfg_dvp));
+			if (!pq_cfg_dvp) {
+				vfree(pq_config_dvp_fake);
+				pq_config_dvp_fake = NULL;
+				return -ENOMEM;
+			}
+			pq_config_dvp_fake_top1 =
+				(struct pq_config *)pq_cfg_dvp;
 			tv_hw5_setting = vmalloc(sizeof(*tv_hw5_setting));
 			if (!tv_hw5_setting) {
 				vfree(pq_config_dvp_fake);
 				pq_config_dvp_fake = NULL;
+				vfree(pq_config_dvp_fake_top1);
+				pq_config_dvp_fake_top1 = NULL;
 				p_funcs_tv = NULL;
 				return -ENOMEM;
 			}
@@ -14131,6 +14144,8 @@ int register_dv_functions(const struct dolby_vision_func_s *func)
 			if (!invalid_hw5_setting) {
 				vfree(pq_config_dvp_fake);
 				pq_config_dvp_fake = NULL;
+				vfree(pq_config_dvp_fake_top1);
+				pq_config_dvp_fake_top1 = NULL;
 				vfree(tv_hw5_setting);
 				tv_hw5_setting = NULL;
 				p_funcs_tv = NULL;
@@ -14140,6 +14155,8 @@ int register_dv_functions(const struct dolby_vision_func_s *func)
 			if (!last_tv_hw5_setting) {
 				vfree(pq_config_dvp_fake);
 				pq_config_dvp_fake = NULL;
+				vfree(pq_config_dvp_fake_top1);
+				pq_config_dvp_fake_top1 = NULL;
 				vfree(tv_hw5_setting);
 				tv_hw5_setting = NULL;
 				vfree(invalid_hw5_setting);
@@ -14160,6 +14177,8 @@ int register_dv_functions(const struct dolby_vision_func_s *func)
 			if (!tv_input_info) {
 				vfree(pq_config_dvp_fake);
 				pq_config_dvp_fake = NULL;
+				vfree(pq_config_dvp_fake_top1);
+				pq_config_dvp_fake_top1 = NULL;
 				p_funcs_tv = NULL;
 				vfree(tv_hw5_setting);
 				tv_hw5_setting = NULL;
@@ -14189,6 +14208,8 @@ int register_dv_functions(const struct dolby_vision_func_s *func)
 			} else {
 				vfree(pq_config_dvp_fake);
 				pq_config_dvp_fake = NULL;
+				vfree(pq_config_dvp_fake_top1);
+				pq_config_dvp_fake_top1 = NULL;
 				p_funcs_tv = NULL;
 				vfree(tv_hw5_setting);
 				tv_hw5_setting = NULL;
@@ -14200,6 +14221,8 @@ int register_dv_functions(const struct dolby_vision_func_s *func)
 			} else {
 				vfree(pq_config_dvp_fake);
 				pq_config_dvp_fake = NULL;
+				vfree(pq_config_dvp_fake_top1);
+				pq_config_dvp_fake_top1 = NULL;
 				p_funcs_tv = NULL;
 				vfree(tv_hw5_setting->top1_ext);
 				vfree(tv_hw5_setting);
@@ -14323,6 +14346,10 @@ int unregister_dv_functions(void)
 		if (is_aml_hw5()) {
 			if (pq_config_dvp_fake) {
 				vfree(pq_config_dvp_fake);
+				pq_config_fake = NULL;
+			}
+			if (pq_config_dvp_fake_top1) {
+				vfree((pq_config_dvp_fake_top1));
 				pq_config_fake = NULL;
 			}
 			if (tv_hw5_setting) {
