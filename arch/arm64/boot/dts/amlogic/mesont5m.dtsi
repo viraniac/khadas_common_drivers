@@ -787,6 +787,7 @@
 				clock-names = "clk_uart";
 				xtal_tick_en = <2>;
 				fifosize = < 64 >;
+				support-sysrq = <1>;
 			};
 
 			periphs_pinctrl: pinctrl@4000 {
