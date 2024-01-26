@@ -3789,6 +3789,8 @@ static void force_switch_slice(void)
 			/* frc is ready off */
 			/* 4k120hz and frc_n2m_not_worked 2 slice */
 			slice_num = 2;
+			if (is_aisr_enable(&vd_layer[0]))
+				vd_layer[0].aisr_mif_setting.aisr_enable = 0;
 			vd_layer[0].slice_num = slice_num;
 			vd_layer[0].property_changed = true;
 			if (debug_common_flag & DEBUG_FLAG_COMMON_FRC)
@@ -3818,6 +3820,8 @@ bool force_switch_to_2slice(void)
 			pr_info("%s:slice_num = %d gslice_num = %d\n",
 				__func__, slice_num, vd_layer[0].slice_num);
 		if (slice_num != vd_layer[0].slice_num) {
+			if (is_aisr_enable(&vd_layer[0]))
+				vd_layer[0].aisr_mif_setting.aisr_enable = 0;
 			vd_layer[0].slice_num = slice_num;
 			vd_layer[0].property_changed = true;
 //			set_frc_bypass_byself(&vd_layer[0]);

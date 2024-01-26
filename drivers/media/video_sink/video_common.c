@@ -1375,7 +1375,7 @@ bool check_aisr_need_disable(struct video_layer_s *layer)
 	const struct vinfo_s *info = NULL;
 
 	//n2m :not check slice num
-	if ((frc_get_n2m_setting() != 2) &&
+	if ((frc_get_n2m_setting() != 2) ||
 		layer->slice_num >= 2) {
 		if (debug_common_flag & DEBUG_FLAG_COMMON_AISR)
 			pr_info("%s:n2m=%d slice_num(%d)\n",

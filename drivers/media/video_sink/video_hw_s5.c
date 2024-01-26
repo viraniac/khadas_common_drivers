@@ -11795,7 +11795,7 @@ void set_video_slice_policy(struct video_layer_s *layer,
 {
 	u32 src_width = 0;
 	u32 src_height = 0;
-	u32 slice_num = 1, pi_en = 0;
+	u32 slice_num = layer->slice_num, pi_en = 0;
 	u32 vd1s1_vd2_prebld_en = 0;
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
 	u32 n2m_setting = 0;
@@ -11859,12 +11859,8 @@ void set_video_slice_policy(struct video_layer_s *layer,
 
 				slice_num_save = layer->slice_num;
 				/* 4k120hz and frc_n2m_worked && aisr enable 1 slice */
-				/*frc_switch_flag : 1 or 3 force 1 slice valid*/
-				if (frc_switch_flag == 1 || frc_switch_flag == 3) {
-					slice_num = 1;
-					slice_stable = true;
-					/* unmute func not need update layer->slice_num */
-				} else {
+				/*frc_switch_flag : 0 or 2 force 2 slice valid*/
+				if (frc_switch_flag == 0 || frc_switch_flag == 2) {
 					slice_num = 2;
 					/* temp set for current frame */
 					if (is_aisr_enable(layer)) {
@@ -11994,6 +11990,8 @@ void adjust_video_slice_policy(u32 layer_id,
 	struct video_layer_s *layer = get_vd_layer(layer_id);
 
 	if (cur_dev->display_module != S5_DISPLAY_MODULE)
+		return;
+	if (video_is_meson_t3x_cpu())
 		return;
 	/* check input */
 	if (!no_compress &&
@@ -12477,6 +12475,17 @@ void update_frc_in_size_s5(struct video_layer_s *layer)
 	switch_flag = frc_ready_to_switch();
 	if (!layer || !layer->next_frame_par)
 		return;
+
+	if (layer->slice_num == 4)
+		layer->next_frame_par->frc_h_size =
+			SIZE_ALIG32(layer->next_frame_par->nnhf_input_w);
+	else if (layer->slice_num == 2)
+		layer->next_frame_par->frc_h_size =
+			SIZE_ALIG32(layer->next_frame_par->nnhf_input_w);
+	else
+		layer->next_frame_par->frc_h_size = layer->next_frame_par->nnhf_input_w;
+	layer->next_frame_par->frc_v_size = layer->next_frame_par->nnhf_input_h;
+
 	if (!layer->frc_h_size_pre || switch_flag == 1) {
 		;
 	} else if (layer->next_frame_par->nnhf_input_w !=
@@ -12501,15 +12510,6 @@ void update_frc_in_size_s5(struct video_layer_s *layer)
 			}
 		}
 	}
-	if (layer->slice_num == 4)
-		layer->next_frame_par->frc_h_size =
-			SIZE_ALIG32(layer->next_frame_par->nnhf_input_w);
-	else if (layer->slice_num == 2)
-		layer->next_frame_par->frc_h_size =
-			SIZE_ALIG32(layer->next_frame_par->nnhf_input_w);
-	else
-		layer->next_frame_par->frc_h_size = layer->next_frame_par->nnhf_input_w;
-	layer->next_frame_par->frc_v_size = layer->next_frame_par->nnhf_input_h;
 	layer->frc_h_size_pre = layer->next_frame_par->nnhf_input_w;
 	layer->frc_v_size_pre = layer->next_frame_par->nnhf_input_h;
 
