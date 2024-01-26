@@ -3394,7 +3394,7 @@ static struct lcd_tcon_config_s tcon_data_t5d = {
 
 	.axi_bank = LCD_TCON_AXI_BANK_T5D,
 
-	.rsv_mem_size    = 0x00502840, /* 8M */
+	.rsv_mem_size    = 0x00502840, /* 5M more */
 	.axi_mem_size    = 0x00500000, /* 5M */
 	.bin_path_size   = 0x00002800, /* 10K */
 	.secure_cfg_size = 0x00000040,
