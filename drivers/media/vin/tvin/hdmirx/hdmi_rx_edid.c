@@ -516,6 +516,10 @@ void hdmirx_fill_edid_with_port_buf(const char *buf, int size)
 		rx_set_port_hpd(port_num, 0);
 		rx_pr("port%d_hpd_low\n", port_num);
 	}
+	if (size < 257) {
+		rx_pr("Incomplete edid\n");
+		return;
+	}
 	switch (port_num) {
 	case 0:
 		switch (edid_type) {
@@ -529,7 +533,7 @@ void hdmirx_fill_edid_with_port_buf(const char *buf, int size)
 		break;
 		case EDID_TYPE_256_PLUS_512:
 			memcpy(edid_buf1, buf + 1, 256);
-			memcpy(edid_buf1 + 512, buf + 257, 512);
+			memcpy(edid_buf1 + 512, buf + 257, size - 257);
 		break;
 		default:
 			rx_pr("port 0 err edid_type\n");
@@ -551,7 +555,7 @@ void hdmirx_fill_edid_with_port_buf(const char *buf, int size)
 		break;
 		case EDID_TYPE_256_PLUS_512:
 			memcpy(edid_buf2, buf + 1, 256);
-			memcpy(edid_buf2 + 512, buf + 257, 512);
+			memcpy(edid_buf2 + 512, buf + 257, size - 257);
 		break;
 		default:
 			rx_pr("port 1 err edid_type\n");
@@ -573,7 +577,7 @@ void hdmirx_fill_edid_with_port_buf(const char *buf, int size)
 		break;
 		case EDID_TYPE_256_PLUS_512:
 			memcpy(edid_buf3, buf + 1, 256);
-			memcpy(edid_buf3 + 512, buf + 257, 512);
+			memcpy(edid_buf3 + 512, buf + 257, size - 257);
 		break;
 		default:
 			rx_pr("port 2 err edid_type\n");
@@ -595,7 +599,7 @@ void hdmirx_fill_edid_with_port_buf(const char *buf, int size)
 		break;
 		case EDID_TYPE_256_PLUS_512:
 			memcpy(edid_buf4, buf + 1, 256);
-			memcpy(edid_buf4 + 512, buf + 257, 512);
+			memcpy(edid_buf4 + 512, buf + 257, size - 257);
 		break;
 		default:
 			rx_pr("port 3 err edid_type\n");
