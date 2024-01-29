@@ -2760,11 +2760,13 @@ u32 vlock_fsm_to_en_func(struct stvlock_sig_sts *pvlock,
 	u32 ret = 0;
 	struct vinfo_s *vinfo;
 	u32 offset_enc;
+	u32 vlock_input_hz;
 
 	if (!pvlock || !vf)
 		return ret;
 
 	offset_enc = pvlock->offset_encl;
+	vlock_input_hz = vlock_check_input_hz(vf);
 	vdin_vlock_input_sel(pvlock, vf->type, vf->source_type);
 	if (vf->source_type != pre_source_type ||
 	    vf->source_mode != pre_source_mode ||
@@ -2828,6 +2830,8 @@ u32 vlock_fsm_to_en_func(struct stvlock_sig_sts *pvlock,
 		 (pvlock->input_hz * 2 == pvlock->output_hz) &&
 		 (pvlock->output_hz != 100) && (pvlock->output_hz != 120))
 		pvlock->phlock_percent = 25;
+	else if (vlock_input_hz == 60 || vlock_input_hz == 120)
+		pvlock->phlock_percent = 30;
 	else
 		pvlock->phlock_percent = 40;
 
