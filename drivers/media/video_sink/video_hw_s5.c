@@ -11687,13 +11687,18 @@ void vd_set_alpha_s5(struct video_layer_s *layer,
 static void vd1_clip_setting_s5(u8 vpp_index, struct video_layer_s *layer,
 	struct clip_setting_s *setting)
 {
-	int slice = 0;
+	int slice = 0, slice_num;
 	rdma_wr_op rdma_wr = cur_dev->rdma_func[vpp_index].rdma_wr;
 	struct vd_proc_slice_reg_s *vd_proc_slice_reg = NULL;
 
 	if (!setting)
 		return;
-	for (slice = 0; slice < layer->slice_num; slice++) {
+	/* force 2 slice num for t3x vd1 mute */
+	if (video_is_meson_t3x_cpu())
+		slice_num = 2;
+	else
+		slice_num = layer->slice_num;
+	for (slice = 0; slice < slice_num; slice++) {
 		vd_proc_slice_reg = &vd_proc_reg.vd_proc_slice_reg[slice];
 		rdma_wr(vd_proc_slice_reg->vd1_s0_clip_misc0,
 			setting->clip_max);
@@ -11855,9 +11860,6 @@ void set_video_slice_policy(struct video_layer_s *layer,
 				}
 			} else {
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
-				u32 slice_num_save = 0;
-
-				slice_num_save = layer->slice_num;
 				/* 4k120hz and frc_n2m_worked && aisr enable 1 slice */
 				/*frc_switch_flag : 0 or 2 force 2 slice valid*/
 				if (frc_switch_flag == 0 || frc_switch_flag == 2) {
@@ -11873,8 +11875,8 @@ void set_video_slice_policy(struct video_layer_s *layer,
 				if (frc_muted_frames == frc_mute_frames)
 					set_video_mute_info(VPP_INTERNAL, true);
 				if (frc_muted_frames == 0) {
-					/* mute slice_num = 2, unmute must 2 */
-					layer->slice_num = 2;
+					/* move force 2 slice to vd1_clip_setting_s5() */
+					/*layer->slice_num = 2; */
 					set_video_mute_info(VPP_INTERNAL, false);
 				} else {
 					if (debug_common_flag & DEBUG_FLAG_COMMON_FRC)
@@ -11884,7 +11886,6 @@ void set_video_slice_policy(struct video_layer_s *layer,
 				}
 				/* special call for frc mute */
 				check_video_mute();
-				layer->slice_num = slice_num_save;
 #else
 				layer->slice_num = 2;
 #endif
