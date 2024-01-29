@@ -1231,7 +1231,7 @@ struct meson_vpu_block_ops txhd2_osdblend_ops = {
 	.update_state = txhd2_osdblend_set_state,
 	.enable = osdblend_hw_enable,
 	.disable = osdblend_hw_disable,
-	.dump_register = osdblend_dump_register,
+	.dump_register = NULL,
 	.init = txhd2_osdblend_hw_init,
 };
 

@@ -357,6 +357,8 @@ static void txhd2_postblend_set_state(struct meson_vpu_block *vblk,
 	struct osd_scope_s scope_default = {0};
 	struct osd_scope_s scope[MESON_MAX_OSDS] = {0};
 	struct osd_zorder_s din[MESON_MAX_OSDS] = {0};
+	int src_sel1 = VPP_NULL;
+	int src_sel2 = VPP_NULL;
 	int osd_num = 0;
 
 	crtc_index = vblk->index;
@@ -421,13 +423,14 @@ static void txhd2_postblend_set_state(struct meson_vpu_block *vblk,
 							VPP_POSTBLEND);
 
 					if (i == 0)
-						vpp_osd1_postblend_mux_set(vblk, reg_ops,
-							postblend->reg, hardware_layer[i]);
+						src_sel1 = hardware_layer[i];
 					else
-						vpp_osd2_postblend_mux_set(vblk, reg_ops,
-							postblend->reg, hardware_layer[i]);
+						src_sel2 = hardware_layer[i];
 				}
 			}
+
+			vpp_osd1_postblend_mux_set(vblk, reg_ops, postblend->reg, src_sel1);
+			vpp_osd2_postblend_mux_set(vblk, reg_ops, postblend->reg, src_sel2);
 		}
 
 	}
