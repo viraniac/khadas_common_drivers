@@ -2163,7 +2163,8 @@
 
 &pwm_ab {
 	pinctrl-0 = <&pwm_a_pins>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&pwm_a_pins_sleep>;
+	pinctrl-names = "default", "sleep";
 	status = "okay";
 };
 
@@ -2185,8 +2186,9 @@
 };
 
 &pwmao_cd {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pwm_ao_d_pins>;
+	pinctrl-1 = <&pwm_ao_d_pins_sleep>;
 	status = "okay";
 };
 
