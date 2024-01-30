@@ -61,6 +61,8 @@ struct freesync_vsif_s freesync_vsif_data;
 struct freesync_vtem_s freesync_vtem_data;
 static unsigned int freesync_pb6_data_pre;
 
+u8 freesync_ld_ctrl;
+
 struct vrr_sig_sts frame_sts = {
 	.vrr_support = false,
 	.vrr_lfc_mode = false,
@@ -167,10 +169,41 @@ void frame_lock_local_dimming_ctrl(u8 freesync_spd_pb6)
 		if (frame_lock_debug & VRR_POLICY_DEBUG_LD_FLAG)
 			framelock_pr_info("enable local dimming!!!");
 #ifdef CONFIG_AMLOGIC_BL_LDIM
-			if (ldim_drv->ld_sel_ctrl)
-				ldim_drv->ld_sel_ctrl(1);
+		if (ldim_drv->ld_sel_ctrl)
+			ldim_drv->ld_sel_ctrl(1);
 #endif
 	}
+}
+
+int frame_lock_phase_vtem_data(struct vframe_s *vf)
+{
+	int  ret = -1;
+
+	if (!vf) {
+		if (frame_lock_debug & VRR_POLICY_DEBUG_VF_FLAG)
+			framelock_pr_info("%s vf is NULL!!!\n", __func__);
+		return ret;
+	}
+
+	if (!vf->vtem.addr) {
+		if (frame_lock_debug & VRR_POLICY_DEBUG_VF_FLAG)
+			framelock_pr_info("vf->vtem.addr is NULL!!!\n");
+		return ret;
+	}
+
+	if (vf->vtem.size == 0) {
+		if (frame_lock_debug & VRR_POLICY_DEBUG_VF_FLAG)
+			framelock_pr_info("vf->vtem.size = 0\n");
+		return ret;
+	}
+
+	if (frame_lock_debug & VRR_POLICY_DEBUG_VF_FLAG)
+		framelock_pr_info("vtem.size = %d\n", vf->vtem.size);
+
+	memset(&freesync_vtem_data, 0, sizeof(struct freesync_vtem_s));
+	memcpy(&freesync_vtem_data, vf->vtem.addr, vf->vtem.size * sizeof(u8));
+
+	return ret;
 }
 
 int frame_lock_parse_spd_data(struct vframe_s *vf)
@@ -195,25 +228,13 @@ int frame_lock_parse_spd_data(struct vframe_s *vf)
 		return ret;
 	}
 
-	if (!vf->vtem.addr) {
-		if (frame_lock_debug & VRR_POLICY_DEBUG_VF_FLAG)
-			framelock_pr_info("vf->vtem.addr is NULL!!!");
-		return ret;
-	}
-
-	if (vf->vtem.size == 0) {
-		if (frame_lock_debug & VRR_POLICY_DEBUG_VF_FLAG)
-			framelock_pr_info("vf->vtem.size = 0");
-		return ret;
-	}
-
 	if (frame_lock_debug & VRR_POLICY_DEBUG_VF_FLAG)
-		framelock_pr_info("vtem.size = %d vf->spd.size = %d", vf->vtem.size, vf->spd.size);
+		framelock_pr_info("vf->spd.size = %d", vf->spd.size);
 
 	memset(&freesync_vsif_data, 0, sizeof(struct freesync_vsif_s));
-	memset(&freesync_vtem_data, 0, sizeof(struct freesync_vtem_s));
 	memcpy(&freesync_vsif_data, vf->spd.addr, vf->spd.size * sizeof(u8));
-	memcpy(&freesync_vtem_data, vf->vtem.addr, vf->vtem.size * sizeof(u8));
+
+	frame_lock_phase_vtem_data(vf);
 
 	if (freesync_pb6_data_pre != freesync_vsif_data.freesync_ctr1)
 		frame_lock_local_dimming_ctrl(freesync_vsif_data.freesync_ctr1);
@@ -809,6 +830,12 @@ ssize_t frame_lock_debug_store(struct class *cla,
 		if (kstrtol(parm[1], 10, &val) < 0)
 			return -EINVAL;
 		frame_lock_debug = val;
+		pr_info("\n frame_lock_debug = %d\n", frame_lock_debug);
+	} else if (!strncmp(parm[0], "freesync_ld_ctrl", 16)) {
+		if (kstrtol(parm[1], 10, &val) < 0)
+			return -EINVAL;
+		freesync_ld_ctrl = val;
+		frame_lock_local_dimming_ctrl(freesync_ld_ctrl);
 		pr_info("\n frame_lock_debug = %d\n", frame_lock_debug);
 	} else {
 		pr_info("\n frame lock debug cmd invalid\n");
