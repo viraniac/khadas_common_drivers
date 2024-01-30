@@ -3596,14 +3596,13 @@ static long amvecm_ioctl(struct file *file,
 		break;
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	case AMVECM_IOC_SET_3D_LUT:
-		p3dlut = kmalloc(4913 * 3 * sizeof(unsigned int),
-				 GFP_KERNEL);
+		p3dlut = vmalloc(4913 * 3 * sizeof(unsigned int));
 		if (!p3dlut)
 			return -ENOMEM;
 
 		if (copy_from_user(p3dlut,
-				   (void __user *)arg,
-				   4913 * 3 * sizeof(unsigned int))) {
+			(void __user *)arg,
+			4913 * 3 * sizeof(unsigned int))) {
 			ret = -EFAULT;
 		} else {
 			vpp_lut3d_table_init(0, 0, 0);
@@ -3611,7 +3610,7 @@ static long amvecm_ioctl(struct file *file,
 			vpp_lut3d_table_release();
 		}
 
-		kfree(p3dlut);
+		vfree(p3dlut);
 		break;
 	case AMVECM_IOC_LOAD_3D_LUT:
 		if (copy_from_user(&lut_index,
