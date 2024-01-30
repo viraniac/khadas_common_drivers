@@ -6645,8 +6645,6 @@ void rx_port2_main_state_machine(void)
 		/* disable irq before hpd low */
 		rx_irq_en(false, port);
 		rx_set_cur_hpd(0, 0, port);
-		if (rx_is_need_edid_reset(port))
-			rx_edid_module_reset();
 		//set_scdc_cfg(1, 0, port);
 		rx[port].state = FSM_INIT;
 		break;
@@ -7214,8 +7212,6 @@ void rx_port3_main_state_machine(void)
 		/* disable irq before hpd low */
 		rx_irq_en(false, port);
 		rx_set_cur_hpd(0, 0, port);
-		if (rx_is_need_edid_reset(port))
-			rx_edid_module_reset();
 		//set_scdc_cfg(1, 0, port);
 		rx[port].state = FSM_INIT;
 		break;

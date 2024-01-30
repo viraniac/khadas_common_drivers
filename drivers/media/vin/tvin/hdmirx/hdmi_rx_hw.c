@@ -2263,7 +2263,7 @@ bool rx_is_need_edid_reset(u8 port)
 
 	sts = hdmirx_rd_top(TOP_EDID_GEN_STAT, port);
 	ddc_sts = (sts >> 20) & 0x1f;
-	ddc_offset = sts & 0xff;
+	ddc_offset = sts & 0x1ff;
 	if (ddc_offset != 0 && ddc_offset != 0xff)
 		ret = true;
 	return ret;
@@ -2911,6 +2911,10 @@ int rx_set_port_hpd(u8 port_id, bool val)
 void rx_set_cur_hpd(u8 val, u8 func, u8 port)
 {
 	rx_pr("func-%d\n", func);
+	if (val == 0) {
+		if (rx_is_need_edid_reset(port))
+			rx_edid_module_reset();
+	}
 	rx_set_port_hpd(port, val);
 	port_hpd_rst_flag |= (1 << port);
 }
