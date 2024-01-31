@@ -11854,10 +11854,8 @@ void set_video_slice_policy(struct video_layer_s *layer,
 					layer->aisr_mif_setting.aisr_enable = 0;
 				}
 				/* if vd1 mute internal by frc, unmute it */
-				if (get_video_mute_val(VPP_INTERNAL)) {
-					layer->slice_num = 2;
+				if (get_video_mute_val(VPP_INTERNAL))
 					set_video_mute_info(VPP_INTERNAL, false);
-				}
 			} else {
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
 				/* 4k120hz and frc_n2m_worked && aisr enable 1 slice */
