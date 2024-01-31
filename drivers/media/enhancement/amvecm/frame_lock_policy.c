@@ -18,6 +18,7 @@
 #include "vlock.h"
 #include <linux/amlogic/media/vout/lcd/aml_ldim.h>
 #include <linux/amlogic/media/vout/lcd/aml_bl.h>
+#include "../../vrr/vrr_drv.h"
 
 #define framelock_pr_info(fmt, args...)      pr_info("FrameLock: " fmt "", ## args)
 #define FrameLockERR(fmt, args...)     pr_err("FrameLock ERR: " fmt "", ## args)
@@ -756,19 +757,26 @@ unsigned int vrr_check_frame_rate_min_hz(void)
 {
 	unsigned int vrr_min = 0;
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
-	struct vinfo_s *vinfo = NULL;
+	struct aml_vrr_drv_s *vdrv = NULL;
 
-	vinfo = get_current_vinfo();
-	if (!vinfo) {
+	vdrv = aml_vrr_drv_active_sel();
+	if (!vdrv) {
 		vrr_min = 48;
 		if (frame_lock_debug & VRR_POLICY_DEBUG_FLAG)
-			framelock_pr_info("%s: vinfo is null!\n", __func__);
+			framelock_pr_info("%s: vdrv is null!\n", __func__);
+		return vrr_min;
+	}
+
+	if (!vdrv->vrr_dev) {
+		vrr_min = 48;
+		if (frame_lock_debug & VRR_POLICY_DEBUG_FLAG)
+			framelock_pr_info("%s: vrr_dev is null!\n", __func__);
 		return vrr_min;
 	}
 
 	if (frame_sts.vrr_support) {
-		vrr_min = vinfo->vfreq_min + 5;
-		if (vrr_min != 48 && vrr_min != 40)
+		vrr_min = vdrv->vrr_dev->vfreq_min + 5;
+		if (vrr_min != 40)
 			vrr_min = 48;
 	} else {
 		vrr_min = 48;
@@ -778,7 +786,7 @@ unsigned int vrr_check_frame_rate_min_hz(void)
 		framelock_pr_info("%s: vrr support:%d vrr_min:%d vfreq_min:%d\n",
 			__func__,
 			frame_sts.vrr_support,
-			vrr_min, vinfo->vfreq_min + 5);
+			vrr_min, vdrv->vrr_dev->vfreq_min + 5);
 	}
 #endif
 
