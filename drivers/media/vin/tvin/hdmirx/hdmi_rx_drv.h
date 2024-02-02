@@ -64,7 +64,9 @@
 //2023.12.12 t3x no open port limit when reboot
 //2024.01.04 fix soundless issue for 2.0 ip
 //2024.01.10 optimize eq setting for 75m~115m frequency
-#define RX_VER0 "ver.2024/01/10"
+//2024.02.21 fix t3x hbr audio clk not correct issue
+#define RX_VER0 "ver.2024/02/21"
+
 
 /*print type*/
 #define COR1_LOG	0x10000
