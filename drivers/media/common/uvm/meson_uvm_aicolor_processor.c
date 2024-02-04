@@ -618,6 +618,7 @@ int aicolor_getinfo(void *arg, char *buf)
 		output.width = aicolor_info->nn_input_frame_width;
 		output.height = aicolor_info->nn_input_frame_height;
 		aicolor_info->omx_index = vf->omx_index;
+		aicolor_info->ge2d_out_phy_addr = (ulong)phy_addr;
 
 		output.format = GE2D_FORMAT_S24_RGB;
 		output.addr = (ulong)phy_addr;
