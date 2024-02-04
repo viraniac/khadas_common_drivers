@@ -544,13 +544,12 @@ static int do_file_thread(struct video_queue_dev *dev)
 		if (vf->dv_crc_sts) {
 			dev->vdin_err_crc_count = 0;
 		} else {
-			vq_print(dev->inst, P_ERROR, "invalid vframe.\n");
 			vf_get(dev->vf_receiver_name);
 			dev->frame_num++;
 			vf_put(vf, dev->vf_receiver_name);
 			dev->vdin_err_crc_count++;
 			vq_print(dev->inst, P_ERROR,
-				"vdin_err_crc_count is %d.\n",
+				"invalid vframe, vdin_err_crc_count is %d.\n",
 				dev->vdin_err_crc_count);
 			if (dev->vdin_err_crc_count >= 6) {
 				ret = vt_send_cmd(dev->dev_session,
@@ -739,7 +738,7 @@ static int do_file_thread(struct video_queue_dev *dev)
 	}
 
 	if (!kfifo_get(&dev->file_q, &ready_file)) {
-		vq_print(dev->inst, P_ERROR, "file_q is empty\n");
+		vq_print(dev->inst, P_OTHER, "file_q is empty\n");
 		return -1;
 	}
 	private_data = v4lvideo_get_file_private_data(ready_file, true);
@@ -1204,7 +1203,7 @@ static int videoqueue_unreg_provider(struct video_queue_dev *dev)
 	if (dev->di_backend_en) {
 		while (kfifo_len(&dev->out2vt_q) > 0) {
 			if (kfifo_get(&dev->out2vt_q, &disp_file)) {
-				vq_print(dev->inst, P_OTHER, "unreg: disp_list keep vf\n");
+				vq_print(dev->inst, P_THREAD, "unreg: disp_list keep vf\n");
 				if (disp_file)
 					v4lvideo_keep_vf(disp_file);
 			}
@@ -1218,7 +1217,7 @@ static int videoqueue_unreg_provider(struct video_queue_dev *dev)
 	} else {
 		while (kfifo_len(&dev->display_q) > 0) {
 			if (kfifo_get(&dev->display_q, &disp_file)) {
-				vq_print(dev->inst, P_OTHER, "unreg: disp_list keep vf\n");
+				vq_print(dev->inst, P_THREAD, "unreg: disp_list keep vf\n");
 				if (disp_file)
 					v4lvideo_keep_vf(disp_file);
 			}
