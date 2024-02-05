@@ -887,6 +887,7 @@ void lc_config(int enable,
 	static unsigned int sps_w_in_pre, sps_h_in_pre;
 	unsigned int flag, flag_full;
 	int lc_en_ctrl = enable;
+	int in_sel;
 
 	h_num = LC_BLK_H_NUM;
 	v_num = LC_BLK_V_NUM;
@@ -991,11 +992,16 @@ void lc_config(int enable,
 	width = sps_w_in;
 	height = sps_h_in;
 
+	if (chip_type_id == chip_txhd2)
+		in_sel = 5;
+	else
+		in_sel = 4;
+
 	if (chip_type_id != chip_t3x) {
 		lc_curve_ctrl_config(lc_en_ctrl, height, width);
 		lc_stts_blk_config(lc_en_ctrl, height, width);
 		lc_stts_en(lc_en_ctrl, height, width,
-			0, 0, 1, 1, 4,
+			0, 0, 1, 1, in_sel,
 			bitdepth, flag, flag_full);
 	} else {
 		ve_lc_curve_ctrl_cfg(lc_en_ctrl,
