@@ -65,8 +65,7 @@ static int last_int_top1 = 0x8;/*bit3 intensity_frm_wr_done*/
 static int last_int_top1b = 0x8;/*bit3 pyramid_frm_wr_done*/
 static int last_int_top2 = 0x10;/*bit4 out_frm_wr_done*/
 
-static u32 last_py_level = PY_NO_LEVEL;
-u32 py_level = PY_NO_LEVEL;/*todo*/
+static u32 last_top2_py_level = PY_NO_LEVEL;
 bool py_enabled = true;/*when top1 on,enable pyramid by default.some idk case disable pyramid*/
 bool l1l4_enabled = true;/*when top1 on,enable l1l4 by default.some idk case disable l1l4*/
 u32 l1l4_distance;
@@ -82,6 +81,7 @@ static u32 top2_err_cnt;
 bool top1_enable_changed;
 bool force_bypass_precision;
 bool bypass_shadow = true;
+u32 top1_scale;
 
 #define PR_DONE_CONTINUE_CNT 4
 #define PR_ON_DELAY_CNT 2
@@ -236,6 +236,7 @@ void top1_crc_ro(void)
 	}
 }
 
+/*top1 rdmif, config size before skip*/
 static void dolby5_top1_rdmif
 	(int hsize,
 	int vsize,
@@ -273,10 +274,16 @@ static void dolby5_top1_rdmif
 	unsigned int cntl_64bit_rev = 0;/*0 for h265 420-10*/
 	u32 pic_32byte_aligned = 0;
 	u32 vskip = 0;
+	u32 hskip = 0;
 
 	/*4k240, vd1 vskip to 4k1k for 4k2k source*/
 	if (output_4k240hz && top1_vd_info.compHeight == 2160 && top1_vd_info.compWidth == 3840)
 		vskip = 1;
+
+	if (top1_scale) {
+		hskip = 1;
+		vskip = 1;
+	}
 
 	if (fix_data)
 		block_mode = 0;
@@ -375,6 +382,8 @@ static void dolby5_top1_rdmif
 			(yuv444 << 16) |           //demux_mode
 			(cntl_pixel_bytes << 14) | //cntl_pixel_bytes
 			(0 << 4) |                 //little endian 128bit read
+			(hskip << 3) |             //chrome hskip
+			(hskip << 2) |             //luma hskip
 			(separate_en << 1) |       //separate_en
 			1);
 	else if ((debug_rdmif & 2))
@@ -384,6 +393,8 @@ static void dolby5_top1_rdmif
 			(yuv444 << 16) |           //demux_mode
 			(cntl_pixel_bytes << 14) | //cntl_pixel_bytes
 			(1 << 4) |                 //little endian 128bit read
+			(hskip << 3) |             //chrome hskip
+			(hskip << 2) |             //luma hskip
 			(separate_en << 1) |       //separate_en
 			1);
 	else
@@ -393,13 +404,14 @@ static void dolby5_top1_rdmif
 			(yuv444 << 16) |           //demux_mode
 			(cntl_pixel_bytes << 14) | //cntl_pixel_bytes
 			(little_endian << 4) |     //little endian 128bit read
+			(hskip << 3) |             //chrome hskip
+			(hskip << 2) |             //luma hskip
 			(separate_en << 1) |       //separate_en
 			1);                        //cntl_enable
 
 	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_GEN_REG2, cntl_color_map, 0, 2);
-	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_GEN_REG2, vskip, 9, 1);
-	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_GEN_REG2, vskip, 17, 1);
-	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_GEN_REG2, vskip, 25, 1);
+	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_LUMA_RPT_PAT, vskip, 3, 1);
+	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_CHROMA_RPT_PAT, vskip, 3, 1);
 
 	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_GEN_REG3, cntl_bits_mode, 8, 2);
 	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_GEN_REG3, cntl_bit16_mode, 7, 1);
@@ -675,6 +687,8 @@ static void dolby5_top1_ini(struct dolby5_top1_type *dolby5_top1, bool reset)
 	u32 *p_reg_top1b;
 	int top1_ahb_num;
 	int top1b_ahb_num;
+	u32 top1_hsize = dolby5_top1->core1_hsize >> top1_scale;
+	u32 top1_vsize = dolby5_top1->core1_vsize >> top1_scale;
 
 	if (hw5_reg_from_file || (test_dv & DEBUG_FIXED_REG) /*fixed reg*/) {
 		p_reg_top1 = (u32 *)top1_reg_buf;
@@ -704,7 +718,8 @@ static void dolby5_top1_ini(struct dolby5_top1_type *dolby5_top1, bool reset)
 		rdmif_stride[i] = dolby5_top1->rdmif_stride[i];
 	}
 
-	VSYNC_WR_DV_REG(DOLBY_TOP1_PIC_SIZE, (core1_vsize << 16) | core1_hsize);
+	/*top1, config size after skip*/
+	VSYNC_WR_DV_REG(DOLBY_TOP1_PIC_SIZE, (top1_vsize << 16) | top1_hsize);
 
 	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_RDMA_CTRL, 0x1, 16, 3);
 	VSYNC_WR_DV_REG_BITS(DOLBY_TOP1_RDMA_CTRL, 0x95, 0, 16);
@@ -728,6 +743,7 @@ static void dolby5_top1_ini(struct dolby5_top1_type *dolby5_top1, bool reset)
 
 	VSYNC_WR_DV_REG(DOLBY_TOP1_WDMA_BADDR0, dolby5_top1->wdma_baddr >> 4);
 
+	/*top1 rdmif, config size before skip*/
 	dolby5_top1_rdmif(core1_hsize,
 		core1_vsize,
 		bit_mode,
@@ -1481,18 +1497,14 @@ int tv_top1_set(u64 *top1_reg,
 
 	top1_type.core1_hsize = top1_vd_info.width;
 	top1_type.core1_vsize = top1_vd_info.height;
+
 	//top1_type.bit_mode = top1_vd_info.bitdepth;
 	//top1_vd_info.bitdepth = 8;
 	top1_type.rdmif_baddr[0] = top1_vd_info.canvasaddr[0];
 	top1_type.rdmif_baddr[1] = top1_vd_info.canvasaddr[1];
 	top1_type.rdmif_baddr[2] = top1_vd_info.canvasaddr[2];
 
-	if (top1_vd_info.width > 512 && top1_vd_info.height > 288)
-		top1_type.py_level = PY_SEVEN_LEVEL;
-	else if (top1_vd_info.width > 256 && top1_vd_info.height > 144)
-		top1_type.py_level = PY_SIX_LEVEL;
-	else
-		top1_type.py_level = PY_NO_LEVEL;
+	top1_type.py_level = top1_info.py_level;
 
 	for (i = 0; i < 2; i++) {
 		if (top1_vd_info.bitdepth == 8)
@@ -1564,7 +1576,8 @@ int tv_top1_set(u64 *top1_reg,
 					top1_type.rdmif_stride[0],
 					top1_type.py_level == 0 ?
 					"6" : (top1_type.py_level == 1 ? "7" : "0"),
-					py_level == 0 ? "6" : (py_level == 1 ? "7" : "0"),
+					top2_info.py_level == 0 ? "6" :
+					(top2_info.py_level == 1 ? "7" : "0"),
 					py_wr_id,
 					l1l4_wr_index);
 
@@ -1656,10 +1669,10 @@ int tv_top2_set(u64 *reg_data,
 			VSYNC_WR_DV_REG(DOLBY5_CORE2_REG_BASE0 + 4, last_int_top2);/*clear int*/
 
 #if PYRAMID_SW_RST
-			if (enable_top1 && py_level != PY_NO_LEVEL) {
+			if (enable_top1 && top2_info.py_level != PY_NO_LEVEL) {
 				pyrd_crtl = VSYNC_RD_DV_REG(DOLBY_TOP2_PYRD_CTRL);
 				pyrd_crtl &= 0xFFFFFFFC;
-				pyrd_crtl |= py_level & 3;
+				pyrd_crtl |= top2_info.py_level & 3;
 				VSYNC_WR_DV_REG(DOLBY_TOP2_PYRD_CTRL, pyrd_crtl);
 
 				VSYNC_WR_DV_REG_BITS(DOLBY_TOP2_CTRL0, 1, 0, 2);
@@ -1690,7 +1703,7 @@ int tv_top2_set(u64 *reg_data,
 
 #if PYRAMID_SW_RST /*software start pyramid*/
 	/*reg control pyramid instead of vsync trigger, set before other regs*/
-	if (enable_top1 && py_level != PY_NO_LEVEL)
+	if (enable_top1 && top2_info.py_level != PY_NO_LEVEL)
 		VSYNC_WR_DV_REG_BITS(DOLBY_TOP2_CTRL0, 1, 0, 2);
 #endif
 
@@ -1725,7 +1738,7 @@ int tv_top2_set(u64 *reg_data,
 #if PYRAMID_SW_RST /*software start pyramid*/
 	pyrd_crtl = VSYNC_RD_DV_REG(DOLBY_TOP2_PYRD_CTRL);
 	pyrd_crtl &= 0xFFFFFFFC;
-	pyrd_crtl |= py_level & 3;
+	pyrd_crtl |= top2_info.py_level & 3;
 	//pyrd_crtl |= 0xFFFF0;/*bit4-19 clk gating disable*/
 	VSYNC_WR_DV_REG(DOLBY_TOP2_PYRD_CTRL, pyrd_crtl);
 	/*VPU_DOLBY_WRAP_GCLK bit16 reset total dolby core, need reload pyramid mmu*/
@@ -1734,20 +1747,21 @@ int tv_top2_set(u64 *reg_data,
 		VSYNC_WR_DV_REG(DOLBY_TOP2_PYRD_CTRL, pyrd_crtl);/*pyramid mmu rst*/
 		pyrd_crtl &= ~(1 << 30);
 		VSYNC_WR_DV_REG(DOLBY_TOP2_PYRD_CTRL, pyrd_crtl);
-		if (py_level == PY_SIX_LEVEL)
+		if (top2_info.py_level == PY_SIX_LEVEL)
 			dolby5_mmu_config(pyrd_seq_lvl6, L6_MMU_NUM);
-		else if (py_level == PY_SEVEN_LEVEL)
+		else if (top2_info.py_level == PY_SEVEN_LEVEL)
 			dolby5_mmu_config(pyrd_seq_lvl7, L7_MMU_NUM);
 	}
 #else /*must set py_level before next vsync*/
 	/*VPU_DOLBY_WRAP_GCLK bit16 reset total dolby core, need reload pyramid mmu*/
-	WRITE_VPP_DV_REG_BITS(DOLBY_TOP2_PYRD_CTRL, py_level, 0, 2); /*must set before next vsync*/
-	if (py_level != PY_NO_LEVEL && reset) {
+	/*must set before next vsync*/
+	WRITE_VPP_DV_REG_BITS(DOLBY_TOP2_PYRD_CTRL, top2_info.py_level, 0, 2);
+	if (top2_info.py_level != PY_NO_LEVEL && reset) {
 		WRITE_VPP_DV_REG_BITS(DOLBY_TOP2_PYRD_CTRL, 1, 30, 1);/*pyramid mmu rst*/
 		WRITE_VPP_DV_REG_BITS(DOLBY_TOP2_PYRD_CTRL, 0, 30, 1);
-		if (py_level == PY_SIX_LEVEL)
+		if (top2_info.py_level == PY_SIX_LEVEL)
 			dolby5_mmu_config(pyrd_seq_lvl6, L6_MMU_NUM);
-		else if (py_level == PY_SEVEN_LEVEL)
+		else if (top2_info.py_level == PY_SEVEN_LEVEL)
 			dolby5_mmu_config(pyrd_seq_lvl7, L7_MMU_NUM);
 	}
 #endif
@@ -1861,7 +1875,7 @@ int tv_top2_set(u64 *reg_data,
 	}
 
 #if PYRAMID_SW_RST /*software start pyramid*/
-	if (py_level != PY_NO_LEVEL) {
+	if (top2_info.py_level != PY_NO_LEVEL) {
 		VSYNC_WR_DV_REG_BITS(DOLBY_TOP2_CTRL0, 1, 0, 2);
 		pyrd_crtl |= 1 << 31;
 		VSYNC_WR_DV_REG(DOLBY_TOP2_PYRD_CTRL, pyrd_crtl);/*pyramid sw rst*/
@@ -1934,7 +1948,7 @@ int tv_top_set(u64 *top1_reg,
 
 	if (!top2_info.core_on) {
 		last_py_enabled = py_enabled;
-		last_py_level = level;
+		last_top2_py_level = level;
 	}
 
 	if ((force_vsync_id & 0x1F) > 0 && (force_vsync_id & 0x0F) < 4)
@@ -2003,7 +2017,7 @@ int tv_top_set(u64 *top1_reg,
 		reset = true;
 	/**************debug reset done***************/
 
-	py_level = PY_NO_LEVEL;//todo
+	top2_info.py_level = PY_NO_LEVEL;//todo
 
 	/*******check top2 status changed start********/
 	if (test_dv & DEBUG_FORCE_BYPASS_TOP2)
@@ -2035,21 +2049,23 @@ int tv_top_set(u64 *top1_reg,
 	if (enable_top1) {
 		check_pr_enabled_in_setting();
 
-		py_level = level;
+		top2_info.py_level = level;
 		if (hw5_reg_from_file)
-			py_level = PY_SIX_LEVEL;//temp debug, case0 frame1, 6 level
+			top2_info.py_level = PY_SIX_LEVEL;//temp debug, case0 frame1, 6 level
 		if (test_dv & DEBUG_HW5_NO_LEVEL)
-			py_level = PY_NO_LEVEL; //temp debug, case0 frame0, 0 level
+			top2_info.py_level = PY_NO_LEVEL; //temp debug, case0 frame0, 0 level
 		if (test_dv & DEBUG_HW5_SEVEN_LEVEL)
-			py_level = PY_SEVEN_LEVEL; //temp debug,7 level
+			top2_info.py_level = PY_SEVEN_LEVEL; //temp debug,7 level
 
 		/*******check py_level status changed********/
-		if (last_py_level != py_level) {
+		if (last_top2_py_level != top2_info.py_level) {
 			pr_dv_dbg("py_level status changed %s->%s\n",
-				last_py_level == 0 ? "6" : (last_py_level == 1 ? "7" : "0"),
-				py_level == 0 ? "6" : (py_level == 1 ? "7" : "0"));
+				last_top2_py_level == 0 ? "6" :
+				(last_top2_py_level == 1 ? "7" : "0"),
+				last_top2_py_level == 0 ? "6" :
+				(last_top2_py_level == 1 ? "7" : "0"));
 			/*off->on step1: bypass for 2vsync, step2: reset, enable precision*/
-			if (last_py_level == PY_NO_LEVEL && top2_info.core_on) {
+			if (last_top2_py_level == PY_NO_LEVEL && top2_info.core_on) {
 				/*force_bypass_precision_once = true;*/
 				/*delay_reset = true;*//*no need delay reset now*/
 				sw_reset = true;
@@ -2061,8 +2077,8 @@ int tv_top_set(u64 *top1_reg,
 				sw_reset = true;
 				toggle = true;
 			}
-			last_py_level = py_level;
-		} else if (py_level != PY_NO_LEVEL) {
+			last_top2_py_level = top2_info.py_level;
+		} else if (top2_info.py_level != PY_NO_LEVEL) {
 			/*******check precision status changed********/
 			/*if not get a frame in advance,there will no pyramid.bypass pyramid once*/
 			if (top1_info.core_on && !pr_done &&

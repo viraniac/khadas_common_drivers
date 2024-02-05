@@ -9,7 +9,7 @@
 /*#define V2_4_3*/
 
 /*  driver version */
-#define DRIVER_VER "202301225"
+#define DRIVER_VER "20240205"
 
 #include <linux/types.h>
 #include "amdv_pq_config.h"
@@ -654,6 +654,7 @@ struct core_inst_s {
 	u32 run_mode_count;
 	u32 core_disp_hsize;
 	u32 core_disp_vsize;
+	u32 py_level;
 };
 
 struct tv_input_info_s {
@@ -896,7 +897,6 @@ extern struct video_inst_s top2_v_info;/*video info*/
 extern struct top1_pyramid_addr py_addr[PYRAMID_BUF_CNT];
 extern u8 py_wr_id;
 extern u8 py_rd_id;
-extern u32 py_level;
 extern struct dolby5_top1_md_hist dv5_md_hist;
 extern int force_top1_enable;
 extern u32 fix_data;
@@ -928,6 +928,9 @@ extern bool top1_enable_changed;
 extern bool force_bypass_precision;
 extern bool force_bypass_precision_once;
 extern bool miss_top1_and_bypass_pr_once;
+extern bool update_top2_control_path_flag;
+extern u32 top1_scale;
+extern bool enable_top1_scale;
 /************/
 
 #define pr_dv_dbg(fmt, args...)\

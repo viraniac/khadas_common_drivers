@@ -645,6 +645,7 @@ MODULE_PARM_DESC(force_top1_enable,    "\n force_top1_enable\n");
 static int sdr_transition_delay;
 static int dv_core1_detunnel = 1;
 static bool update_control_path_flag;
+bool update_top2_control_path_flag;
 
 static bool hdmi_in_allm;
 static bool local_allm;
@@ -1921,13 +1922,16 @@ void reset_dv_param(void)
 		top1_info.run_mode_count = 0;
 		top1_info.core_disp_hsize = 0;
 		top1_info.core_disp_vsize = 0;
+		top1_info.py_level = PY_NO_LEVEL;
 		top2_info.core_on = false;
 		top2_info.amdv_setting_video_flag = false;
 		top2_info.core_on_cnt = 0;
 		top2_info.run_mode_count = 0;
 		top2_info.core_disp_hsize = 0;
 		top2_info.core_disp_vsize = 0;
+		top2_info.py_level = PY_NO_LEVEL;
 		top1_done = false;
+		top1_scale = 0;
 		top1_v_info.amdv_src_format = 0;
 		top1_v_info.amdv_wait_init = false;
 		top1_v_info.amdv_wait_count = 0;
@@ -10629,13 +10633,18 @@ int amdv_parse_metadata(struct vframe_s *vf,
 				update_control_path_flag = false;
 		}
 	} else {
-		if (is_aml_hw5())
+		if (is_aml_hw5()) {
 			ret = amdv_parse_metadata_hw5(vf, toggle_mode,
 							bypass_release,
 							drop_flag);
-		else
+			if (ret == 0)
+				update_top2_control_path_flag = true;
+			else
+				update_top2_control_path_flag = false;
+		} else {
 			ret = amdv_parse_metadata_v1(vf, toggle_mode,
 						     bypass_release, drop_flag);
+		}
 		if (debug_dolby & 0x2000)
 			pr_dv_dbg("parse_metadata return %d\n", ret);
 	}
@@ -15139,6 +15148,7 @@ static const char *amdolby_vision_debug_usage_str = {
 	"echo force_unmap > /sys/class/amdolby_vision/debug;\n"
 	"echo trace_amdv_isr value > /sys/class/amdolby_vision/debug;\n"
 	"echo output_4k240hz value > /sys/class/amdolby_vision/debug;\n"
+	"echo enable_top1_scale value > /sys/class/amdolby_vision/debug;\n"
 };
 
 static ssize_t  amdolby_vision_debug_show
@@ -15404,6 +15414,11 @@ static ssize_t amdolby_vision_debug_store
 			return -EINVAL;
 		force_vsync_id = val;
 		pr_info("set force_vsync_id 0x%x\n", force_vsync_id);
+	} else if (!strcmp(parm[0], "enable_top1_scale")) {
+		if (kstrtoul(parm[1], 10, &val) < 0)
+			return -EINVAL;
+		enable_top1_scale = val;
+		pr_info("enable_top1_scale %d\n", enable_top1_scale);
 	} else {
 		pr_info("unsupport cmd\n");
 	}
@@ -16639,12 +16654,14 @@ static ssize_t amdolby_vision_inst_status_show
 			tv_hw5_setting->pq_config->tdc.ana_config.enalbe_l1l4_gen);
 		len += sprintf(buf + len, "pd:wr=%d rd=%d level_%s,pr_enabled=%d,l1l4=%d %d\n",
 			py_wr_id, py_rd_id,
-			py_level == 0 ? "6" : (py_level == 1 ? "7" : "0"),
+			top2_info.py_level == 0 ? "6" : (top2_info.py_level == 1 ? "7" : "0"),
 			py_enabled, l1l4_enabled, l1l4_distance);
 
 		len += sprintf(buf + len, "==========TOP1=========\n");
 		len += sprintf(buf + len, "top1 enable: %d, 0d01:0x%x\n", enable_top1,
 			READ_VPP_DV_REG(0x0d01));
+		len += sprintf(buf + len, "num_downsamplers: %d, scale: %d\n",
+			num_downsamplers, top1_scale);
 		len += sprintf(buf + len, "force_bypass_precision: %d\n", force_bypass_precision);
 		len += sprintf(buf + len, "force_bypass_precision_once: %d\n",
 			force_bypass_precision_once);
