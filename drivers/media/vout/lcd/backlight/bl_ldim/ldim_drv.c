@@ -632,6 +632,8 @@ static long ldim_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct aml_ldim_bin_s ldim_buff;
 	struct aml_bl_drv_s *bdrv = aml_bl_get_driver(0);
 	unsigned int temp = 0;
+	struct ldim_fw_s *fw = aml_ldim_get_fw();
+	unsigned int *bl_matrix;
 
 	mcd_nr = _IOC_NR(cmd);
 	LDIMPR("%s: cmd_dir = 0x%x, cmd_nr = 0x%x\n",
@@ -644,6 +646,11 @@ static long ldim_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	if (ldim_driver.dev_drv->init_loaded == 0) {
 		LDIMERR("%s: dev_drv->init_loaded == 0!!\n", __func__);
+		return -1;
+	}
+
+	if (!fw) {
+		LDIMERR("%s: ldim_driver.fw is null!!\n", __func__);
 		return -1;
 	}
 
@@ -744,6 +751,31 @@ static long ldim_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		temp = ldim_config.seg_col * ldim_config.seg_row;
 		if (copy_to_user(argp, ldim_driver.bl_matrix_cur, temp * sizeof(unsigned int)))
 			ret = -EFAULT;
+		break;
+	case AML_LDIM_IOC_NR_GET_GLB_HIST:
+		if (!fw->stts || !fw->stts->global_hist) {
+			LDIMERR("%s fw->stts is null\n", __func__);
+			return -EFAULT;
+		}
+		if (copy_to_user(argp, fw->stts->global_hist, 64 * sizeof(unsigned int)))
+			ret = -EFAULT;
+		break;
+	case AML_LDIM_IOC_NR_SET_REMAP_BL:
+		temp = ldim_config.seg_col * ldim_config.seg_row;
+		bl_matrix = vmalloc(temp * sizeof(unsigned int));
+		if (!bl_matrix) {
+			LDIMERR("%s vmalloc buf for receive blmatrix failed\n", __func__);
+			vfree(bl_matrix);
+			return -EFAULT;
+		}
+		if (copy_from_user(bl_matrix, argp, temp * sizeof(unsigned int))) {
+			vfree(bl_matrix);
+			return -EFAULT;
+		}
+		fw->fw_ctrl |= 0x1000;//FW_CTRL_BYPASS_REMAP_BL
+		if (fw->fw_rmem_duty_set)
+			fw->fw_rmem_duty_set(bl_matrix);
+		vfree(bl_matrix);
 		break;
 	case AML_LDIM_IOC_NR_GET_BL_MAPPING_PATH:
 		LDIMPR("get bl_mapping_path is(%s)\n", ldim_driver.dev_drv->bl_mapping_path);
