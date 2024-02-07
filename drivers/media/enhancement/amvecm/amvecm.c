@@ -2932,7 +2932,7 @@ static irqreturn_t amvecm_lc_curve_isr(int irq, void *dev_id)
 		aml_pstore_write(AML_PSTORE_TYPE_SCHED, "amvecm in", 0, irqs_disabled(), 0);
 #endif
 
-	if (use_lc_curve_isr)
+	if (use_lc_curve_isr && chip_type_id != chip_t3x)
 		lc_read_region(8, 12, 0);
 
 #if IS_ENABLED(CONFIG_AMLOGIC_DEBUG_IOTRACE)
@@ -12009,6 +12009,15 @@ static ssize_t amvecm_lc_store(struct class *cls,
 		pr_info("detect_signal_range_threshold = %d %d\n",
 			detect_signal_range_threshold_black,
 			detect_signal_range_threshold_white);
+	} else if (!strcmp(parm[0], "clean_error_ro")) {
+		clean_lc_stts_overflow();
+	} else if (!strcmp(parm[0], "lc_dma_reset")) {
+		if (!strcmp(parm[1], "enable"))
+			am_dma_reset_lc(1, 1, 3);
+		else if (!strcmp(parm[1], "disable"))
+			am_dma_reset_lc(0, 1, 3);
+		else
+			pr_info("unsupport cmd!\n");
 	} else {
 		pr_info("unsupport cmd!\n");
 	}
@@ -12305,7 +12314,7 @@ tvchip_pq_setting:
 		am_dma_set_mif_wr(EN_DMA_WR_ID_VD1_HDR_0, 1);
 		am_dma_set_mif_wr(EN_DMA_WR_ID_VD1_HDR_1, 1);
 		am_dma_set_mif_wr(EN_DMA_WR_ID_LC_STTS_0, 1);
-		am_dma_set_mif_wr(EN_DMA_WR_ID_LC_STTS_1, 1);
+		/*am_dma_set_mif_wr(EN_DMA_WR_ID_LC_STTS_1, 1);*/
 		/*am_dma_set_mif_wr(EN_DMA_WR_ID_CM2_HIST_0, 1);*/
 		/*am_dma_set_mif_wr(EN_DMA_WR_ID_CM2_HIST_1, 0);*/
 		/*am_dma_set_mif_wr(EN_DMA_WR_ID_VD2_HDR, 1);*/
