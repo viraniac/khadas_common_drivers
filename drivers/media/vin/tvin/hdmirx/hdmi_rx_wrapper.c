@@ -593,8 +593,10 @@ void rx_update_edid_callback(enum tvin_port_e tvin_port, u32 hdr_priority)
 	u8 port;
 
 	port = (tvin_port - TVIN_PORT_HDMI0) & 0xff;
+#ifdef CONFIG_AMLOGIC_HDMITX
 	tx_hdr_priority = hdr_priority;
-	rx_pr(" edid update:%d\n", tx_hdr_priority);
+#endif
+	rx_pr(" edid update:%d\n", hdr_priority);
 	hdmi_rx_top_edid_update();
 	port_hpd_rst_flag |= (1 << rx_info.main_port);
 	rx[port].state = FSM_HPD_LOW;
@@ -745,8 +747,10 @@ static int rx_dwc_irq_handler(void)
 			rx_pr("[*aksv*\n");
 			rx[port].hdcp.hdcp_version = HDCP_VER_14;
 			rx[port].hdcp.hdcp_source = true;
+#ifdef CONFIG_AMLOGIC_HDMITX
 			if (hdmirx_repeat_support())
 				rx_start_repeater_auth();
+#endif
 		}
 	}
 
@@ -3825,12 +3829,16 @@ void rx_get_global_variable(const char *buf)
 	pr_var(wait_no_sig_max, i++);
 	pr_var(vrr_func_en, i++);
 	pr_var(allm_func_en, i++);
+#ifdef CONFIG_AMLOGIC_HDMITX
 	pr_var(receive_edid_len, i++);
+#endif
 	pr_var(edid_auto_sel, i++);
 	//pr_var(hdcp_array_len, i++);
+#ifdef CONFIG_AMLOGIC_HDMITX
 	pr_var(hdcp_len, i++);
 	pr_var(hdcp_repeat_depth, i++);
 	pr_var(up_phy_addr, i++);
+#endif
 	pr_var(stable_check_lvl, i++);
 	pr_var(hdcp22_reauth_enable, i++);
 	pr_var(esm_recovery_mode, i++);
@@ -4157,16 +4165,20 @@ int rx_set_global_variable(const char *buf, int size)
 		return pr_var(vrr_func_en, index);
 	if (set_pr_var(tmpbuf, var_to_str(allm_func_en), &allm_func_en, value))
 		return pr_var(allm_func_en, index);
+#ifdef CONFIG_AMLOGIC_HDMITX
 	if (set_pr_var(tmpbuf, var_to_str(receive_edid_len), &receive_edid_len, value))
 		return pr_var(receive_edid_len, index);
+#endif
 	if (set_pr_var(tmpbuf, var_to_str(edid_auto_sel), &edid_auto_sel, value))
 		return pr_var(edid_auto_sel, index);
+#ifdef CONFIG_AMLOGIC_HDMITX
 	if (set_pr_var(tmpbuf, var_to_str(hdcp_len), &hdcp_len, value))
 		return pr_var(hdcp_len, index);
 	if (set_pr_var(tmpbuf, var_to_str(hdcp_repeat_depth), &hdcp_repeat_depth, value))
 		return pr_var(hdcp_repeat_depth, index);
 	if (set_pr_var(tmpbuf, var_to_str(up_phy_addr), &up_phy_addr, value))
 		return pr_var(up_phy_addr, index);
+#endif
 	if (set_pr_var(tmpbuf, var_to_str(stable_check_lvl), &stable_check_lvl, value))
 		return pr_var(stable_check_lvl, index);
 	if (set_pr_var(tmpbuf, var_to_str(hdcp22_reauth_enable), &hdcp22_reauth_enable, value))
@@ -8224,8 +8236,10 @@ int hdmirx_debug(const char *buf, int size)
 		} else if (tmpbuf[5] == '4') {
 			if (kstrtou32(tmpbuf + 6, 16, &value) < 0)
 				return -EINVAL;
+#ifdef CONFIG_AMLOGIC_HDMITX
 			tx_hdr_priority = value;
-			rx_pr(" edid update:%d\n", tx_hdr_priority);
+#endif
+			rx_pr(" edid update:%d\n", value);
 			hdmi_rx_top_edid_update();
 			port_hpd_rst_flag |= (1 << rx_info.main_port);
 			rx_set_port_hpd(rx_info.main_port, 0);
@@ -8677,7 +8691,9 @@ void hdmirx_timer_t3x_pre(void)
 	if (rx_info.main_port_open || rx[rx_info.main_port].resume_flag) {
 		rx_nosig_monitor(rx_info.main_port);
 		rx_cable_clk_monitor(rx_info.main_port);
+#ifdef CONFIG_AMLOGIC_HDMITX
 		rx_check_repeat(rx_info.main_port);
+#endif
 		if (!(rpt_only_mode && !rx[rx_info.main_port].hdcp.repeat)) {
 			if (!sm_pause) {
 				rx_clk_rate_monitor(rx_info.main_port);

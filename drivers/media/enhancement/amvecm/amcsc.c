@@ -4112,8 +4112,11 @@ uint32_t sink_hdr_support(const struct vinfo_s *vinfo)
 	bool u_force = false;
 
 	/* hdr_cap from vinfo for Android U force mode*/
-	if (get_amdv_policy() == AMDV_FORCE_OUTPUT_MODE ||
-		hdr_policy == 4)
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
+	if (get_amdv_policy() == AMDV_FORCE_OUTPUT_MODE)
+		u_force = true;
+#endif
+	if (hdr_policy == 4)
 		u_force = true;
 
 	/* when policy == follow sink(0) or force output (2) */

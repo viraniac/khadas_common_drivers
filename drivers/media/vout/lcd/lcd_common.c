@@ -1381,9 +1381,11 @@ static int lcd_power_load_from_dts(struct aml_lcd_drv_s *pdrv, struct device_nod
 				if (index < LCD_CPU_GPIO_NUM_MAX)
 					lcd_cpu_gpio_probe(pdrv, index);
 				break;
+#ifdef CONFIG_AMLOGIC_LCD_EXTERN
 			case LCD_POWER_TYPE_EXTERN:
 				lcd_extern_dev_index_add(pdrv->index, index);
 				break;
+#endif
 			case LCD_POWER_TYPE_CLK_SS:
 				temp = power_step->power_on_step[i].value;
 				pdrv->config.timing.ss_freq = temp & 0xf;
@@ -1471,9 +1473,11 @@ static int lcd_power_load_from_dts(struct aml_lcd_drv_s *pdrv, struct device_nod
 				if (index < LCD_CPU_GPIO_NUM_MAX)
 					lcd_cpu_gpio_probe(pdrv, index);
 				break;
+#ifdef CONFIG_AMLOGIC_LCD_EXTERN
 			case LCD_POWER_TYPE_EXTERN:
 				lcd_extern_dev_index_add(pdrv->index, index);
 				break;
+#endif
 			default:
 				break;
 			}
@@ -1540,9 +1544,11 @@ static int lcd_power_load_from_unifykey(struct aml_lcd_drv_s *pdrv,
 			if (index < LCD_CPU_GPIO_NUM_MAX)
 				lcd_cpu_gpio_probe(pdrv, index);
 			break;
+#ifdef CONFIG_AMLOGIC_LCD_EXTERN
 		case LCD_POWER_TYPE_EXTERN:
 			lcd_extern_dev_index_add(pdrv->index, index);
 			break;
+#endif
 		case LCD_POWER_TYPE_CLK_SS:
 			temp = power_step->power_on_step[i].value;
 			pdrv->config.timing.ss_freq = temp & 0xf;
@@ -1601,9 +1607,11 @@ static int lcd_power_load_from_unifykey(struct aml_lcd_drv_s *pdrv,
 			if (index < LCD_CPU_GPIO_NUM_MAX)
 				lcd_cpu_gpio_probe(pdrv, index);
 			break;
+#ifdef CONFIG_AMLOGIC_LCD_EXTERN
 		case LCD_POWER_TYPE_EXTERN:
 			lcd_extern_dev_index_add(pdrv->index, index);
 			break;
+#endif
 		default:
 			break;
 		}
@@ -2253,6 +2261,7 @@ static int lcd_config_load_from_dts(struct aml_lcd_drv_s *pdrv)
 #ifdef CONFIG_AMLOGIC_LCD_TABLET
 		lcd_mipi_dsi_init_table_detect(pdrv, child);
 #endif
+#ifdef CONFIG_AMLOGIC_LCD_EXTERN
 		ret = of_property_read_u32_array(child, "extern_init", &para[0], 1);
 		if (ret) {
 			LCDPR("[%d]: failed to get extern_init\n", pdrv->index);
@@ -2260,6 +2269,7 @@ static int lcd_config_load_from_dts(struct aml_lcd_drv_s *pdrv)
 			pctrl->mipi_cfg.extern_init = para[0];
 			lcd_extern_dev_index_add(pdrv->index, para[0]);
 		}
+#endif
 		break;
 	case LCD_EDP:
 		ret = of_property_read_u32_array(child, "edp_attr", &para[0], 9);

@@ -625,7 +625,7 @@ void rx_edid_update_hdr_dv_info(unsigned char *p_edid)
 {
 	//if (hdmirx_repeat_support())
 		//return;
-
+#ifdef CONFIG_AMLOGIC_HDMITX
 	if (tx_hdr_priority == 1) {
 		//remove DV
 		edid_rm_db_by_tag(p_edid, EXTENDED_VSVDB_TAG);
@@ -635,6 +635,7 @@ void rx_edid_update_hdr_dv_info(unsigned char *p_edid)
 		edid_rm_db_by_tag(p_edid, VSVDB_HDR10P_TAG);
 		edid_rm_db_by_tag(p_edid, VSVDB_DV_TAG);
 	}
+#endif
 }
 
 void rx_edid_update_vrr_info(unsigned char *p_edid)
@@ -3131,6 +3132,7 @@ void rx_blk_index_print(struct cta_blk_parse_info *blk_info)
 		rx_data_blk_index_print(&blk_info->db_info[i]);
 }
 
+#ifdef CONFIG_AMLOGIC_HDMITX
 void rx_edid_physical_addr(int a, int b, int c, int d)
 {
 	//tx_hpd_event = E_RCV;
@@ -3147,6 +3149,7 @@ void rx_edid_physical_addr(int a, int b, int c, int d)
 	rx_pr("\nup_phy_addr = %x\n", up_phy_addr);
 }
 EXPORT_SYMBOL(rx_edid_physical_addr);
+#endif
 
 unsigned char rx_get_cea_dtd_size(unsigned char *cur_edid, unsigned int size)
 {
@@ -3695,6 +3698,7 @@ void edid_rm_db_by_idx(u8 *p_edid, u8 blk_idx)
 	}
 }
 
+#ifdef CONFIG_AMLOGIC_HDMITX
 static void rpt_edid_extension_num_extraction(unsigned char *p_edid)
 {
 	u_int i;
@@ -4890,6 +4894,7 @@ void rpt_edid_extraction(unsigned char *p_edid)
 	rpt_edid_vsg_freesync_extraction(p_edid);
 	rpt_edid_vsv_db_extraction(p_edid);
 }
+#endif
 
 u_char rx_edid_calc_cksum(u_char *pedid, u8 blk_num)
 {
@@ -5005,7 +5010,9 @@ bool hdmi_rx_top_edid_update(void)
 			rx_edid_update_vrr_info(pedid);
 		if (allm_update_en)
 			rx_edid_update_allm_info(pedid);
+#ifdef CONFIG_AMLOGIC_HDMITX
 		rpt_edid_extraction(pedid);
+#endif
 		for (j = 0; j <= ext_blk_num; ++j) {
 			if (pedid[j * EDID_BLK_SIZE] == 0x70) //dp block
 				continue;

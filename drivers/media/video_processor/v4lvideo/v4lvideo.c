@@ -1540,6 +1540,7 @@ struct file_private_data *v4lvideo_get_file_private_data(struct file *file_vf,
 	if (!file_private_data)
 		return NULL;
 
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	file_private_data->md.p_md  = vmalloc(MD_BUF_SIZE);
 	if (!file_private_data->md.p_md) {
 		kfree((u8 *)file_private_data);
@@ -1555,6 +1556,7 @@ struct file_private_data *v4lvideo_get_file_private_data(struct file *file_vf,
 		kfree((u8 *)file_private_data);
 		return NULL;
 	}
+#endif
 
 	file_private_data->p_ud_param = vmalloc(VF_UD_MAX_SIZE);
 	if (!file_private_data->p_ud_param) {
@@ -2847,6 +2849,7 @@ struct file *v4lvideo_alloc_file(void)
 		return NULL;
 	}
 
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	private_data->md.p_md  = vmalloc(MD_BUF_SIZE);
 	if (!private_data->md.p_md) {
 		kfree((u8 *)private_data);
@@ -2862,6 +2865,7 @@ struct file *v4lvideo_alloc_file(void)
 		kfree((u8 *)private_data);
 		return NULL;
 	}
+#endif
 
 	private_data->p_ud_param = vmalloc(VF_UD_MAX_SIZE);
 	if (!private_data->p_ud_param) {
@@ -2909,6 +2913,7 @@ int v4lvideo_alloc_fd(int *fd)
 		return -ENODEV;
 	}
 
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	private_data->md.p_md  = vmalloc(MD_BUF_SIZE);
 	if (!private_data->md.p_md) {
 		kfree((u8 *)private_data);
@@ -2926,6 +2931,7 @@ int v4lvideo_alloc_fd(int *fd)
 		put_unused_fd(file_fd);
 		return -ENOMEM;
 	}
+#endif
 
 	private_data->p_ud_param = vmalloc(VF_UD_MAX_SIZE);
 	if (!private_data->p_ud_param) {

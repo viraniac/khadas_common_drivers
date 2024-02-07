@@ -785,19 +785,14 @@ unsigned int vrr_check_frame_rate_min_hz(void)
 	unsigned int vrr_min = 0;
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	struct aml_vrr_drv_s *vdrv = NULL;
-
+#ifdef CONFIG_AMLOGIC_MEDIA_VRR
 	vdrv = aml_vrr_drv_active_sel();
-	if (!vdrv) {
+#endif
+	if (!vdrv || !vdrv->vrr_dev) {
 		vrr_min = 48;
 		if (frame_lock_debug & VRR_POLICY_DEBUG_FLAG)
-			framelock_pr_info("%s: vdrv is null!\n", __func__);
-		return vrr_min;
-	}
-
-	if (!vdrv->vrr_dev) {
-		vrr_min = 48;
-		if (frame_lock_debug & VRR_POLICY_DEBUG_FLAG)
-			framelock_pr_info("%s: vrr_dev is null!\n", __func__);
+			framelock_pr_info("%s: vdrv or vrr_dev is null!\n",
+					  __func__);
 		return vrr_min;
 	}
 

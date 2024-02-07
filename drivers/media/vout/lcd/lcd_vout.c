@@ -294,8 +294,9 @@ static void lcd_dlg_switch_mode(struct aml_lcd_drv_s *pdrv)
 #ifdef CONFIG_AMLOGIC_LCD_EXTERN
 	struct lcd_extern_driver_s *edrv;
 	struct lcd_extern_dev_s *edev;
+	unsigned int index;
 #endif
-	unsigned int i = 0, index;
+	unsigned int i = 0;
 	unsigned long long local_time[3];
 
 	LCDPR("[%d]: %s\n", pdrv->index, __func__);
@@ -353,9 +354,10 @@ static void lcd_dlg_power_ctrl(struct aml_lcd_drv_s *pdrv, int status)
 #ifdef CONFIG_AMLOGIC_LCD_EXTERN
 	struct lcd_extern_driver_s *edrv;
 	struct lcd_extern_dev_s *edev;
-#endif
-	unsigned int i, index;
+	unsigned int index;
 	unsigned long long local_time[3];
+#endif
+	unsigned int i;
 
 	LCDPR("[%d]: %s: %d\n", pdrv->index, __func__, status);
 	i = 0;

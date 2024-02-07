@@ -20,7 +20,7 @@ MODULE_PARM_DESC(align_proc, "align_proc");
 #define BLEND_DOUT_DEF_HSIZE 3840
 #define BLEND_DOUT_DEF_VSIZE 2160
 
-#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 static int osd_enable[MESON_MAX_OSDS] = {1, 0, 1, 0};
 #endif
 
