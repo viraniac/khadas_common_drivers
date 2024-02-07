@@ -684,6 +684,7 @@ struct mbox_domain s1a_mbox_domains[] = {
 	[S1A_REE2AO3]   = MBOX_DOMAIN(S1A_REE2AO3, S1A_MBOX_REE2AO, 0),
 	[S1A_REE2AO4]   = MBOX_DOMAIN(S1A_REE2AO4, S1A_MBOX_REE2AO, 0),
 	[S1A_REE2AO5]   = MBOX_DOMAIN(S1A_REE2AO5, S1A_MBOX_REE2AO, 0),
+	[S1A_REE2AO6]   = MBOX_DOMAIN(S1A_REE2AO6, S1A_MBOX_REE2AO, 0),
 };
 
 static struct mbox_domain_data s1a_mbox_domains_data __initdata = {
