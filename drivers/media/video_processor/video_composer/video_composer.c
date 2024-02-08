@@ -1905,6 +1905,11 @@ static bool check_dewarp_support_status(struct composer_dev *dev,
 		return false;
 	}
 
+	if (received_frames->frames_info.frame_count > 1) {
+		vc_print(dev->index, PRINT_OTHER, "%s: dewarp not support composer.\n", __func__);
+		return false;
+	}
+
 	memset(&vframe_para, 0, sizeof(struct composer_vf_para));
 	memset(&frame_info, 0, sizeof(struct frame_info_t));
 	frame_info = received_frames->frames_info.frame_info[0];
