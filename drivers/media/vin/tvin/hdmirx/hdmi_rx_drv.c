@@ -2388,7 +2388,10 @@ static ssize_t hdcp14_onoff_store(struct device *dev,
 				const char *buf,
 				size_t count)
 {
-	hdcp14_on = 1;
+	if (strncmp(buf, "1", 1) == 0)
+		hdcp14_on = 1;
+	else
+		hdcp14_on = 0;
 	return count;
 }
 
@@ -2409,13 +2412,16 @@ static ssize_t hdcp22_onoff_store(struct device *dev,
 {
 	int i;
 
-	hdcp22_on = 1;
+	if (strncmp(buf, "1", 1) == 0)
+		hdcp22_on = 1;
+	else
+		hdcp22_on = 0;
 	if (rx_info.chip_id >= CHIP_ID_T7) {
 		if (rx_info.chip_id == CHIP_ID_T3X) {
 			for (i = 0; i < rx_info.port_num; i++)
-				hdmirx_wr_cor(RX_HDCP2x_CTRL_PWD_IVCRX, 0x1, i);
+				hdmirx_wr_cor(RX_HDCP2x_CTRL_PWD_IVCRX, hdcp22_on, i);
 		} else {
-			hdmirx_wr_cor(RX_HDCP2x_CTRL_PWD_IVCRX, 0x1, 0);
+			hdmirx_wr_cor(RX_HDCP2x_CTRL_PWD_IVCRX, hdcp22_on, 0);
 		}
 	}
 	return count;
