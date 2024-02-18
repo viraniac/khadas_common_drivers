@@ -1307,6 +1307,16 @@ void lcd_tcon_global_reset_t3(struct aml_lcd_drv_s *pdrv)
 	udelay(2);
 }
 
+void lcd_tcon_global_reset_t3x(struct aml_lcd_drv_s *pdrv)
+{
+	/* global reset tcon */
+	lcd_reset_setb(pdrv, RESETCTRL_RESET2_MASK, 0, 3, 1);
+	lcd_reset_setb(pdrv, RESETCTRL_RESET2_LEVEL, 0, 3, 1);
+	udelay(1);
+	lcd_reset_setb(pdrv, RESETCTRL_RESET2_LEVEL, 1, 3, 1);
+	udelay(2);
+}
+
 int lcd_tcon_enable_tl1(struct aml_lcd_drv_s *pdrv)
 {
 	struct lcd_config_s *pconf = &pdrv->config;
@@ -1619,6 +1629,26 @@ int lcd_tcon_disable_t3(struct aml_lcd_drv_s *pdrv)
 	lcd_tcon_write(pdrv, TCON_RST_CTRL, 0x003f);
 
 	lcd_tcon_global_reset_t3(pdrv);
+
+	return 0;
+}
+
+int lcd_tcon_disable_t3x(struct aml_lcd_drv_s *pdrv)
+{
+	/* disable unit(reg_func_enable) timing signal */
+	lcd_tcon_write(pdrv, 0x30e, 0);
+
+	/* disable tcon intr */
+	lcd_tcon_write(pdrv, TCON_INTR_MASKN, 0);
+
+	/* disable od ddr_if */
+	lcd_tcon_setb(pdrv, 0x263, 0, 31, 1);
+	lcd_delay_ms(100);
+
+	/* top reset */
+	lcd_tcon_write(pdrv, TCON_RST_CTRL, 0x003f);
+
+	lcd_tcon_global_reset_t3x(pdrv);
 
 	return 0;
 }
