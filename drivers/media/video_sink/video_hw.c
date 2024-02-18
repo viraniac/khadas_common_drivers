@@ -11933,7 +11933,7 @@ bool aisr_update_frame_info(struct video_layer_s *layer,
 	/* update layer->aisr_mif_setting */
 	if (vf->vc_private &&
 	    vf->vc_private->flag & VC_FLAG_AI_SR &&
-	    check_aisr_need_disable(layer)) {
+	    !check_aisr_need_disable(layer)) {
 		struct vf_nn_sr_t *srout_data = NULL;
 
 		//layer->slice_num = 1;

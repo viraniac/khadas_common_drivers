@@ -1703,7 +1703,7 @@ static int vpp_set_filters_internal
 	if (video_is_meson_t3x_cpu() &&
 		get_uvm_open_nn() &&
 		(width_in <= 1920 && height_in <= 1080) &&
-		check_aisr_need_disable(&vd_layer[0])) {
+		!check_aisr_need_disable(&vd_layer[0])) {
 		video_layer_width = round_up(video_layer_width, 2);
 		video_layer_height = round_up(video_layer_height, 2);
 	}
