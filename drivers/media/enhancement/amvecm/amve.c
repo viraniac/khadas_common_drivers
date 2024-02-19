@@ -968,91 +968,91 @@ void vpp_set_rgb_ogo(struct tcon_rgb_ogo_s *p, int vpp_index)
 		}
 
 		if (get_cpu_type() >= MESON_CPU_MAJOR_ID_G12A) {
-			WRITE_VPP_REG_BITS(VPP_POST_MATRIX_EN_CTRL,
+			VSYNC_WRITE_VPP_REG_BITS(VPP_POST_MATRIX_EN_CTRL,
 					   p->en, 0, 1);
-			WRITE_VPP_REG(VPP_POST_MATRIX_PRE_OFFSET0_1,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_PRE_OFFSET0_1,
 				      ((m[0] & 0xfff) << 16)
 				      | (m[1] & 0xfff));
-			WRITE_VPP_REG(VPP_POST_MATRIX_PRE_OFFSET2,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_PRE_OFFSET2,
 				      m[2] & 0xfff);
-			WRITE_VPP_REG(VPP_POST_MATRIX_COEF00_01,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF00_01,
 				      ((m[3] & 0x1fff) << 16)
 				      | (m[4] & 0x1fff));
-			WRITE_VPP_REG(VPP_POST_MATRIX_COEF02_10,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF02_10,
 				      ((m[5]	& 0x1fff) << 16)
 				      | (m[6] & 0x1fff));
-			WRITE_VPP_REG(VPP_POST_MATRIX_COEF11_12,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF11_12,
 				      ((m[7] & 0x1fff) << 16)
 				      | (m[8] & 0x1fff));
-			WRITE_VPP_REG(VPP_POST_MATRIX_COEF20_21,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF20_21,
 				      ((m[9] & 0x1fff) << 16)
 				      | (m[10] & 0x1fff));
-			WRITE_VPP_REG(VPP_POST_MATRIX_COEF22,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF22,
 				      m[11] & 0x1fff);
 			if (m[21]) {
-				WRITE_VPP_REG(VPP_POST_MATRIX_COEF13_14,
+				VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF13_14,
 					      ((m[12] & 0x1fff) << 16)
 					      | (m[13] & 0x1fff));
-				WRITE_VPP_REG(VPP_POST_MATRIX_COEF15_25,
+				VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF15_25,
 					      ((m[14] & 0x1fff) << 16)
 					      | (m[17] & 0x1fff));
-				WRITE_VPP_REG(VPP_POST_MATRIX_COEF23_24,
+				VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_COEF23_24,
 					      ((m[15] & 0x1fff) << 16)
 					      | (m[16] & 0x1fff));
 			}
-			WRITE_VPP_REG(VPP_POST_MATRIX_OFFSET0_1,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_OFFSET0_1,
 				      ((m[18] & 0xfff) << 16)
 				      | (m[19] & 0xfff));
-			WRITE_VPP_REG(VPP_POST_MATRIX_OFFSET2,
+			VSYNC_WRITE_VPP_REG(VPP_POST_MATRIX_OFFSET2,
 				      m[20] & 0xfff);
-			WRITE_VPP_REG_BITS(VPP_POST_MATRIX_CLIP,
+			VSYNC_WRITE_VPP_REG_BITS(VPP_POST_MATRIX_CLIP,
 					   m[21], 3, 2);
-			WRITE_VPP_REG_BITS(VPP_POST_MATRIX_CLIP,
+			VSYNC_WRITE_VPP_REG_BITS(VPP_POST_MATRIX_CLIP,
 					   m[22], 5, 3);
 			return;
 		}
 
-		WRITE_VPP_REG_BITS(VPP_MATRIX_CTRL, p->en, 6, 1);
-		WRITE_VPP_REG_BITS(VPP_MATRIX_CTRL, 3, 8, 2);
+		VSYNC_WRITE_VPP_REG_BITS(VPP_MATRIX_CTRL, p->en, 6, 1);
+		VSYNC_WRITE_VPP_REG_BITS(VPP_MATRIX_CTRL, 3, 8, 2);
 
-		WRITE_VPP_REG(VPP_MATRIX_PRE_OFFSET0_1,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_PRE_OFFSET0_1,
 			      ((m[0] & 0xfff) << 16)
 			      | (m[1] & 0xfff));
-		WRITE_VPP_REG(VPP_MATRIX_PRE_OFFSET2,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_PRE_OFFSET2,
 			      m[2] & 0xfff);
-		WRITE_VPP_REG(VPP_MATRIX_COEF00_01,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF00_01,
 			      ((m[3] & 0x1fff) << 16)
 			      | (m[4] & 0x1fff));
-		WRITE_VPP_REG(VPP_MATRIX_COEF02_10,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF02_10,
 			      ((m[5]	& 0x1fff) << 16)
 			      | (m[6] & 0x1fff));
-		WRITE_VPP_REG(VPP_MATRIX_COEF11_12,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF11_12,
 			      ((m[7] & 0x1fff) << 16)
 			      | (m[8] & 0x1fff));
-		WRITE_VPP_REG(VPP_MATRIX_COEF20_21,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF20_21,
 			      ((m[9] & 0x1fff) << 16)
 			      | (m[10] & 0x1fff));
-		WRITE_VPP_REG(VPP_MATRIX_COEF22,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF22,
 			      m[11] & 0x1fff);
 		if (m[21]) {
-			WRITE_VPP_REG(VPP_MATRIX_COEF13_14,
+			VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF13_14,
 				      ((m[12] & 0x1fff) << 16)
 				      | (m[13] & 0x1fff));
-			WRITE_VPP_REG(VPP_MATRIX_COEF15_25,
+			VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF15_25,
 				      ((m[14] & 0x1fff) << 16)
 				      | (m[17] & 0x1fff));
-			WRITE_VPP_REG(VPP_MATRIX_COEF23_24,
+			VSYNC_WRITE_VPP_REG(VPP_MATRIX_COEF23_24,
 				      ((m[15] & 0x1fff) << 16)
 				      | (m[16] & 0x1fff));
 		}
-		WRITE_VPP_REG(VPP_MATRIX_OFFSET0_1,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_OFFSET0_1,
 			      ((m[18] & 0xfff) << 16)
 			      | (m[19] & 0xfff));
-		WRITE_VPP_REG(VPP_MATRIX_OFFSET2,
+		VSYNC_WRITE_VPP_REG(VPP_MATRIX_OFFSET2,
 			      m[20] & 0xfff);
-		WRITE_VPP_REG_BITS(VPP_MATRIX_CLIP,
+		VSYNC_WRITE_VPP_REG_BITS(VPP_MATRIX_CLIP,
 				   m[21], 3, 2);
-		WRITE_VPP_REG_BITS(VPP_MATRIX_CLIP,
+		VSYNC_WRITE_VPP_REG_BITS(VPP_MATRIX_CLIP,
 				   m[22], 5, 3);
 	} else {
 		/*for txlx and txhd, pre_offset and post_offset become 13 bit*/
@@ -1062,20 +1062,20 @@ void vpp_set_rgb_ogo(struct tcon_rgb_ogo_s *p, int vpp_index)
 			post_gainoff_set(p, WR_DMA, vpp_index);
 		} else if (is_meson_txlx_cpu() || is_meson_txhd_cpu() ||
 		    is_meson_tm2_cpu() || is_meson_t7_cpu()) {
-			WRITE_VPP_REG(VPP_GAINOFF_CTRL0,
+			VSYNC_WRITE_VPP_REG(VPP_GAINOFF_CTRL0,
 				      ((p->en << 31) & 0x80000000) |
 				      ((p->r_gain << 16) & 0x07ff0000) |
 				      ((p->g_gain <<  0) & 0x000007ff));
-			WRITE_VPP_REG(VPP_GAINOFF_CTRL1,
+			VSYNC_WRITE_VPP_REG(VPP_GAINOFF_CTRL1,
 				      ((p->b_gain << 16) & 0x07ff0000) |
 				      ((p->r_post_offset <<  0) & 0x00001fff));
-			WRITE_VPP_REG(VPP_GAINOFF_CTRL2,
+			VSYNC_WRITE_VPP_REG(VPP_GAINOFF_CTRL2,
 				      ((p->g_post_offset << 16) & 0x1fff0000) |
 				      ((p->b_post_offset <<  0) & 0x00001fff));
-			WRITE_VPP_REG(VPP_GAINOFF_CTRL3,
+			VSYNC_WRITE_VPP_REG(VPP_GAINOFF_CTRL3,
 				      ((p->r_pre_offset  << 16) & 0x1fff0000) |
 				      ((p->g_pre_offset  <<  0) & 0x00001fff));
-			WRITE_VPP_REG(VPP_GAINOFF_CTRL4,
+			VSYNC_WRITE_VPP_REG(VPP_GAINOFF_CTRL4,
 				      ((p->b_pre_offset  <<  0) & 0x00001fff));
 		} else
 #endif
@@ -1098,20 +1098,20 @@ void vpp_set_rgb_ogo(struct tcon_rgb_ogo_s *p, int vpp_index)
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 			}
 #endif
-			WRITE_VPP_REG(gainoff_ctl0,
+			VSYNC_WRITE_VPP_REG(gainoff_ctl0,
 				      ((p->en << 31) & 0x80000000) |
 				      ((p->r_gain << 16) & 0x07ff0000) |
 				      ((p->g_gain <<  0) & 0x000007ff));
-			WRITE_VPP_REG(gainoff_ctl1,
+			VSYNC_WRITE_VPP_REG(gainoff_ctl1,
 				      ((p->b_gain << 16) & 0x07ff0000) |
 				      ((p->r_post_offset <<  0) & 0x000007ff));
-			WRITE_VPP_REG(gainoff_ctl2,
+			VSYNC_WRITE_VPP_REG(gainoff_ctl2,
 				      ((p->g_post_offset << 16) & 0x07ff0000) |
 				      ((p->b_post_offset <<  0) & 0x000007ff));
-			WRITE_VPP_REG(gainoff_ctl3,
+			VSYNC_WRITE_VPP_REG(gainoff_ctl3,
 				      ((p->r_pre_offset  << 16) & 0x07ff0000) |
 				      ((p->g_pre_offset  <<  0) & 0x000007ff));
-			WRITE_VPP_REG(gainoff_ctl4,
+			VSYNC_WRITE_VPP_REG(gainoff_ctl4,
 				      ((p->b_pre_offset  <<  0) & 0x000007ff));
 		}
 	}
@@ -1122,20 +1122,20 @@ void vpp_set_rgb_ogo_sub(struct tcon_rgb_ogo_s *p)
 {
 	/*for t7 vpp1 go*/
 	if (is_meson_t7_cpu()) {
-		WRITE_VPP_REG(VPP1_GAINOFF_CTRL0,
+		VSYNC_WRITE_VPP_REG(VPP1_GAINOFF_CTRL0,
 			((p->en << 31) & 0x80000000) |
 			((p->r_gain << 16) & 0x07ff0000) |
 			((p->g_gain << 0) & 0x000007ff));
-		WRITE_VPP_REG(VPP1_GAINOFF_CTRL1,
+		VSYNC_WRITE_VPP_REG(VPP1_GAINOFF_CTRL1,
 			((p->b_gain << 16) & 0x07ff0000) |
 			((p->r_post_offset << 0) & 0x00001fff));
-		WRITE_VPP_REG(VPP1_GAINOFF_CTRL2,
+		VSYNC_WRITE_VPP_REG(VPP1_GAINOFF_CTRL2,
 			((p->g_post_offset << 16) & 0x1fff0000) |
 			((p->b_post_offset << 0) & 0x00001fff));
-		WRITE_VPP_REG(VPP1_GAINOFF_CTRL3,
+		VSYNC_WRITE_VPP_REG(VPP1_GAINOFF_CTRL3,
 			((p->r_pre_offset << 16) & 0x1fff0000) |
 			((p->g_pre_offset << 0) & 0x00001fff));
-		WRITE_VPP_REG(VPP1_GAINOFF_CTRL4,
+		VSYNC_WRITE_VPP_REG(VPP1_GAINOFF_CTRL4,
 			((p->b_pre_offset << 0) & 0x00001fff));
 	}
 }
