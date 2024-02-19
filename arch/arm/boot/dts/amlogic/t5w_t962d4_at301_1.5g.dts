@@ -164,14 +164,16 @@
 			no-map;
 			size = <0x1000000>;
 			alignment = <0x100000>;
+			alloc-ranges = <0x00000000 0x30000000>;
 		};
 
 		dmaheap_cma_reserved:heap-gfx {
 			compatible = "shared-dma-pool";
 			reusable;
 			/* 1080p TV androidT size 88M */
-			size = <0x5800000>;
+			size = <0x0>;
 			alignment = <0x400000>;
+			alloc-ranges = <0x00000000 0x30000000>;
 		};
 		dmaheap_fb_reserved:heap-fb {
 			compatible = "shared-dma-pool";
@@ -179,6 +181,7 @@
 			/* 1080p TV androidT size 36M */
 			size = <0x2400000>;
 			alignment = <0x400000>;
+			alloc-ranges = <0x00000000 0x30000000>;
 		};
 
 		ion_cma_reserved:linux,ion-dev {
@@ -821,6 +824,7 @@
 	};
 	dvbci {
 		compatible = "amlogic, dvbci";
+		status = "okay";
 		dev_name = "dvbci";
 		io_type = <4>; /* 0=iobus,1=spi,2=cimax,3=spi-t312 4:T5D,ci bus*/
 		addr_ts_mode_multiplex = <0>; /*AT301 not multi ts and addr,default 1*/
