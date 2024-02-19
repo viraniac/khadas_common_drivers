@@ -223,9 +223,14 @@ void videoqueue_pcrscr_update(s32 inc, u32 base)
 	}
 }
 
-static inline int DUR2PTS(int x)
+static inline int DUR2PTS(int y)
 {
 	int var = 0, count = 0;
+	int x = y;
+
+	if (y >= 1915 && y <= 1925) {
+		x = 1920;
+	}
 
 	if ((x % 10) == 0) {
 		var = x * 15;
@@ -505,10 +510,14 @@ static int do_file_thread(struct video_queue_dev *dev)
 	vf = vf_peek(dev->vf_receiver_name);
 	if (!vf && !dev->game_mode) {
 		/*if do ai_sr, 6ms for ai_sr, 3ms software scheduling*/
-		if (dev->need_aisr || !dev->sync_start)
+		if (dev->need_aisr || !dev->sync_start) {
 			usleep_range(6000, 7000);
-		else
-			usleep_range(10000, 11000);
+		} else {
+			if (vsync_pts_inc < 24000)
+				usleep_range(3000, 4000);
+			else
+				usleep_range(10000, 11000);
+		}
 
 		vf = vf_peek(dev->vf_receiver_name);
 		if (vf)

@@ -83,6 +83,10 @@ static signed int vlock_enc_maxtune_pixel_num = 10;
 module_param(vlock_enc_maxtune_pixel_num, uint, 0664);
 MODULE_PARM_DESC(vlock_enc_maxtune_pixel_num, "\n vlock_enc_maxtune_pixel_num\n");
 
+static signed int vlock_oa_num = 10;
+module_param(vlock_oa_num, uint, 0664);
+MODULE_PARM_DESC(vlock_oa_num, "\n vlock_oa_num\n");
+
 static unsigned int vlock_enc_adj_limit;
 /* 0x3009 default setting for 2 line(1080p-output) is 0x8000 */
 static unsigned int vlock_capture_limit = 0x10000/*0x8000*/;
@@ -2163,8 +2167,8 @@ void vlock_enable_step3_auto_enc(struct stvlock_sig_sts *pvlock)
 	stbdec_win0 = READ_VPP_REG(VPU_VLOCK_STBDET_WIN0_WIN1 + offset_vlck) & 0xff;
 	stbdec_win1 = (READ_VPP_REG(VPU_VLOCK_STBDET_WIN0_WIN1 + offset_vlck) >> 8) & 0xff;
 
-	th0 = (oa * stbdec_win0 * 10) / vinfo->vtotal;
-	th1 = (oa * stbdec_win1 * 10) / vinfo->vtotal;
+	th0 = (oa * stbdec_win0 * vlock_oa_num) / vinfo->vtotal;
+	th1 = (oa * stbdec_win1 * vlock_oa_num) / vinfo->vtotal;
 
 	WRITE_VPP_REG(VPU_VLOCK_WIN0_TH + offset_vlck, th0);
 	WRITE_VPP_REG(VPU_VLOCK_WIN1_TH + offset_vlck, th1);
@@ -2821,7 +2825,8 @@ u32 vlock_fsm_to_en_func(struct stvlock_sig_sts *pvlock,
 	if (pvlock->video_inverse)
 		pvlock->phlock_percent = 15;
 	else if ((pvlock->input_hz > 0) &&
-		 (pvlock->input_hz * 2 == pvlock->output_hz))
+		 (pvlock->input_hz * 2 == pvlock->output_hz) &&
+		 (pvlock->output_hz != 100) && (pvlock->output_hz != 120))
 		pvlock->phlock_percent = 25;
 	else
 		pvlock->phlock_percent = 40;
