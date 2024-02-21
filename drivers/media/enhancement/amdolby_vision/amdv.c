@@ -15462,9 +15462,9 @@ static ssize_t amdolby_vision_debug_store
 			return -EINVAL;
 		force_ignore_top1_result = val;
 		if (val == 0)
-			force_ignore_top1_result = 0;
+			force_ignore_top1_result = false;
 		else
-			force_ignore_top1_result = 1;
+			force_ignore_top1_result = true;
 		pr_info("set force_ignore_top1_result %d\n", force_ignore_top1_result);
 	} else if (!strcmp(parm[0], "pyramid_read_urgent")) {
 		if (kstrtoul(parm[1], 10, &val) < 0)
@@ -15490,6 +15490,15 @@ static ssize_t amdolby_vision_debug_store
 			return -EINVAL;
 		enable_top1_scale = val;
 		pr_info("enable_top1_scale %d\n", enable_top1_scale);
+	} else if (!strcmp(parm[0], "wait_first_frame_top1")) {
+		if (kstrtoul(parm[1], 10, &val) < 0)
+			return -EINVAL;
+		wait_first_frame_top1 = val;
+		if (val == 0)
+			wait_first_frame_top1 = false;
+		else
+			wait_first_frame_top1 = true;
+		pr_info("set wait_first_frame_top1 %d\n", wait_first_frame_top1);
 	} else {
 		pr_info("unsupport cmd\n");
 	}
@@ -16728,21 +16737,21 @@ static ssize_t amdolby_vision_inst_status_show
 			top2_info.py_level == 0 ? "6" : (top2_info.py_level == 1 ? "7" : "0"),
 			py_enabled, l1l4_enabled, l1l4_distance);
 
-		len += sprintf(buf + len, "==========TOP1=========\n");
-		len += sprintf(buf + len, "top1 enable: %d, 0d01:0x%x\n", enable_top1,
+		len += sprintf(buf + len, "================TOP1===============\n");
+		len += sprintf(buf + len, "top1 enable:%d, 0d01:0x%x\n", enable_top1,
 			READ_VPP_DV_REG(0x0d01));
-		len += sprintf(buf + len, "num_downsamplers: %d, scale: %d\n",
+		len += sprintf(buf + len, "num_downsamplers:%d, scale:%d\n",
 			num_downsamplers, top1_scale);
-		len += sprintf(buf + len, "force_bypass_precision: %d\n", force_bypass_precision);
-		len += sprintf(buf + len, "force_bypass_precision_once: %d\n",
+		len += sprintf(buf + len, "force_bypass_precision:%d\n", force_bypass_precision);
+		len += sprintf(buf + len, "force_bypass_precision_once:%d\n",
 			force_bypass_precision_once);
-		len += sprintf(buf + len, "miss_top1_and_bypass_pr_once: %d\n",
+		len += sprintf(buf + len, "miss_top1_and_bypass_pr_once:%d\n",
 			miss_top1_and_bypass_pr_once);
 		len += sprintf(buf + len, "top1 on: %d\n", top1_info.core_on);
 		len += sprintf(buf + len, "top1 on cnt: %d\n", top1_info.core_on_cnt);
 		len += sprintf(buf + len, "top1 video: %d\n",
 			top1_info.amdv_setting_video_flag);
-		len += sprintf(buf + len, "==========TOP2=========\n");
+		len += sprintf(buf + len, "================TOP2===============\n");
 		len += sprintf(buf + len, "top2 on: %d\n", top2_info.core_on);
 		len += sprintf(buf + len, "top2 on cnt: %d\n", top2_info.core_on_cnt);
 		len += sprintf(buf + len, "top2 video: %d\n",

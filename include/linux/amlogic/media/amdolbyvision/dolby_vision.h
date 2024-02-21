@@ -52,7 +52,8 @@ struct vframe_s;
 enum py_level {
 	PY_SIX_LEVEL = 0,
 	PY_SEVEN_LEVEL = 1,
-	PY_NO_LEVEL  = 2
+	PY_NO_LEVEL  = 2,
+	PY_LEVEL_INVALID = 3
 };
 
 extern unsigned int debug_dolby;

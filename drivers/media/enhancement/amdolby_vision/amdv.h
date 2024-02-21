@@ -937,6 +937,8 @@ extern bool miss_top1_and_bypass_pr_once;
 extern bool update_top2_control_path_flag;
 extern u32 top1_scale;
 extern bool enable_top1_scale;
+extern bool wait_first_frame_top1;
+extern const char level_str[4][10];
 /************/
 
 #define pr_dv_dbg(fmt, args...)\

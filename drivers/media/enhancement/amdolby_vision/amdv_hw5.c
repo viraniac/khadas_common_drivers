@@ -117,6 +117,7 @@ ulong fixed_y_buf_paddr;
 ulong fixed_uv_buf_paddr;
 u8 *y_vaddr;
 u8 *uv_vaddr;
+bool wait_first_frame_top1;
 
 void fixed_buf_config(void)
 {
@@ -687,7 +688,7 @@ static void dolby5_top1_ini(struct dolby5_top1_type *dolby5_top1, bool reset)
 	u32 *p_reg_top1b;
 	int top1_ahb_num;
 	int top1b_ahb_num;
-	u32 top1_hsize = dolby5_top1->core1_hsize >> top1_scale;
+	u32 top1_hsize = dolby5_top1->core1_hsize >> top1_scale;/*real size after rdmif downscale*/
 	u32 top1_vsize = dolby5_top1->core1_vsize >> top1_scale;
 
 	if (hw5_reg_from_file || (test_dv & DEBUG_FIXED_REG) /*fixed reg*/) {
@@ -2046,10 +2047,9 @@ int tv_top_set(u64 *top1_reg,
 		top1_enable_changed = false;
 	}
 
+	top2_info.py_level = level;
 	if (enable_top1) {
 		check_pr_enabled_in_setting();
-
-		top2_info.py_level = level;
 		if (hw5_reg_from_file)
 			top2_info.py_level = PY_SIX_LEVEL;//temp debug, case0 frame1, 6 level
 		if (test_dv & DEBUG_HW5_NO_LEVEL)
@@ -2059,25 +2059,22 @@ int tv_top_set(u64 *top1_reg,
 
 		/*******check py_level status changed********/
 		if (last_top2_py_level != top2_info.py_level) {
-			pr_dv_dbg("py_level status changed %s->%s\n",
-				last_top2_py_level == 0 ? "6" :
-				(last_top2_py_level == 1 ? "7" : "0"),
-				last_top2_py_level == 0 ? "6" :
-				(last_top2_py_level == 1 ? "7" : "0"));
+			pr_dv_dbg("top2 py_level status changed %s->%s\n",
+				level_str[last_top2_py_level],
+				level_str[top2_info.py_level]);
 			/*off->on step1: bypass for 2vsync, step2: reset, enable precision*/
 			if (last_top2_py_level == PY_NO_LEVEL && top2_info.core_on) {
 				/*force_bypass_precision_once = true;*/
-				/*delay_reset = true;*//*no need delay reset now*/
+				/*delay_reset = true;*//*no need reset now*/
+				/*delay_cnt = 0;*/
 				sw_reset = true;
 				toggle = true;
-				delay_cnt = 0;
 			} else if (top2_info.core_on) {
 				/*level 6/7 change during playing, reset without delay*/
 				//reset = true;
 				sw_reset = true;
 				toggle = true;
 			}
-			last_top2_py_level = top2_info.py_level;
 		} else if (top2_info.py_level != PY_NO_LEVEL) {
 			/*******check precision status changed********/
 			/*if not get a frame in advance,there will no pyramid.bypass pyramid once*/
@@ -2091,7 +2088,9 @@ int tv_top_set(u64 *top1_reg,
 			} else {
 				if (miss_top1_and_bypass_pr_once && pr_done) {
 					++pr_done_continue_cnt;
-					if (pr_done_continue_cnt > PR_DONE_CONTINUE_CNT)
+					/*check precision done for more frames except first frame*/
+					if (pr_done_continue_cnt > PR_DONE_CONTINUE_CNT ||
+						top2_info.core_on_cnt < 3)
 						miss_top1_and_bypass_pr_once = false;
 					if (debug_dolby & 1)
 						pr_dv_dbg("pr_done_continue_cnt %d %d\n",
@@ -2160,7 +2159,6 @@ int tv_top_set(u64 *top1_reg,
 				//reset = true;
 				sw_reset = true;
 				toggle = true;
-				//py_rd_id = py_wr_id ^ 1;
 			}
 		}
 		if (!top1_info.core_on && !top2_info.core_on) {
@@ -2173,9 +2171,12 @@ int tv_top_set(u64 *top1_reg,
 			isr_cnt = 0;
 			top1_done = false;
 		}
-		/*first frame with top2, reset*/
-		//if (top1_info.core_on && !top2_info.core_on)
-			//reset = true;
+
+		if (wait_first_frame_top1) {
+			/*first frame with top2,reset to avoid blank for first play(TOP2 RO err)*/
+			if (top1_info.core_on && !top2_info.core_on)
+				reset = true;
+		}
 
 		if (debug_dolby & 8)
 			pr_dv_dbg("last_py_enabled %d %d,%d %d,%d %d,%d %d,reset %d %d\n",
@@ -2233,15 +2234,16 @@ int tv_top_set(u64 *top1_reg,
 	if (!py_enabled && last_py_enabled)
 		toggle = true;
 	last_py_enabled = py_enabled;
+	last_top2_py_level = top2_info.py_level;
 
-	/*first frame with top1, not enable top2*/
-	if (!enable_top1 || top1_info.core_on || top2_info.core_on) {
-		if (/*top1_info.core_on_cnt == 0 &&*/
-			top2_info.core_on_cnt == 0)
+	/*For cert: first frame with top1, not enable top2*/
+	if (!wait_first_frame_top1 ||
+		(!enable_top1 || top1_info.core_on || top2_info.core_on)) {
+		if (top2_info.core_on_cnt == 0)
 			reset = true;/*first frame with top2, reset*/
 
 		/*update pyramid read index when toggle new frame, except first frame*/
-		if (top1_info.core_on && top2_info.core_on_cnt != 0) {
+		if ((top1_info.core_on && top2_info.core_on_cnt != 0) || !wait_first_frame_top1) {
 			if (reset || toggle)
 				py_rd_id = py_rd_id ^ 1;
 		}
