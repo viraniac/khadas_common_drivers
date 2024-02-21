@@ -1453,7 +1453,7 @@ static void osd_afbc_dump_register(struct drm_printer *p,
 
 	osd_index = vblk->index;
 	afbc = to_afbc_block(vblk);
-	reg = &afbc->afbc_regs[osd_index];
+	reg = afbc->afbc_regs;
 
 	snprintf(buff, 8, "OSD%d", osd_index + 1);
 	drm_printf(p, "afbc error [%d]\n", afbc_err_cnt);
