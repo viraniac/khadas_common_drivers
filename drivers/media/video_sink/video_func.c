@@ -2330,7 +2330,7 @@ void amvecm_process(struct path_id_s *path_id,
 			vd_layer[0].vpp_index);
 	else if (path_id->vd2_path_id == p_gvideo_recv->path_id) {
 		if (p_gvideo_recv->vpp_id != VPP0)
-			vpp_index = vd_layer_vpp[p_gvideo_recv->vpp_id - VPP0].vpp_index;
+			vpp_index = vd_layer_vpp[p_gvideo_recv->vpp_id - VPP1].vpp_index;
 		else
 			vpp_index = vd_layer[1].vpp_index;
 		amvecm_on_vs
@@ -2349,7 +2349,7 @@ void amvecm_process(struct path_id_s *path_id,
 			vpp_index);
 	} else if (path_id->vd3_path_id == p_gvideo_recv->path_id) {
 		if (p_gvideo_recv->vpp_id != VPP0)
-			vpp_index = vd_layer_vpp[p_gvideo_recv->vpp_id - VPP0].vpp_index;
+			vpp_index = vd_layer_vpp[p_gvideo_recv->vpp_id - VPP1].vpp_index;
 		else
 			vpp_index = vd_layer[2].vpp_index;
 		amvecm_on_vs

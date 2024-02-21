@@ -2585,9 +2585,10 @@ void amvecm_video_latch(int vpp_index)
 static void amvecm_overscan_process(struct vframe_s *vf,
 				    struct vframe_s *toggle_vf,
 				    int flags,
-				    enum vd_path_e vd_path)
+				    enum vd_path_e vd_path,
+				    enum vpp_index_e vpp_index)
 {
-	if (vd_path != VD1_PATH)
+	if (vpp_index == VPP_TOP0 && vd_path != VD1_PATH)
 		return;
 	if (flags & CSC_FLAG_CHECK_OUTPUT) {
 		if (toggle_vf)
@@ -2720,7 +2721,7 @@ int amvecm_on_vs(struct vframe_s *vf,
 		return result;
 	}
 #endif
-	amvecm_overscan_process(vf, toggle_vf, flags, vd_path);
+	amvecm_overscan_process(vf, toggle_vf, flags, vd_path, vpp_index);
 	pr_amvecm_bringup_dbg("[on_vs] overscan_process done.\n");
 
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
