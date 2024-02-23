@@ -1428,12 +1428,15 @@ void ve_lcd_gamma_process(int vpp_index)
 	}
 
 	if (cpu_after_eq_t7()) {
-		if ((vecm_latch_flag & FLAG_GAMMA_TABLE_R) &&
-			(vecm_latch_flag & FLAG_GAMMA_TABLE_G) &&
+		if ((vecm_latch_flag & FLAG_GAMMA_TABLE_R) ||
+			(vecm_latch_flag & FLAG_GAMMA_TABLE_G) ||
 			(vecm_latch_flag & FLAG_GAMMA_TABLE_B)) {
-			vecm_latch_flag &= ~FLAG_GAMMA_TABLE_R;
-			vecm_latch_flag &= ~FLAG_GAMMA_TABLE_G;
-			vecm_latch_flag &= ~FLAG_GAMMA_TABLE_B;
+			if (vecm_latch_flag & FLAG_GAMMA_TABLE_R)
+				vecm_latch_flag &= ~FLAG_GAMMA_TABLE_R;
+			if (vecm_latch_flag & FLAG_GAMMA_TABLE_G)
+				vecm_latch_flag &= ~FLAG_GAMMA_TABLE_G;
+			if (vecm_latch_flag & FLAG_GAMMA_TABLE_B)
+				vecm_latch_flag &= ~FLAG_GAMMA_TABLE_B;
 			if (chip_type_id == chip_t5m ||
 				chip_type_id == chip_t3x ||
 				chip_type_id == chip_txhd2 ||

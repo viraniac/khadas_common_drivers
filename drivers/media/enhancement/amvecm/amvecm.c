@@ -12355,40 +12355,37 @@ void amvecm_gamma_init(bool en)
 				gt.gm_tb[k][j].data[i] = data[i];
 	}
 
-	if (chip_type_id == chip_t5m ||
-		chip_type_id == chip_t3x ||
-		chip_type_id == chip_txhd2 ||
-		chip_type_id == chip_a4) {
-		p_gm = get_gm_data();
-		p_gm->max_idx = 257;
-		p_gm->auto_inc = 1 << L_H_AUTO_INC_2;
-		if (chip_type_id == chip_a4) {
-			p_gm->addr_port = LCD_GAMMA_ADDR_PORT0_A4;
-			p_gm->data_port = LCD_GAMMA_DATA_PORT0_A4;
-		} else {
-			p_gm->addr_port = LCD_GAMMA_ADDR_PORT0;
-			p_gm->data_port = LCD_GAMMA_DATA_PORT0;
-		}
-		for (i = 0; i < p_gm->max_idx; i++) {
-			temp = i << 2;
-			if (temp >= (1 << 10))
-				temp = (1 << 10) - 1;
-			p_gm->gm_tbl.gamma_r[i] = temp;
-			p_gm->gm_tbl.gamma_g[i] = temp;
-			p_gm->gm_tbl.gamma_b[i] = temp;
-		}
-		lcd_gamma_api(0, p_gm->gm_tbl.gamma_r,
-				p_gm->gm_tbl.gamma_g,
-				p_gm->gm_tbl.gamma_b,
-				WR_VCB, WR_MOD, 0);
-		return;
-	}
-
 	if (cpu_after_eq_t7()) {
 		if (is_meson_t7_cpu()) {
 			vecm_latch_flag |= FLAG_GAMMA_TABLE_R;
 			vecm_latch_flag |= FLAG_GAMMA_TABLE_G;
 			vecm_latch_flag |= FLAG_GAMMA_TABLE_B;
+		} else if (chip_type_id == chip_t5m ||
+				   chip_type_id == chip_t3x ||
+				   chip_type_id == chip_txhd2 ||
+				   chip_type_id == chip_a4) {
+			p_gm = get_gm_data();
+			p_gm->max_idx = 257;
+			p_gm->auto_inc = 1 << L_H_AUTO_INC_2;
+			if (chip_type_id == chip_a4) {
+				p_gm->addr_port = LCD_GAMMA_ADDR_PORT0_A4;
+				p_gm->data_port = LCD_GAMMA_DATA_PORT0_A4;
+			} else {
+				p_gm->addr_port = LCD_GAMMA_ADDR_PORT0;
+				p_gm->data_port = LCD_GAMMA_DATA_PORT0;
+			}
+			for (i = 0; i < p_gm->max_idx; i++) {
+				temp = i << 2;
+				if (temp >= (1 << 10))
+					temp = (1 << 10) - 1;
+				p_gm->gm_tbl.gamma_r[i] = temp;
+				p_gm->gm_tbl.gamma_g[i] = temp;
+				p_gm->gm_tbl.gamma_b[i] = temp;
+			}
+			lcd_gamma_api(0, p_gm->gm_tbl.gamma_r,
+					p_gm->gm_tbl.gamma_g,
+					p_gm->gm_tbl.gamma_b,
+					WR_VCB, WR_MOD, 0);
 		} else {
 			lcd_gamma_api(0, video_gamma_table_r.data,
 				video_gamma_table_g.data,
