@@ -282,6 +282,13 @@ void video_display_push_ready(struct composer_dev *dev, struct vframe_s *vf)
 {
 	u32 vsync_index = vsync_count[dev->index];
 
+#ifdef CONFIG_AMLOGIC_MEDIA_FRC
+	if (!dev->enable_pulldown && (vd_pulldown_level && frc_get_video_latency())) {
+		dev->enable_pulldown = true;
+		vc_print(dev->index, PRINT_OTHER, "%s: enable pulldown\n", __func__);
+	}
+#endif
+
 	if (vf && vf->vc_private) {
 		vf->vc_private->vsync_index = vsync_index;
 		vc_print(dev->index, PRINT_OTHER,
@@ -1165,8 +1172,7 @@ int video_display_create_path(struct composer_dev *dev)
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
 	if (vd_pulldown_level && frc_get_video_latency()) {
 		dev->enable_pulldown = true;
-		vc_print(dev->index, PRINT_OTHER,
-			"enable pulldown\n");
+		vc_print(dev->index, PRINT_OTHER, "%s: enable pulldown\n", __func__);
 	}
 #endif
 	return 0;
