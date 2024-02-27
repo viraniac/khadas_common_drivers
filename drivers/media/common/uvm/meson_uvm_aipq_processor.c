@@ -75,6 +75,8 @@ int aipq_vf_set_value(struct uvm_aipq_info *aipq_info, bool enable_aipq)
 	struct file_private_data *file_private_data = NULL;
 	int shared_fd = aipq_info->shared_fd;
 	int i = 0, di_flag = 0;
+	struct vframe_s *dma_di_vf = NULL;
+	bool dma_has_di_vf = false;
 
 	dmabuf = dma_buf_get(shared_fd);
 
@@ -126,6 +128,27 @@ int aipq_vf_set_value(struct uvm_aipq_info *aipq_info, bool enable_aipq)
 		vf->ai_pq_enable = enable_aipq;
 		di_flag = vf->flag & VFRAME_FLAG_CONTAIN_POST_FRAME;
 
+		/*check attach vf == vf_ext for di*/
+		uhmod = uvm_get_hook_mod(dmabuf, VF_PROCESS_DI);
+		if (!IS_ERR_OR_NULL(uhmod) && uhmod->arg) {
+			dma_has_di_vf = true;
+			dma_di_vf = (struct vframe_s *)uhmod->arg;
+		}
+
+		aipq_print(PRINT_OTHER,
+			"dmabuf=%px, vf=%px, vf->vf_ext=%px, dma_di_vf=%px, flag=%x, has_di=%d\n",
+			dmabuf, vf, vf->vf_ext, dma_di_vf, vf->flag, dma_has_di_vf);
+
+		if (vf->vf_ext && di_flag) {
+			if (!(dma_has_di_vf && vf->vf_ext == dma_di_vf)) {
+				aipq_print(PRINT_ERROR,
+					"di vf err:dmabuf=%px,uhmod=%px,vf=%px,vf_ext=%px,dma_di_vf=%px,index=%d\n",
+					dmabuf, uhmod, vf, vf->vf_ext, dma_di_vf, vf->omx_index);
+				di_flag = 0;
+			}
+		}
+		/*check end, next need put uvm*/
+
 		if (vf->vf_ext) {
 			if (!is_dec_vf || (is_dec_vf && di_flag)) {
 				aipq_print(PRINT_OTHER, "set di vf\n");
@@ -141,6 +164,10 @@ int aipq_vf_set_value(struct uvm_aipq_info *aipq_info, bool enable_aipq)
 		} else {
 			aipq_print(PRINT_OTHER, "not find di vf\n");
 		}
+
+		if (!IS_ERR_OR_NULL(uhmod))
+			uvm_put_hook_mod(dmabuf, VF_PROCESS_DI);
+
 	} else {
 		aipq_print(PRINT_ERROR, "not find vf\n");
 		dma_buf_put(dmabuf);
@@ -160,6 +187,8 @@ struct vframe_s *aipq_get_dw_vf(struct uvm_aipq_info *aipq_info)
 	struct file_private_data *file_private_data = NULL;
 	int shared_fd = aipq_info->shared_fd;
 	int interlace_mode = 0;
+	struct vframe_s *dma_di_vf = NULL;
+	bool dma_has_di_vf = false;
 
 	dmabuf = dma_buf_get(shared_fd);
 
@@ -197,6 +226,25 @@ struct vframe_s *aipq_get_dw_vf(struct uvm_aipq_info *aipq_info)
 
 		di_vf = vf->vf_ext;
 		interlace_mode = vf->type & VIDTYPE_TYPEMASK;
+
+		uhmod = uvm_get_hook_mod(dmabuf, VF_PROCESS_DI);
+		if (!IS_ERR_OR_NULL(uhmod)) {
+			dma_has_di_vf = true;
+			dma_di_vf = (struct vframe_s *)uhmod->arg;
+		}
+
+		if (di_vf && (vf->flag & VFRAME_FLAG_CONTAIN_POST_FRAME)) {
+			aipq_print(PRINT_OTHER,
+				"%s: dma_has_di_vf=%d, dma_di_vf=%px\n",
+				__func__, dma_has_di_vf, dma_di_vf);
+			if (!(dma_has_di_vf && di_vf == dma_di_vf)) {
+				aipq_print(PRINT_ERROR,
+					"di vf err: dmabuf=%px, uhmod=%px, vf=%px, di_vf=%px, dma_di_vf=%px, omx_index=%d\n",
+					dmabuf, uhmod, vf, di_vf, dma_di_vf, vf->omx_index);
+				di_vf = NULL;
+			}
+		}
+
 		if (di_vf && (vf->flag & VFRAME_FLAG_CONTAIN_POST_FRAME)) {
 			if (interlace_mode != VIDTYPE_PROGRESSIVE) {
 				/*for interlace*/
@@ -209,6 +257,9 @@ struct vframe_s *aipq_get_dw_vf(struct uvm_aipq_info *aipq_info)
 				vf = di_vf;
 			}
 		}
+
+		if (dma_has_di_vf)
+			uvm_put_hook_mod(dmabuf, VF_PROCESS_DI);
 		dmabuf_put_vframe(dmabuf);
 	} else {
 		uhmod = uvm_get_hook_mod(dmabuf, VF_PROCESS_V4LVIDEO);

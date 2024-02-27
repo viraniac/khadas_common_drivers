@@ -1724,6 +1724,10 @@ static struct vframe_s *get_vf_from_file(struct composer_dev *dev,
 	struct file_private_data *file_private_data = NULL;
 	bool enable_prelink = false;
 	bool dec_is_i = false;
+	struct uvm_hook_mod *uhmod = NULL;
+	struct dma_buf *dmabuf = NULL;
+	struct vframe_s *dma_di_vf = NULL;
+	bool dma_has_di_vf = false;
 
 	if (IS_ERR_OR_NULL(dev) || IS_ERR_OR_NULL(file_vf)) {
 		vc_print(dev->index, PRINT_ERROR,
@@ -1749,6 +1753,29 @@ static struct vframe_s *get_vf_from_file(struct composer_dev *dev,
 			vf->type,
 			vf->flag);
 		dec_is_i = vf->type & VIDTYPE_INTERLACE;
+
+		dmabuf = (struct dma_buf *)(file_vf->private_data);
+		uhmod = uvm_get_hook_mod(dmabuf, VF_PROCESS_DI);
+		if (!IS_ERR_OR_NULL(uhmod)) {
+			dma_has_di_vf = true;
+			dma_di_vf = (struct vframe_s *)uhmod->arg;
+		}
+
+		if (di_vf && (vf->flag & VFRAME_FLAG_CONTAIN_POST_FRAME)) {
+			vc_print(dev->index, PRINT_OTHER,
+				"dma_has_di_vf=%d, dma_di_vf=%px\n",
+				dma_has_di_vf, dma_di_vf);
+			if (!(dma_has_di_vf && di_vf == dma_di_vf)) {
+				vc_print(dev->index, PRINT_ERROR,
+					"di vf err: file_vf=%px, dmabuf=%px, uhmod=%px, vf=%px\n",
+					file_vf, dmabuf, uhmod, vf);
+				vc_print(dev->index, PRINT_ERROR,
+					"di_vf=%px, dma_di_vf=%px, omx_index=%d\n",
+					di_vf, dma_di_vf, vf->omx_index);
+				di_vf = NULL;
+			}
+		}
+
 		if (di_vf && (vf->flag & VFRAME_FLAG_CONTAIN_POST_FRAME)) {
 #ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
 			enable_prelink = dim_get_pre_link();
@@ -1772,9 +1799,13 @@ static struct vframe_s *get_vf_from_file(struct composer_dev *dev,
 				vf = di_vf;
 			}
 		}
-		dmabuf_put_vframe((struct dma_buf *)(file_vf->private_data));
 		if (vf->omx_index == 0 && vf->index_disp != 0)
 			vf->omx_index = vf->index_disp;
+
+		if (dma_has_di_vf)
+			uvm_put_hook_mod(dmabuf, VF_PROCESS_DI);
+		dmabuf_put_vframe((struct dma_buf *)(file_vf->private_data));
+
 	} else {
 		vc_print(dev->index, PRINT_OTHER, "vf is from v4lvideo\n");
 		file_private_data = vc_get_file_private(dev, file_vf);
