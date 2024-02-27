@@ -1573,6 +1573,7 @@ void vdin_stop_dec(struct vdin_dev_s *devp)
 		pr_err("%s vdin%d not enable\n", __func__, devp->index);
 		return;
 	}
+	devp->msct_top.sct_stop_flag = true;
 
 #ifdef CONFIG_CMA
 	if (devp->cma_mem_alloc == 0 && devp->cma_config_en &&
@@ -2758,8 +2759,8 @@ int vdin_vframe_put_and_recycle(struct vdin_dev_s *devp, struct vf_entry *vfe,
 				devp->vfp->last_last_vfe->vf.index,
 				devp->vfp->last_last_vfe->vf.signal_type,
 				devp->vfp->last_last_vfe->vf.type,
-				devp->vfp->last_last_vfe->vf.flag,
 				devp->vfp->last_last_vfe->flag,
+				devp->vfp->last_last_vfe->vf.flag,
 				devp->vfp->last_last_vfe->vf.duration,
 				devp->vfp->last_last_vfe->vf.index_disp);
 
@@ -3471,13 +3472,10 @@ irqreturn_t vdin_isr(int irq, void *dev_id)
 		spin_lock_irqsave(&devp->vfp->wr_lock, wr_list_flags);
 		if (next_wr_vfe->sct_stat != VFRAME_SCT_STATE_FULL) {
 			spin_unlock_irqrestore(&devp->vfp->wr_lock, wr_list_flags);
-			devp->msct_top.sct_pause_dec = true;
 			devp->vdin_irq_flag = VDIN_IRQ_FLG_NO_NEXT_FE;
 			vdin_drop_frame_info(devp, "sct no next wr vfe");
-			vdin_pause_hw_write(devp, 0);
+			vdin_pause_hw_write(devp, devp->flags & VDIN_FLAG_RDMA_ENABLE);
 			goto irq_handled;
-		} else if (devp->msct_top.sct_pause_dec) {
-			devp->msct_top.sct_pause_dec = false;
 		}
 		spin_unlock_irqrestore(&devp->vfp->wr_lock, wr_list_flags);
 	}
