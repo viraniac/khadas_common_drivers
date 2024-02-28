@@ -2042,7 +2042,6 @@ static int bl_lcd_update_notifier(struct notifier_block *nb,
 {
 	struct aml_lcd_drv_s *pdrv = (struct aml_lcd_drv_s *)data;
 	struct aml_bl_drv_s *bdrv;
-	struct bl_metrics_config_s *bl_metrics_conf;
 	struct bl_pwm_config_s *bl_pwm = NULL;
 	unsigned int frame_rate;
 	unsigned short hactive, vactive;
@@ -2062,12 +2061,13 @@ static int bl_lcd_update_notifier(struct notifier_block *nb,
 	if (bdrv->probe_done == 0)
 		return NOTIFY_DONE;
 
-	bl_metrics_conf = &bdrv->bl_metrics_conf;
 	frame_rate = pdrv->config.timing.act_timing.frame_rate;
 	hactive = pdrv->config.timing.act_timing.h_active;
 	vactive = pdrv->config.timing.act_timing.v_active;
 
-	bl_metrics_conf->frame_rate = frame_rate;
+#ifdef BL_BRIGHTNESS_METER
+	bdrv->bl_metrics_conf.frame_rate = frame_rate;
+#endif
 	if (lcd_debug_print_flag & LCD_DBG_PR_BL_NORMAL)
 		BLPR("[%d]: %s for pwm_vs\n", bdrv->index, __func__);
 	switch (bdrv->bconf.method) {
@@ -2498,9 +2498,11 @@ static void bl_pwm_port_update(struct aml_bl_drv_s *bdrv)
 
 static inline void bl_vsync_handler(struct aml_bl_drv_s *bdrv)
 {
-	struct bl_metrics_config_s *bl_metrics_conf;
 	struct bl_pwm_config_s *bl_pwm;
 	struct bl_config_s *bconf = &bdrv->bconf;
+#ifdef BL_BRIGHTNESS_METER
+	struct bl_metrics_config_s *meter_conf;
+#endif
 	unsigned int level = 0;
 	static int backlight_toggled;
 
@@ -2536,30 +2538,29 @@ static inline void bl_vsync_handler(struct aml_bl_drv_s *bdrv)
 		backlight_toggled = !backlight_toggled;
 	}
 
-	bl_metrics_conf = &bdrv->bl_metrics_conf;
-	if (bl_metrics_conf && bl_metrics_conf->level_buf) {
-		if (bl_metrics_conf->sum_cnt < bl_metrics_conf->frame_rate) {
-			bl_metrics_conf->level_count += bdrv->level;
-			bl_metrics_conf->brightness_count +=
-					bdrv->level_brightness;
-			bl_metrics_conf->sum_cnt++;
+#ifdef BL_BRIGHTNESS_METER
+	meter_conf = &bdrv->bl_metrics_conf;
+	if (meter_conf->level_buf) {
+		if (meter_conf->sum_cnt < meter_conf->frame_rate) {
+			meter_conf->level_count += bdrv->level;
+			meter_conf->brightness_count += bdrv->level_brightness;
+			meter_conf->sum_cnt++;
 		} else {
-			bl_metrics_conf->level_buf[bl_metrics_conf->cnt] =
-			bl_metrics_conf->level_count /
-			bl_metrics_conf->frame_rate;
-			bl_metrics_conf->brightness_buf[bl_metrics_conf->cnt] =
-			bl_metrics_conf->brightness_count /
-			bl_metrics_conf->frame_rate;
-			bl_metrics_conf->cnt++;
-			bl_metrics_conf->sum_cnt = 0;
-			bl_metrics_conf->level_count = 0;
-			bl_metrics_conf->brightness_count = 0;
+			meter_conf->level_buf[meter_conf->cnt] =
+				meter_conf->level_count / meter_conf->frame_rate;
+			meter_conf->brightness_buf[meter_conf->cnt] =
+				meter_conf->brightness_count / meter_conf->frame_rate;
+			meter_conf->cnt++;
+			meter_conf->sum_cnt = 0;
+			meter_conf->level_count = 0;
+			meter_conf->brightness_count = 0;
 		}
-		if (bl_metrics_conf->cnt == BL_LEVEL_CNT_MAX) {
-			bl_metrics_conf->sum_cnt = 0;
-			bl_metrics_conf->cnt = 0;
+		if (meter_conf->cnt == BL_LEVEL_CNT_MAX) {
+			meter_conf->sum_cnt = 0;
+			meter_conf->cnt = 0;
 		}
 	}
+#endif
 
 	if ((bdrv->state & BL_STATE_GD_EN) == 0) {
 		if (bdrv->level_brightness == bdrv->level)
@@ -3607,9 +3608,10 @@ static ssize_t bl_debug_brightness_bypass_store(struct device *dev,
 	return count;
 }
 
+#ifdef BL_BRIGHTNESS_METER
 static void bl_brightness_metrics_calc(struct aml_bl_drv_s *bdrv)
 {
-	struct bl_metrics_config_s *bl_metrics_conf = &bdrv->bl_metrics_conf;
+	struct bl_metrics_config_s *meter_conf = &bdrv->bl_metrics_conf;
 	unsigned int j = BL_LEVEL_CNT_MAX;
 	unsigned int i = 0;
 	unsigned int level_sum = 0;
@@ -3617,29 +3619,26 @@ static void bl_brightness_metrics_calc(struct aml_bl_drv_s *bdrv)
 	unsigned int cnt = 0;
 	unsigned int temp;
 
-	cnt = bl_metrics_conf->cnt;
-	temp = bl_metrics_conf->times;
-	memcpy(&bl_metrics_conf->level_buf[j],
-	       bl_metrics_conf->level_buf,
+	cnt = meter_conf->cnt;
+	temp = meter_conf->times;
+	memcpy(&meter_conf->level_buf[j], meter_conf->level_buf,
 	       (sizeof(unsigned int) * BL_LEVEL_CNT_MAX));
-
-	memcpy(&bl_metrics_conf->brightness_buf[j],
-	       bl_metrics_conf->brightness_buf,
+	memcpy(&meter_conf->brightness_buf[j], meter_conf->brightness_buf,
 	       (sizeof(unsigned int) * BL_LEVEL_CNT_MAX));
 
 	for (i = cnt + j; i > (cnt + j - temp); i--) {
 		if (lcd_debug_print_flag & LCD_DBG_PR_BL_ADV) {
 			BLPR("cnt: %d, %d: brightness_buf: %d, level_buf: %d\n",
 			     cnt, i,
-			     bl_metrics_conf->brightness_buf[i],
-			     bl_metrics_conf->level_buf[i]);
+			     meter_conf->brightness_buf[i],
+			     meter_conf->level_buf[i]);
 		}
-		level_sum +=  bl_metrics_conf->level_buf[i];
-		brightness_sum +=  bl_metrics_conf->brightness_buf[i];
+		level_sum +=  meter_conf->level_buf[i];
+		brightness_sum +=  meter_conf->brightness_buf[i];
 	}
 
-	bl_metrics_conf->level_metrics = level_sum / temp;
-	bl_metrics_conf->brightness_metrics = brightness_sum / temp;
+	meter_conf->level_metrics = level_sum / temp;
+	meter_conf->brightness_metrics = brightness_sum / temp;
 }
 
 static ssize_t bl_brightness_metrics_show(struct device *dev,
@@ -3647,16 +3646,16 @@ static ssize_t bl_brightness_metrics_show(struct device *dev,
 					  char *buf)
 {
 	struct aml_bl_drv_s *bdrv = dev_get_drvdata(dev);
-	struct bl_metrics_config_s *bl_metrics_conf = &bdrv->bl_metrics_conf;
+	struct bl_metrics_config_s *meter_conf = &bdrv->bl_metrics_conf;
 
-	if (!bl_metrics_conf->level_buf)
+	if (!meter_conf->level_buf)
 		return sprintf(buf, "bl_metrics_conf have no level_buf\n");
 
 	bl_brightness_metrics_calc(bdrv);
 
 	return sprintf(buf, "brightness_metrics: %d, level_metrics: %d\n",
-		       bl_metrics_conf->brightness_metrics,
-		       bl_metrics_conf->level_metrics);
+		       meter_conf->brightness_metrics,
+		       meter_conf->level_metrics);
 }
 
 static ssize_t bl_brightness_metrics_store(struct device *dev,
@@ -3664,7 +3663,7 @@ static ssize_t bl_brightness_metrics_store(struct device *dev,
 					   const char *buf, size_t count)
 {
 	struct aml_bl_drv_s *bdrv = dev_get_drvdata(dev);
-	struct bl_metrics_config_s *bl_metrics_conf = &bdrv->bl_metrics_conf;
+	struct bl_metrics_config_s *meter_conf = &bdrv->bl_metrics_conf;
 	unsigned int temp;
 	int ret;
 
@@ -3674,27 +3673,28 @@ static ssize_t bl_brightness_metrics_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	if (!bl_metrics_conf->level_buf) {
+	if (!meter_conf->level_buf) {
 		BLERR("get no brightness value\n");
 		return  -EINVAL;
 	}
 
 	if (temp > (BL_LEVEL_CNT_MAX / 60)) {
 		BLPR("max support 60min\n");
-		bl_metrics_conf->times = BL_LEVEL_CNT_MAX;
+		meter_conf->times = BL_LEVEL_CNT_MAX;
 	} else {
-		bl_metrics_conf->times = temp * 60;
+		meter_conf->times = temp * 60;
 	}
 
 	bl_brightness_metrics_calc(bdrv);
 
 	BLPR("time: %d, brightness_metrics: %d, level_metrics: %d\n",
-	     bl_metrics_conf->times,
-	     bl_metrics_conf->brightness_metrics,
-	     bl_metrics_conf->level_metrics);
+	     meter_conf->times,
+	     meter_conf->brightness_metrics,
+	     meter_conf->level_metrics);
 
 	return count;
 }
+#endif
 
 static ssize_t bl_debug_level_show(struct device *dev,
 					struct device_attribute *attr,
@@ -3880,8 +3880,10 @@ static struct device_attribute bl_debug_attrs[] = {
 	__ATTR(delay, 0644, bl_debug_delay_show, bl_debug_delay_store),
 	__ATTR(brightness_bypass, 0644, bl_debug_brightness_bypass_show,
 	       bl_debug_brightness_bypass_store),
+#ifdef BL_BRIGHTNESS_METER
 	__ATTR(brightness_metrics, 0644, bl_brightness_metrics_show,
 	       bl_brightness_metrics_store),
+#endif
 	__ATTR(debug_level, 0644, bl_debug_level_show, bl_debug_level_store),
 	__ATTR(debug, 0644, bl_debug_help, bl_debug_store),
 	__ATTR(switch_pwm_port, 0644, bl_pwm_prot_show, bl_pwm_port_switch_store),
@@ -4327,7 +4329,9 @@ static void aml_bl_config_probe_work(struct work_struct *p_work)
 {
 	struct delayed_work *d_work;
 	struct aml_bl_drv_s *bdrv;
-	struct bl_metrics_config_s *bl_metrics_conf = NULL;
+#ifdef BL_BRIGHTNESS_METER
+	struct bl_metrics_config_s *meter_conf = NULL;
+#endif
 	struct backlight_properties props;
 	struct backlight_device *bldev;
 	bool is_init;
@@ -4381,27 +4385,28 @@ static void aml_bl_config_probe_work(struct work_struct *p_work)
 	}
 	bdrv->bldev = bldev;
 
-	bl_metrics_conf = &bdrv->bl_metrics_conf;
-	bl_metrics_conf->times = 60;
-	bl_metrics_conf->cnt = 0;
-	bl_metrics_conf->sum_cnt = 0;
-	bl_metrics_conf->level_count = 0;
-	bl_metrics_conf->brightness_count = 0;
-	bl_metrics_conf->frame_rate = 60;
-	bl_metrics_conf->level_buf = kcalloc(BL_LEVEL_CNT_MAX * 2,
-					     sizeof(unsigned int), GFP_KERNEL);
-	if (!bl_metrics_conf->level_buf)
+#ifdef BL_BRIGHTNESS_METER
+	meter_conf = &bdrv->bl_metrics_conf;
+	meter_conf->times = 60;
+	meter_conf->cnt = 0;
+	meter_conf->sum_cnt = 0;
+	meter_conf->level_count = 0;
+	meter_conf->brightness_count = 0;
+	meter_conf->frame_rate = 60;
+	meter_conf->level_buf =
+		kcalloc(BL_LEVEL_CNT_MAX * 2, sizeof(unsigned int), GFP_KERNEL);
+	if (!meter_conf->level_buf)
 		goto err;
 
-	bl_metrics_conf->brightness_buf = kcalloc(BL_LEVEL_CNT_MAX * 2,
-					     sizeof(unsigned int), GFP_KERNEL);
-	if (!bl_metrics_conf->brightness_buf) {
-		kfree(bl_metrics_conf->level_buf);
-		bl_metrics_conf->level_buf = NULL;
+	meter_conf->brightness_buf =
+		kcalloc(BL_LEVEL_CNT_MAX * 2, sizeof(unsigned int), GFP_KERNEL);
+	if (!meter_conf->brightness_buf) {
+		kfree(meter_conf->level_buf);
+		meter_conf->level_buf = NULL;
 		goto err;
 	}
+#endif
 
-	memset(bl_metrics_conf->level_buf, 0, (sizeof(unsigned int)) * BL_LEVEL_CNT_MAX * 2);
 	bdrv->probe_done = 1;
 
 	/* init workqueue */
@@ -4544,8 +4549,10 @@ static int __exit aml_bl_remove(struct platform_device *pdev)
 
 	index = bdrv->index;
 
+#ifdef BL_BRIGHTNESS_METER
 	kfree(bdrv->bl_metrics_conf.level_buf);
 	kfree(bdrv->bl_metrics_conf.brightness_buf);
+#endif
 	cancel_delayed_work_sync(&bdrv->delayed_on_work);
 	cancel_delayed_work(&bdrv->config_probe_dly_work);
 	backlight_device_unregister(bdrv->bldev);

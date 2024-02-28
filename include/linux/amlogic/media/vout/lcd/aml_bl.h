@@ -35,6 +35,8 @@
 #define BL_FREQ_DEFAULT		1000 /* unit: HZ */
 #define BL_FREQ_VS_DEFAULT	2    /* multiple 2 of vfreq */
 
+//#define BL_BRIGHTNESS_METER
+
 struct bl_data_s {
 	unsigned int chip_type;
 	const char *chip_name;
@@ -173,6 +175,7 @@ struct bl_config_s {
 	unsigned int bl_extern_index;
 };
 
+#ifdef BL_BRIGHTNESS_METER
 #define BL_LEVEL_CNT_MAX	      3600 //default 1h
 struct bl_metrics_config_s {
 	unsigned int frame_rate;
@@ -186,6 +189,7 @@ struct bl_metrics_config_s {
 	unsigned int *level_buf;
 	unsigned int *brightness_buf;
 };
+#endif
 
 /* backlight_properties: state */
 /* Flags used to signal drivers of state changes */
@@ -218,7 +222,9 @@ struct aml_bl_drv_s {
 	unsigned char pwm_duty_free; /*debug flag*/
 	unsigned char debug_force;
 
+#ifdef BL_BRIGHTNESS_METER
 	struct bl_metrics_config_s bl_metrics_conf;
+#endif
 	struct bl_config_s        bconf;
 	struct cdev               cdev;
 	struct bl_data_s          *data;
