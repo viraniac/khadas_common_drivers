@@ -294,7 +294,7 @@
 
 		lcd_tcon_reserved:linux,lcd_tcon {
 			compatible = "amlogic, lcd_tcon";
-			reg = <0x1f000000 0x00800000>;
+			reg = <0x1f000000 0x00502840>;
 			no-map;
 		};
 
@@ -792,6 +792,28 @@
 		<&single_cpu_opp_table1>,
 		<&single_cpu_opp_table2>,
 		<&single_cpu_opp_table3>;
+};
+
+&meson_cooldev {
+	cooling_devices {
+		ddr_cool {
+			ddr_data = <9616 9616 9616 9616 9616 9616 9616
+			9616 9616 9616 9616 9616 9616 >;
+			gpu_data = <0x28202820 0x28202820 0x28202820 0x28202820
+			0x28202820 0x28202820 0x28202820 0x28202820 0x28202820
+			0x28202820 0x28202820 0x28202820 0x28202820>;
+		};
+	};
+};
+
+&thermal_zones {
+	soc_thermal {
+		trips {
+			trip-point@2 {
+				temperature = <65000>;
+			};
+		};
+	};
 };
 
 &acodec {
