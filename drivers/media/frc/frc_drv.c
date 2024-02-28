@@ -66,7 +66,8 @@
 #include <linux/cma.h>
 #include <linux/genalloc.h>
 #include <linux/dma-mapping.h>
-// #include <linux/delay.h>
+#include <linux/timer.h>
+#include <linux/hrtimer.h>
 
 #include "frc_drv.h"
 #include "frc_proc.h"
@@ -97,6 +98,8 @@ const struct frm_dly_dat_s chip_frc_frame_dly[3][4] = {
 		{220, 20},  // {240, 15},
 	},
 };
+
+struct hrtimer frc_hi_timer;  // timer
 
 // static struct frc_dev_s *frc_dev; // for SWPL-53056:KASAN: use-after-free
 static struct frc_dev_s frc_dev;
@@ -1100,6 +1103,10 @@ static void frc_drv_initial(struct frc_dev_s *devp)
 
 	devp->pat_dbg.pat_en = 1;
 
+	// ctrl high-priority tasklet
+	devp->in_sts.hi_en = 0;
+	devp->out_sts.hi_en = 0;
+
 	fw_data = (struct frc_fw_data_s *)devp->fw_data;
 	fw_data->holdline_parm.me_hold_line = 4;
 	fw_data->holdline_parm.mc_hold_line = 1;
@@ -1596,11 +1603,13 @@ int __init frc_init(void)
 		PR_ERR("failed to register frc driver module\n");
 		return -ENODEV;
 	}
+	hrtimer_init(&frc_hi_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	return 0;
 }
 
 void __exit frc_exit(void)
 {
 	platform_driver_unregister(&frc_driver);
+	hrtimer_cancel(&frc_hi_timer);
 	PR_FRC("%s:module exit\n", __func__);
 }

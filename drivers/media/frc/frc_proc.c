@@ -272,6 +272,7 @@ irqreturn_t frc_input_isr(int irq, void *dev_id)
 		return IRQ_HANDLED;
 
 	devp->in_sts.vs_cnt++;
+
 	/*update vs time*/
 	timestamp = div64_u64(timestamp, 1000);
 	devp->in_sts.vs_duration = timestamp - devp->in_sts.vs_timestamp;
@@ -284,7 +285,10 @@ irqreturn_t frc_input_isr(int irq, void *dev_id)
 	if (devp->in_sts.vs_cnt == devp->dbg_mvrd_mode)
 		if ((READ_FRC_REG(FRC_MC_MVRD_CTRL) & BIT_0) == BIT_0)
 			WRITE_FRC_REG_BY_CPU(FRC_MC_MVRD_CTRL, 0x100);
-	tasklet_schedule(&devp->input_tasklet);
+	if (devp->in_sts.hi_en)
+		tasklet_hi_schedule(&devp->input_tasklet);
+	else
+		tasklet_schedule(&devp->input_tasklet);
 
 	FRC_RDMA_WR_REG_IN(FRC_REG_TOP_RESERVE13, devp->in_sts.vs_cnt);
 	frc_rdma_config(1, 0);
@@ -356,7 +360,10 @@ irqreturn_t frc_output_isr(int irq, void *dev_id)
 
 	if (devp->dbg_reg_monitor_o)
 		frc_out_reg_monitor(devp);
-	tasklet_schedule(&devp->output_tasklet);
+	if (devp->out_sts.hi_en)
+		tasklet_hi_schedule(&devp->output_tasklet);
+	else
+		tasklet_schedule(&devp->output_tasklet);
 
 	// frc_rdma->rdma_item_count = 0;
 	// rdma trigger 0 manual, 1-7 auto path

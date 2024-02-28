@@ -960,8 +960,11 @@ ssize_t frc_debug_other_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "del_120_pth\t=%d\n", devp->ud_dbg.res2_dbg_en);
 	len += sprintf(buf + len, "pr_dbg\t\t=%d\n", devp->ud_dbg.pr_dbg);
 	len += sprintf(buf + len, "pre_vsync\t=%d\n", devp->use_pre_vsync);
-	len += sprintf(buf + len, "mute_en\t\t=%d\t%d\n", devp->in_sts.enable_mute_flag,
-							devp->in_sts.mute_vsync_cnt);
+	len += sprintf(buf + len, "mute_en\t\t=%d\t%d\n",
+		devp->in_sts.enable_mute_flag, devp->in_sts.mute_vsync_cnt);
+	len += sprintf(buf + len, "task_hi_en\t in_hi_en:%d out_hi_en:%d\n",
+		devp->in_sts.hi_en, devp->out_sts.hi_en);
+	len += sprintf(buf + len, "timer_ctrl\t[en 0/1][dbg_lvl][time:1-16ms]\n");
 	return len;
 }
 
@@ -1087,6 +1090,23 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->ud_dbg.align_dbg_en = val1;
+	} else if (!strcmp(parm[0], "task_hi_en")) {
+		if (!parm[2])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->in_sts.hi_en = val1;
+		if (kstrtoint(parm[2], 10, &val1) == 0)
+			devp->out_sts.hi_en = val1;
+	} else if (!strcmp(parm[0], "timer_ctrl")) {
+		if (!parm[3])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->timer_dbg.timer_en = (u8)val1;
+		if (kstrtoint(parm[2], 10, &val1) == 0)
+			devp->timer_dbg.timer_level = (u8)val1;
+		if (kstrtoint(parm[3], 10, &val1) == 0)
+			devp->timer_dbg.time_interval = (u8)val1;
+		frc_timer_proc(devp);
 	}
 exit:
 	kfree(buf_orig);
@@ -1215,4 +1235,45 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 
 free_buf:
 	kfree(buf_orig);
+}
+
+// timer
+static enum hrtimer_restart frc_timer_callback(struct hrtimer *timer)
+{
+	u8 i, log, time;
+	u32 reg_val;
+	struct frc_dev_s *devp = get_frc_devp();
+
+	log = devp->timer_dbg.timer_level;
+	time = devp->timer_dbg.time_interval;
+
+	for (i = 0; i < rdma_trace_num; i++) {
+		reg_val = READ_FRC_REG(rdma_trace_reg[i]);
+		pr_frc(log, "reg[%04x]=%08x\n", rdma_trace_reg[i], reg_val);
+	}
+
+	hrtimer_forward(&frc_hi_timer,
+		hrtimer_cb_get_time(timer), ktime_set(0, time * 1000000)); // unit: ns
+
+	return HRTIMER_RESTART;
+}
+
+void frc_timer_proc(struct frc_dev_s *devp)
+{
+	u8 timer_en, time;
+
+	timer_en = devp->timer_dbg.timer_en;
+	time = devp->timer_dbg.time_interval;
+	frc_hi_timer.function = frc_timer_callback;
+
+	if (time > 16)
+		time = 16;
+	else if (time < 1)
+		time = 1;
+
+	if (timer_en)
+		hrtimer_start(&frc_hi_timer,
+			ktime_set(0, time * 1000000), HRTIMER_MODE_REL); // unit: ns
+	else
+		hrtimer_cancel(&frc_hi_timer);
 }

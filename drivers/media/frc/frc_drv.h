@@ -112,8 +112,9 @@
 // frc_20231031 frc compress mc memory usage size
 // frc_20240111 n2m and vpu slice workaround
 // frc_20240104 open clk when sys resume
+// frc_20240116 frc rdma process optimisation
 
-#define FRC_FW_VER			"2024-0116 frc rdma process optimisation"
+#define FRC_FW_VER			"2024-0306  high-priority task and timestamp debug"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1
@@ -489,6 +490,7 @@ struct st_frc_in_sts {
 	u8 auto_ctrl_reserved;
 	u8 enable_mute_flag;
 	u8 mute_vsync_cnt;
+	u8 hi_en;
 };
 
 struct st_frc_out_sts {
@@ -500,6 +502,7 @@ struct st_frc_out_sts {
 	u32 vs_tsk_cnt;
 	u32 vs_duration;
 	u64 vs_timestamp;
+	u8 hi_en;
 };
 
 struct tool_debug_s {
@@ -646,6 +649,13 @@ struct frc_pat_dbg_s {
 	u8 pat_reserved;
 };
 
+struct frc_timer_dbg {
+	u8 timer_en;
+	u8 timer_level; // dbg level
+	u8 time_interval;
+	u8 timer_reserved;
+};
+
 struct frc_dev_s {
 	dev_t devt;
 	struct cdev cdev;
@@ -746,7 +756,10 @@ struct frc_dev_s {
 	struct frc_dmc_cfg_s  dmc_cfg[3];
 	struct frc_csc_set_s init_csc[2];
 	struct frc_pat_dbg_s pat_dbg;
+	struct frc_timer_dbg timer_dbg;
 };
+
+extern struct hrtimer frc_hi_timer;
 
 struct frc_dev_s *get_frc_devp(void);
 void get_vout_info(struct frc_dev_s *frc_devp);
