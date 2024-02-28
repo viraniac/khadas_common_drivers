@@ -46,8 +46,8 @@ static u32 vsync_pts_inc_scale_base[MAX_VD_LAYERS];
 #define PATTERN_32_DETECT_RANGE 7
 #define PATTERN_22_DETECT_RANGE 7
 #define PATTERN_22323_DETECT_RANGE 5
-#define PATTERN_44_DETECT_RANGE 14
-#define PATTERN_55_DETECT_RANGE 17
+#define PATTERN_44_DETECT_RANGE 5
+#define PATTERN_55_DETECT_RANGE 5
 
 /*if add new patten, need change dev->patten[X]*/
 enum video_refresh_pattern {
@@ -588,12 +588,33 @@ static inline int vd_perform_pulldown(struct composer_dev *dev,
 	return 0;
 }
 
-static bool pulldown_support_vf(struct composer_dev *dev, u32 duration)
+static int find_nearest_duration(struct composer_dev *dev, int duration_val)
+{
+	int min = INT_MAX;
+	int duration_arr[11] = {800, 801, 960, 1600, 1601, 1920, 3200, 3203, 3840, 4000, 4004};
+	int i = 0, num = 0, diff = 0;
+	int recy_count = sizeof(duration_arr) / sizeof(int);
+
+	for (i = 0; i < recy_count; i++) {
+		diff = abs(duration_val - duration_arr[i]);
+		if (diff < min) {
+			min = diff;
+			num = i;
+		}
+	}
+
+	vc_print(dev->index, PRINT_PATTERN, "The nearest duration is %d.\n", duration_arr[num]);
+	return duration_arr[num];
+}
+
+static bool pulldown_support_vf(struct composer_dev *dev, u32 duration_val)
 {
 	bool support = false;
-
+	int duration = 0;
 	/*duration: 800(120fps) 801(119.88fps) 960(100fps) 1600(60fps) 1920(50fps)*/
 	/*3200(30fps) 3203(29.97) 3840(25fps) 4000(24fps) 4004(23.976fps)*/
+
+	duration = find_nearest_duration(dev, duration_val);
 
 	if (vsync_pts_inc_scale[dev->index] == 1 &&
 		vsync_pts_inc_scale_base[dev->index] == 48) {
