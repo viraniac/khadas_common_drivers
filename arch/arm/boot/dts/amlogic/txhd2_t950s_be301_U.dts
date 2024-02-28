@@ -741,7 +741,7 @@
 	dvb-demux {
 		compatible = "amlogic, dvb-demux";
 		dev_name = "dvb-demux";
-		status = "disabled";
+		status = "okay";
 
 		dmx = <&demux>;
 		key_endia = <1>;
