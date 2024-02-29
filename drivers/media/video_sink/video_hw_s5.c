@@ -11831,10 +11831,15 @@ void set_video_slice_policy(struct video_layer_s *layer,
 	frc_switch_flag = frc_ready_to_switch();
 #endif
 	if (layer->layer_id == 0 && vinfo) {
+		if (src_width > 4096 && src_height > 2160) {
+			/* input: (4k-8k] */
+			slice_num = 4;
+			vd1s1_vd2_prebld_en = 0;
+			goto slice_calc_exit;
+		}
 		/* check output */
 		/* output: (4k-8k], input <= 4k */
-		if ((vinfo->width > 4096 && vinfo->height > 2160) &&
-			(src_width <= 4096 && src_height <= 2160)) {
+		if ((vinfo->width > 4096 && vinfo->height > 2160)) {
 			pi_en = 1;
 		/* 4k 120hz */
 		} else if (vinfo->width > 1920 && vinfo->height > 1080 &&
@@ -11912,11 +11917,7 @@ void set_video_slice_policy(struct video_layer_s *layer,
 		} else {
 			slice_num = 1;
 		}
-		if (src_width > 4096 && src_height > 2160) {
-			/* input: (4k-8k] */
-			slice_num = 4;
-			vd1s1_vd2_prebld_en = 0;
-		}
+slice_calc_exit:
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
 		if (slice_num != layer->slice_num) {
 			if (slice_num)
