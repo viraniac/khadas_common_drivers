@@ -2544,7 +2544,7 @@ static void vd1_proc_set(struct video_layer_s *layer,
 	vd_proc_pi_path_set(vpp_index, vd_proc);
 }
 
-static void vd_3mux3_set(u8 vpp_index)
+void vd_3mux3_set(u8 vpp_index)
 {
 	u32 vppx_go_field = VPP0;
 

@@ -15188,7 +15188,8 @@ static int amvideom_probe(struct platform_device *pdev)
 			vd_layer[2].vpp_index = VPP2;
 			vd_layer_vpp[1].vpp_index = VPP2;
 			vd_layer_vpp[1].layer_id = 2;
-			vppx_vdx_mux_set();
+			if (video_is_meson_t7_cpu())
+				vppx_vdx_mux_set();
 		}
 	}
 	prop = of_get_property(pdev->dev.of_node, "vpp1_layer_count", NULL);
@@ -15202,6 +15203,8 @@ static int amvideom_probe(struct platform_device *pdev)
 			vd_layer[1].vpp_index = VPP1;
 			vd_layer_vpp[0].vpp_index = VPP1;
 			vd_layer_vpp[0].layer_id = 1;
+			if (video_is_meson_t3x_cpu())
+				vd_3mux3_set(VPP1);
 		}
 	}
 
