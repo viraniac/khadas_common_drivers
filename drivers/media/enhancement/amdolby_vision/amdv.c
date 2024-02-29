@@ -427,7 +427,7 @@ u32 force_sdr10;
 
 u32 need_pps;/*idk5.1 case5364 2160x3840 need pps*/
 u32 trace_amdv_isr;/*3ms 4ms 8ms 16ms*/
-u32 output_4k240hz;
+u32 force_top1_vskip;
 int pyramid_read_urgent = -1;
 u32 variable_fps_mode;
 
@@ -15218,7 +15218,7 @@ static const char *amdolby_vision_debug_usage_str = {
 	"echo debug_ko value > /sys/class/amdolby_vision/debug;\n"
 	"echo force_unmap > /sys/class/amdolby_vision/debug;\n"
 	"echo trace_amdv_isr value > /sys/class/amdolby_vision/debug;\n"
-	"echo output_4k240hz value > /sys/class/amdolby_vision/debug;\n"
+	"echo force_top1_vskip value > /sys/class/amdolby_vision/debug;\n"
 	"echo enable_top1_scale value > /sys/class/amdolby_vision/debug;\n"
 };
 
@@ -15452,11 +15452,11 @@ static ssize_t amdolby_vision_debug_store
 			return -EINVAL;
 		trace_amdv_isr = val;
 		pr_info("set trace_amdv_isr %d\n", trace_amdv_isr);
-	} else if (!strcmp(parm[0], "output_4k240hz")) {
+	} else if (!strcmp(parm[0], "force_top1_vskip")) {
 		if (kstrtoul(parm[1], 10, &val) < 0)
 			return -EINVAL;
-		output_4k240hz = val ? 1 : 0;
-		pr_info("set 4k240hz_output %d\n", output_4k240hz);
+		force_top1_vskip = val ? 1 : 0;
+		pr_info("set force_top1_vskip %d\n", force_top1_vskip);
 	} else if (!strcmp(parm[0], "force_ignore_top1_result")) {
 		if (kstrtoul(parm[1], 10, &val) < 0)
 			return -EINVAL;

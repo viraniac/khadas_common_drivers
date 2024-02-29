@@ -1340,7 +1340,7 @@ void update_cp_cfg(void)
 
 	if (is_aml_hw5()) {
 		update_cp_cfg_hw5(false, true, false);/*update for top1*/
-		update_cp_cfg_hw5(false, false, false);/*update for top2*/
+		update_top2_cfg = true;/*delay update top2 cfg in parse_metadata*/
 		return;
 	}
 	if (cur_pic_mode >= num_picture_mode || num_picture_mode == 0 ||

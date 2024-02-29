@@ -915,7 +915,7 @@ extern u32 num_downsamplers;
 extern u32 force_sdr10;
 extern u32 need_pps;
 extern u32 trace_amdv_isr;
-extern u32 output_4k240hz;
+extern u32 force_top1_vskip;
 extern int pyramid_read_urgent;
 extern bool py_enabled;
 extern bool l1l4_enabled;
@@ -939,6 +939,7 @@ extern u32 top1_scale;
 extern bool enable_top1_scale;
 extern bool wait_first_frame_top1;
 extern const char level_str[4][10];
+extern bool update_top2_cfg;
 /************/
 
 #define pr_dv_dbg(fmt, args...)\

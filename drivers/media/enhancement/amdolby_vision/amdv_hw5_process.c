@@ -75,6 +75,8 @@ const char level_str[4][10] = {
 	"invalid"
 };
 
+bool update_top2_cfg;
+
 void dump_top1_frame(int force_w, int force_h)
 {
 #ifdef CONFIG_AMLOGIC_ENABLE_VIDEO_PIPELINE_DUMP_DATA
@@ -1621,6 +1623,8 @@ int amdv_parse_metadata_hw5_top1(struct vframe_s *vf)
 	}
 	new_w = (top1_vd_info.width << num_downsamplers) >> top1_scale;
 	new_h = (top1_vd_info.height << num_downsamplers) >> top1_scale;
+	if (force_top1_vskip)
+		new_h = new_h >> 1;
 	if (src_format != tv_hw5_setting->top1.src_format ||
 		tv_hw5_setting->top1.video_width != new_w ||
 		tv_hw5_setting->top1.video_height != new_h ||
@@ -1857,6 +1861,23 @@ int amdv_parse_metadata_hw5(struct vframe_s *vf,
 					level_str[vf->src_fmt.py_level]);
 				update_cp_cfg_hw5(true, false, false);
 			}
+			if (update_top2_cfg && vf->src_fmt.py_level == PY_NO_LEVEL) {
+				if (debug_dolby & 0x80000)
+					pr_dv_dbg("top2 cfg changed with level=0,bypass cfg precision for cp\n");
+				update_cp_cfg_hw5(true, false, false);
+			} else if (update_top2_cfg && vf->src_fmt.py_level != PY_NO_LEVEL) {
+				update_cp_cfg_hw5(true, false, true);
+				if (debug_dolby & 0x80000)
+					pr_dv_dbg("top2 cfg changed,enable cfg precision for cp\n");
+			}
+			update_top2_cfg = false;
+		} else {
+			if (update_top2_cfg) {
+				if (debug_dolby & 0x80000)
+					pr_dv_dbg("top2 cfg changed with enable_top1=0,bypass cfg precision for cp\n");
+				update_cp_cfg_hw5(true, false, false);
+			}
+			update_top2_cfg = false;
 		}
 		last_top2_level = vf->src_fmt.py_level;
 	}
@@ -2542,17 +2563,6 @@ int amdv_parse_metadata_hw5(struct vframe_s *vf,
 	tv_hw5_setting->top2.video_width = w;
 	tv_hw5_setting->top2.video_height = h;
 
-	if (debug_cp_res > 0) {
-		tv_hw5_setting->top2.video_width = (debug_cp_res & 0xffff0000) >> 16;
-		tv_hw5_setting->top2.video_height = debug_cp_res & 0xffff;
-		v_inst_info->video_width = (debug_cp_res & 0xffff0000) >> 16;
-		v_inst_info->video_height = debug_cp_res & 0xffff;
-	} else if (output_4k240hz && w == 3840 && h == 2160) {
-		tv_hw5_setting->top2.video_width = 3840;
-		tv_hw5_setting->top2.video_height = 1080;
-		v_inst_info->video_width = 3840;
-		v_inst_info->video_height = 1080;
-	}
 	tv_hw5_setting->top2.input_mode = input_mode;
 	tv_hw5_setting->top2.in_md = v_inst_info->md_buf[v_inst_info->current_id];
 	tv_hw5_setting->top2.in_md_size = (src_format == FORMAT_DOVI) ? total_md_size : 0;
@@ -2859,7 +2869,8 @@ int amdv_hw5_control_path(struct vframe_s *vf, struct vd_proc_info_t *vd_proc_in
 				pr_dv_dbg("controlpath vf[%px], wxh: %dx%d, vd1 size: %dx%d\n",
 					vf, w, h, vd_proc_info->vd1_in_hsize,
 					vd_proc_info->vd1_in_vsize);
-			/*if size not align to 2 or 4(2slice), vpp will align*/
+			/*1.if size not align to 2 or 4(2slice), vpp will align*/
+			/*2.if play 4k video with 4k240hz output, vpp will vskip*/
 			/*need set real vd1 size for controlpath*/
 			if (w != vd_proc_info->vd1_in_hsize || h != vd_proc_info->vd1_in_vsize) {
 				w = vd_proc_info->vd1_in_hsize;
@@ -2877,27 +2888,16 @@ int amdv_hw5_control_path(struct vframe_s *vf, struct vd_proc_info_t *vd_proc_in
 			tv_hw5_setting->force_num_slices = 0;
 		}
 
-		if (tv_hw5_setting->top2.video_width != w ||
-			tv_hw5_setting->top2.video_height != h) {
-			if (debug_dolby & 0x100)
-				pr_dv_dbg("reset control_path w %d->%d, h %d->%d\n",
-					tv_hw5_setting->top2.video_width, w,
-					tv_hw5_setting->top2.video_height, h);
-		}
-
 		tv_hw5_setting->top2.video_width = w;
 		tv_hw5_setting->top2.video_height = h;
+		v_inst_info->video_width = w;
+		v_inst_info->video_height = h;
 
 		if (debug_cp_res > 0) {
 			tv_hw5_setting->top2.video_width = (debug_cp_res & 0xffff0000) >> 16;
 			tv_hw5_setting->top2.video_height = debug_cp_res & 0xffff;
 			v_inst_info->video_width = (debug_cp_res & 0xffff0000) >> 16;
 			v_inst_info->video_height = debug_cp_res & 0xffff;
-		} else if (output_4k240hz && w == 3840 && h == 2160) {
-			tv_hw5_setting->top2.video_width = 3840;
-			tv_hw5_setting->top2.video_height = 1080;
-			v_inst_info->video_width = 3840;
-			v_inst_info->video_height = 1080;
 		}
 	}
 	/*top2,no analyzer*/
@@ -3151,21 +3151,23 @@ int amdolby_vision_process_hw5(struct vframe_s *vf_top1,
 			force_set = true;
 			if (debug_dolby & 8)
 				pr_dv_dbg
-				("tv update disp size %d %d -> %d %d\n",
+				("tv update disp size %d %d -> %d %d, ori %d %d\n",
 				 top2_info.core_disp_hsize,
-				 top2_info.core_disp_vsize, h_size, v_size);
+				 top2_info.core_disp_vsize, h_size, v_size, h_ori, v_ori);
 			top2_info.core_disp_hsize = h_size;
 			top2_info.core_disp_vsize = v_size;
 		}
 		/*check if vd1 data same as vframe original size*/
+		/*1.if there is a big diff,the precision effect may be misplaced,bypassing pr*/
+		/*2.debug mode for force_top1_vskip, not bypassing pr, set vskip for top1 rdmif*/
 		if (enable_top1 && dolby_vision_mode != AMDV_OUTPUT_MODE_BYPASS && vf) {
-			if (h_size != h_ori ||
-				v_size != v_ori) {
+			if (!force_top1_vskip && ((h_ori >  h_size && (h_ori - h_size) > 10) ||
+				(v_ori > v_size && (v_ori - v_size) > 10))) {
 				if (debug_dolby & 1)
-					pr_dv_dbg("vd1 data size diff with ori, bypass precision! %dx%d %dx%d\n",
+					pr_dv_dbg("vd1 size big diff with ori, bypass precision! %dx%d %dx%d\n",
 						h_size, v_size, h_ori, v_ori);
-				//top1_enable_changed = true;
-				//force_bypass_precision = true;
+				top1_enable_changed = true;
+				force_bypass_precision = true;
 			} else {
 				force_bypass_precision = false;
 			}
