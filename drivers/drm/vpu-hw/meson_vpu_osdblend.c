@@ -901,8 +901,8 @@ static void t3x_osdblend_set_state(struct meson_vpu_block *vblk,
 		for (i = 0; i < MESON_MAX_OSDS; i++) {
 			if (mvps->plane_info[i].enable &&
 				mvps->plane_info[i].crtc_index == state->sub->index) {
-				osdblend_t3x_din[i].zorder = mvps->plane_info[i].zorder;
-				osdblend_t3x_din[i].plane_index = i;
+				osdblend_t3x_din[osd_num].zorder = mvps->plane_info[i].zorder;
+				osdblend_t3x_din[osd_num].plane_index = i;
 				osd_num++;
 			}
 		}
