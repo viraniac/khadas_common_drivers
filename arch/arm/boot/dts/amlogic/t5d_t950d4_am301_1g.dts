@@ -74,10 +74,8 @@
 		codec_mm_cma:linux,codec_mm_cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			/* yuv420(32x3)96M + di(7x4,11x5)84M + workbuf(12M)
-			 * the sum with align 4M then is equal to 192M
-			 */
-			size = <0xa800000>;
+			/* testAV1Decode60fps1920x1080: 116MB is required at least */
+			size = <0x7400000>;
 			alignment = <0x400000>;
 			alloc-ranges = <0x30000000 0x10000000>;
 			linux,contiguous-region;
