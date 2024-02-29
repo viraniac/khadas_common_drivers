@@ -2061,7 +2061,7 @@ reisr:hdmirx_top_intr_stat = hdmirx_rd_top(TOP_INTR_STAT, port);
 			if (hdmirx_top_intr_stat & (1 << 21))
 				need_check = true;
 		} else if (rx_info.chip_id >= CHIP_ID_T7 &&
-				   rx_info.chip_id <= CHIP_ID_T5M) {//todo
+				   rx_info.chip_id <= CHIP_ID_TXHD2) {//todo
 			if (hdmirx_top_intr_stat & (1 << 25))
 				need_check = true;
 		}

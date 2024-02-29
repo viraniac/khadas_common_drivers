@@ -1704,6 +1704,8 @@ void hdmirx_de_hactive(bool en, struct tvin_frontend_s *fe, enum tvin_port_type_
 {
 	u8 port = rx_get_port_from_type(port_type);
 
+	if (rx_info.chip_id != CHIP_ID_TXHD2)
+		return;
 	hdmirx_wr_bits_top(TOP_VID_CNTL, _BIT(30), en, port);
 }
 
