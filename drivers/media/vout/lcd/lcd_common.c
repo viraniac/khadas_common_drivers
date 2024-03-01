@@ -2955,7 +2955,7 @@ void lcd_edp_bit_rate_config(struct aml_lcd_drv_s *pdrv)
 	//todo
 }
 
-void lcd_fr_range_update(struct lcd_detail_timing_s *ptiming)
+static void lcd_fr_range_update(struct lcd_detail_timing_s *ptiming)
 {
 	unsigned int htotal, vmin, vmax, hfreq;
 	unsigned long long temp;
@@ -3005,7 +3005,7 @@ void lcd_clk_frame_rate_init(struct lcd_detail_timing_s *ptiming)
 	if (ptiming->pixel_clk == 0) /* default 0 for 60hz */
 		ptiming->pixel_clk = 60;
 	else
-		LCDPR("custom clk: %d\n", ptiming->pixel_clk);
+		LCDPR("config init pixel_clk: %d\n", ptiming->pixel_clk);
 
 	h_period = ptiming->h_period;
 	v_period = ptiming->v_period;
@@ -3421,8 +3421,13 @@ static int lcd_timing_fr_update(struct aml_lcd_drv_s *pdrv)
 		}
 	}
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		if (len > 0)
-			LCDPR("[%d]: %s: %s\n", pdrv->index, __func__, str);
+		if (len > 0) {
+			LCDPR("[%d]: %s: sync_duration: %d/%d, %s\n",
+				pdrv->index, __func__,
+				pconf->timing.act_timing.sync_duration_num,
+				pconf->timing.act_timing.sync_duration_den,
+				str);
+		}
 	}
 
 	return 0;
