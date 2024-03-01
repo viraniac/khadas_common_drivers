@@ -3068,7 +3068,6 @@ void lcd_enc_timing_init_config(struct aml_lcd_drv_s *pdrv)
 		      pconf->timing.enc_clk);
 	}
 
-	/* use period_dft to avoid period changing offset */
 	h_period = ptiming->h_period;
 	v_period = ptiming->v_period;
 	h_active = ptiming->h_active;
@@ -3115,6 +3114,54 @@ void lcd_enc_timing_init_config(struct aml_lcd_drv_s *pdrv)
 		      pconf->timing.hs_vs_addr, pconf->timing.hs_ve_addr,
 		      pconf->timing.vs_hs_addr, pconf->timing.vs_he_addr,
 		      pconf->timing.vs_vs_addr, pconf->timing.vs_ve_addr);
+	}
+}
+
+//h_timing change for multi ppc if needed
+void lcd_enc_h_timing_change(struct aml_lcd_drv_s *pdrv)
+{
+	struct lcd_config_s *pconf = &pdrv->config;
+	struct lcd_detail_timing_s *ptiming;
+	unsigned short h_period, h_active, hsync_bp, hsync_width;
+	unsigned short de_hstart, hs_start, hs_end, h_delay = 0;
+
+	switch (pconf->basic.lcd_type) {
+	case LCD_RGB:
+		h_delay = RGB_DELAY;
+		break;
+	default:
+		break;
+	}
+
+	ptiming = &pdrv->config.timing.act_timing;
+
+	h_period = ptiming->h_period;
+	h_active = ptiming->h_active;
+	hsync_bp = ptiming->hsync_bp;
+	hsync_width = ptiming->hsync_width;
+
+	de_hstart = hsync_bp + hsync_width;
+
+	pconf->timing.hstart = de_hstart - h_delay;
+	pconf->timing.hend = h_active + pconf->timing.hstart - 1;
+
+	pconf->timing.de_hs_addr = de_hstart;
+	pconf->timing.de_he_addr = de_hstart + h_active;
+
+	hs_start = (de_hstart + h_period - hsync_bp - hsync_width) % h_period;
+	hs_end = (de_hstart + h_period - hsync_bp) % h_period;
+	pconf->timing.hs_hs_addr = hs_start;
+	pconf->timing.hs_he_addr = hs_end;
+
+	pconf->timing.vs_hs_addr = (hs_start + h_period) % h_period;
+	pconf->timing.vs_he_addr = pconf->timing.vs_hs_addr;
+
+	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
+		LCDPR("[%d]: hs_hs_addr=%d, hs_he_addr=%d\n"
+		      "vs_hs_addr=%d, vs_he_addr=%d\n",
+		      pdrv->index,
+		      pconf->timing.hs_hs_addr, pconf->timing.hs_he_addr,
+		      pconf->timing.vs_hs_addr, pconf->timing.vs_he_addr);
 	}
 }
 

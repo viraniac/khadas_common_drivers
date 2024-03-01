@@ -462,7 +462,7 @@ static void lcd_venc_change_timing(struct aml_lcd_drv_s *pdrv)
 		lcd_venc_set_timing(pdrv);
 	} else if (pdrv->config.basic.lcd_type == LCD_VBYONE &&
 		pdrv->config.timing.act_timing.h_period != htotal) {
-		lcd_enc_timing_init_config(pdrv);
+		lcd_enc_h_timing_change(pdrv);
 		lcd_venc_set_timing(pdrv);
 	} else {
 		vtotal = lcd_vcbus_getb(ENCL_VIDEO_MAX_CNT + offset, 0, 16) + 1;

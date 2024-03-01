@@ -131,6 +131,7 @@ void lcd_fr_range_update(struct lcd_detail_timing_s *ptiming);
 void lcd_clk_frame_rate_init(struct lcd_detail_timing_s *ptiming);
 void lcd_default_to_basic_timing_init_config(struct aml_lcd_drv_s *pdrv);
 void lcd_enc_timing_init_config(struct aml_lcd_drv_s *pdrv);
+void lcd_enc_h_timing_change(struct aml_lcd_drv_s *pdrv);
 
 int lcd_fr_is_fixed(struct aml_lcd_drv_s *pdrv);
 int lcd_fr_is_frac(struct aml_lcd_drv_s *pdrv, unsigned int frame_rate);
