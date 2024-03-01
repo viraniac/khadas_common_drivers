@@ -324,8 +324,8 @@
 		codec_mm_cma:linux,codec_mm_cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			/* ion_codec_mm max can alloc size 80M */
-			size = <0x7400000>;
+			/* In DTV, H.264 interlace stream playback need 108MB at least */
+			size = <0x6c00000>;
 			alignment = <0x400000>;
 			linux,contiguous-region;
 		};
