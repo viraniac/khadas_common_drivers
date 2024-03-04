@@ -5409,6 +5409,7 @@ void hdmirx_config_video(u8 port)
 	if (rx_info.chip_id >= CHIP_ID_T3) {
 		if (rx[port].pre.sw_vic >= HDMI_VESA_OFFSET ||
 			rx[port].pre.sw_vic == HDMI_640x480p60 ||
+			rx[port].pre.repeat == 0 ||
 			rx[port].pre.sw_dvi)
 			/* for T7, bit7 must be written as 1 in order to de-repeat */
 			hdmirx_wr_bits_top(TOP_VID_CNTL, _BIT(7), 1, port);

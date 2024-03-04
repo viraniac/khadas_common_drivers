@@ -654,7 +654,7 @@ void rx_edid_update_vrr_info(unsigned char *p_edid)
 		return;
 
 	if (vrr_func_en) {
-		if (rx_info.vrr_min == 0 || rx_info.vrr_max == 0)
+		if (rx_info.vrr_min == 0)
 			return;
 		p_edid[hf_vsdb_start + 9] = rx_info.vrr_min;
 		p_edid[hf_vsdb_start + 10] =

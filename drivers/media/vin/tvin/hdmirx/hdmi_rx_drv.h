@@ -65,7 +65,8 @@
 //2024.01.04 fix soundless issue for 2.0 ip
 //2024.01.10 optimize eq setting for 75m~115m frequency
 //2024.02.21 fix t3x hbr audio clk not correct issue
-#define RX_VER0 "ver.2024/02/21"
+//2024.03.04 fix repeat issue
+#define RX_VER0 "ver.2024/03/04"
 
 
 /*print type*/
