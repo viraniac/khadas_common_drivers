@@ -162,7 +162,8 @@
 /* 2024.01.11 fix EMP DDR write out of bounds */
 /* 2023.1.11 fix timing lost */
 /* 2024.2.22 fix hdr flash */
-#define RX_VER2 "ver.2024/2/22"
+/* 2024.3.15 fix arc port hpd changed frequently */
+#define RX_VER2 "ver.2024/3/15"
 
 #define PFIFO_SIZE 256
 #define HDCP14_KEY_SIZE 368

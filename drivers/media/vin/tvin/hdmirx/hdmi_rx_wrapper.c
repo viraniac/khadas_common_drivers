@@ -5272,7 +5272,7 @@ void rx_main_state_machine(void)
 				rx[port].clk.cable_clk = 0;
 				rx[port].var.esd_phy_rst_cnt++;
 			} else {
-				if (!rx[port].resume_flag) {
+				if (!rx[port].resume_flag && port != rx_info.arc_port) {
 					rx[port].state = FSM_HPD_LOW;
 					rx_i2c_err_monitor(port);
 					hdmi_rx_top_edid_update();
@@ -5354,7 +5354,8 @@ void rx_main_state_machine(void)
 					rx[port].var.esd_phy_rst_cnt = 0;
 					rx[port].err_rec_mode = ERR_REC_HPD_RST;
 				}
-			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST) {
+			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
+				port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -5493,7 +5494,8 @@ void rx_main_state_machine(void)
 					rx_set_eq_run_state(E_EQ_START, port);
 					rx[port].var.esd_phy_rst_cnt = 0;
 				}
-			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST) {
+			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
+				port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -5771,8 +5773,10 @@ void rx_port0_main_state_machine(void)
 				rx[port].clk.cable_clk = 0;
 				rx[port].var.esd_phy_rst_cnt++;
 			} else {
-				rx[port].state = FSM_HPD_LOW;
-				rx[port].var.esd_phy_rst_cnt = 0;
+				if (port != rx_info.arc_port) {
+					rx[port].state = FSM_HPD_LOW;
+					rx[port].var.esd_phy_rst_cnt = 0;
+				}
 				break;
 			}
 		}
@@ -5839,7 +5843,8 @@ void rx_port0_main_state_machine(void)
 					rx[port].var.esd_phy_rst_cnt = 0;
 					rx[port].err_rec_mode = ERR_REC_HPD_RST;
 				}
-			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST) {
+			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
+				port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -5982,7 +5987,8 @@ void rx_port0_main_state_machine(void)
 					rx_set_eq_run_state(E_EQ_START, port);
 					rx[port].var.esd_phy_rst_cnt = 0;
 				}
-			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST) {
+			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
+				port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -6255,13 +6261,12 @@ void rx_port1_main_state_machine(void)
 				hdmirx_phy_init(port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].var.esd_phy_rst_cnt++;
-			} else {
+			} else if (port != rx_info.arc_port) {
 				rx[port].state = FSM_HPD_LOW;
 				rx_i2c_err_monitor(port);
 				hdmi_rx_top_edid_update();
 				rx[port].ddc_filter_en = false;
 				rx[port].var.esd_phy_rst_cnt = 0;
-				break;
 			}
 		}
 		break;
@@ -6327,7 +6332,8 @@ void rx_port1_main_state_machine(void)
 					rx[port].var.esd_phy_rst_cnt = 0;
 					rx[port].err_rec_mode = ERR_REC_HPD_RST;
 				}
-			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST) {
+			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
+				port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -6470,7 +6476,8 @@ void rx_port1_main_state_machine(void)
 					rx_set_eq_run_state(E_EQ_START, port);
 					rx[port].var.esd_phy_rst_cnt = 0;
 				}
-			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST) {
+			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
+				port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -6880,7 +6887,7 @@ void rx_port2_main_state_machine(void)
 					rx[port].err_rec_mode = ERR_REC_HPD_RST;
 				}
 			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
-			rx[port].var.frl_rate == 0) {
+				rx[port].var.frl_rate == 0 && port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -7027,7 +7034,7 @@ void rx_port2_main_state_machine(void)
 					rx[port].var.esd_phy_rst_cnt = 0;
 				}
 			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
-			rx[port].var.frl_rate == 0) {
+				rx[port].var.frl_rate == 0 && port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -7446,7 +7453,7 @@ void rx_port3_main_state_machine(void)
 					rx[port].err_rec_mode = ERR_REC_HPD_RST;
 				}
 			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
-			rx[port].var.frl_rate == 0) {
+				rx[port].var.frl_rate == 0 && port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
@@ -7593,7 +7600,7 @@ void rx_port3_main_state_machine(void)
 					rx[port].var.esd_phy_rst_cnt = 0;
 				}
 			} else if (rx[port].err_rec_mode == ERR_REC_HPD_RST &&
-			rx[port].var.frl_rate == 0) {
+				rx[port].var.frl_rate == 0 && port != rx_info.arc_port) {
 				rx_set_cur_hpd(0, 2, port);
 				rx[port].clk.cable_clk = 0;
 				rx[port].state = FSM_INIT;
