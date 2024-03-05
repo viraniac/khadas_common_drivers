@@ -113,8 +113,9 @@
 // frc_20240111 n2m and vpu slice workaround
 // frc_20240104 open clk when sys resume
 // frc_20240116 frc rdma process optimisation
+// frc_20240306 high-priority task and timestamp debug
 
-#define FRC_FW_VER			"2024-0306 high-priority task and timestamp debug"
+#define FRC_FW_VER			"2024-0312  frc protect badedit effect"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1
@@ -492,6 +493,7 @@ struct st_frc_in_sts {
 	u8 mute_vsync_cnt;
 	u8 hi_en;
 	u8 frm_en;
+	u8 t3x_proc_size_chg;
 };
 
 struct st_frc_out_sts {

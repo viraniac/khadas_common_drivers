@@ -3854,3 +3854,29 @@ void t3x_verB_60hz_patch(void)
 
 	pr_frc(0, "%s ok", __func__);
 }
+
+void frc_clr_badedit_effect_before_enable(void)
+{
+	regdata_fwd_sign_ro_016e = READ_FRC_REG(FRC_REG_FWD_SIGN_RO);
+	if (((regdata_fwd_sign_ro_016e >> 28) & 0x3) != 0) {
+		pr_frc(1, "%s  read FRC_REG_FWD_SIGN_RO %8x\n", __func__,
+			regdata_fwd_sign_ro_016e);
+		regdata_fwd_sign_ro_016e &= 0xCFFFFFFF;
+		WRITE_FRC_REG_BY_CPU(FRC_REG_FWD_SIGN_RO, regdata_fwd_sign_ro_016e);
+		pr_frc(1, "set FRC_REG_FWD_SIGN_RO %8x\n", regdata_fwd_sign_ro_016e);
+	}
+	regdata_fwd_phs_0146 = READ_FRC_REG(FRC_REG_FWD_PHS);
+	if ((regdata_fwd_phs_0146 & BIT_29) == BIT_29) {
+		pr_frc(1, "%s  read FRC_REG_FWD_PHS %8x\n", __func__, regdata_fwd_phs_0146);
+		regdata_fwd_phs_0146 &= 0xDFFFFFFF;
+		WRITE_FRC_REG_BY_CPU(FRC_REG_FWD_PHS, regdata_fwd_phs_0146);
+		pr_frc(1, "set FRC_REG_FWD_PHS %8x\n", regdata_fwd_phs_0146);
+	}
+	regdata_fwd_fid_0147 = READ_FRC_REG(FRC_REG_FWD_FID);
+	if (regdata_fwd_fid_0147 != 0) {
+		pr_frc(1, "%s  read FRC_REG_FWD_FID %8x\n", __func__, regdata_fwd_fid_0147);
+		regdata_fwd_fid_0147 = 0;
+		WRITE_FRC_REG_BY_CPU(FRC_REG_FWD_FID, regdata_fwd_fid_0147);
+		pr_frc(1, "set FRC_REG_FWD_FID %8x\n", regdata_fwd_fid_0147);
+	}
+}
