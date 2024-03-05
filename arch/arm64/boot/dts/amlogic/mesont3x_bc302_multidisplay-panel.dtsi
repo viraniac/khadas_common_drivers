@@ -670,7 +670,7 @@
 		compatible = "amlogic, backlight-t3x";
 		status = "okay";
 		index = <0>;
-		key_valid = <1>;
+		key_valid = <0>;
 		pinctrl-names = "pwm_on","pwm_vs_on",
 				"pwm_off";
 		pinctrl-0 = <&pwm_d_pins4>;
