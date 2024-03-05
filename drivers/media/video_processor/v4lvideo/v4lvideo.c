@@ -65,7 +65,11 @@ static u32 alloc_sei = 1;
 #define V4L2_CID_USER_AMLOGIC_V4LVIDEO_BASE  (V4L2_CID_USER_BASE + 0x1100)
 
 static unsigned int video_nr_base = 30;
+#ifdef CONFIG_AMLOGIC_LOWMEM
+static unsigned int n_devs = 1;
+#else
 static unsigned int n_devs = 9;
+#endif
 #define N_DEVS 9
 static unsigned int debug;
 static unsigned int get_count[N_DEVS];

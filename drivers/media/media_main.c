@@ -119,7 +119,6 @@ static int __init media_main_init(void)
 	call_sub_init(aml_vecm_init);
 	call_sub_init(ionvideo_init);
 	call_sub_init(v4lvideo_init);
-	call_sub_init(amlvideo_init);
 	call_sub_init(amlvideo2_init);
 	call_sub_init(dil_init);
 	call_sub_init(di_module_init);
