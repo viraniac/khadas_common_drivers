@@ -30,10 +30,15 @@
 //#include "di_pqa.h"
 #include "di_dd.h"
 
+#ifdef CONFIG_AMLOGIC_LOWMEM
+#define DI_CHANNEL_NUB	(2)
+#define DI_CHANNEL_MAX  (2)
+#define DI_PLINK_CN_NUB	(2)
+#else
 #define DI_CHANNEL_NUB	(4)
 #define DI_CHANNEL_MAX  (4)
-
 #define DI_PLINK_CN_NUB	(4)
+#endif
 
 /* for vfm mode limit input vf */
 #define DIM_K_VFM_IN_LIMIT		(2)
