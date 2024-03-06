@@ -268,7 +268,7 @@ static int ldim_set_level(unsigned int level)
 {
 	struct aml_bl_drv_s *bdrv = aml_bl_get_driver(0);
 	struct ldim_dev_driver_s *dev_drv = ldim_driver.dev_drv;
-	unsigned int level_max, level_min, ret;
+	unsigned int level_max, level_min;
 
 	if (ldim_driver.init_on_flag == 0) {
 		LDIMWARN("%s: init_on_flag is 0\n", __func__);
@@ -292,11 +292,7 @@ static int ldim_set_level(unsigned int level)
 
 	if (strcmp(dev_drv->name, "blmcu") == 0) {
 		level = (level >> 4) & 0xff;
-		ret = ldim_set_pdim(level);
-		if (ret == -1) {
-			LDIMERR("%s: set pdim fail\n", __func__);
-			return -1;
-		}
+		dev_drv->mcu_dim = (dev_drv->mcu_dim & 0xffffff00) | (level & 0xff);
 	} else {
 		level &= 0xfff;
 		ldim_driver.litgain = (unsigned int)level;
