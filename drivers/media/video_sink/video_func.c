@@ -4229,6 +4229,7 @@ static int misc_early_proc(void)
 		vd_layer[i].bypass_pps = bypass_pps;
 		vd_layer[i].global_debug = debug_flag;
 		vd_layer[i].vout_type = vout_type;
+		vd_layer[i].display_cnt++;
 	}
 
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION

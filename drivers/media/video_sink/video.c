@@ -3463,12 +3463,12 @@ static struct vframe_s *vsync_toggle_frame(struct vframe_s *vf, int line)
 		u32 vpts = timestamp_vpts_get();
 		u32 apts = timestamp_apts_get();
 
-		pr_info("%s pts:%d.%06d pcr:%d.%06d vpts:%d.%06d apts:%d.%06d\n",
+		pr_info("%s pts:%d.%06d pcr:%d.%06d vpts:%d.%06d apts:%d.%06d disp:%d\n",
 			__func__, (vf->pts) / 90000,
 			((vf->pts) % 90000) * 1000 / 90, (pcr) / 90000,
 			((pcr) % 90000) * 1000 / 90, (vpts) / 90000,
 			((vpts) % 90000) * 1000 / 90, (apts) / 90000,
-			((apts) % 90000) * 1000 / 90);
+			((apts) % 90000) * 1000 / 90, vf->index_disp);
 	}
 
 	if (trickmode_i || trickmode_fffb)

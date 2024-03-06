@@ -9842,9 +9842,10 @@ int set_layer_display_canvas(struct video_layer_s *layer,
 		struct canvas_s tmp;
 
 		canvas_read(cur_canvas_tbl[0], &tmp);
-		pr_info("%s %d: update_mif %d: vf:%p, omx_index=%d, y:%02x, adr:0x%lx (0x%lx), canvas0:%x, pnum:%d, type:%x, flag:%x, afbc:0x%lx-0x%lx, vf_ext:%px uvm_vf:%px di_flag:%x size:%d %d, vframe size:%d line:%d\n",
+		pr_info("%s %d: update_mif %d: vf(%p):%d, vsync =%d, omx_index=%d, y:%02x, adr:0x%lx (0x%lx), canvas0:%x, pnum:%d, type:%x, flag:%x, afbc:0x%lx-0x%lx, vf_ext:%px uvm_vf:%px di_flag:%x size:%d %d, vframe size:%d line:%d\n",
 			__func__, layer_id, update_mif ? 1 : 0,
-			vf, vf->omx_index, cur_canvas_tbl[0],
+			vf, vf->index_disp, layer->display_cnt,
+			vf->omx_index, cur_canvas_tbl[0],
 			tmp.addr, vf->canvas0_config[0].phy_addr,
 			vf->canvas0Addr, vf->plane_num,
 			vf->type, vf->flag,
@@ -9852,6 +9853,7 @@ int set_layer_display_canvas(struct video_layer_s *layer,
 			vf->vf_ext, vf->uvm_vf, vf->di_flag,
 			vf->compWidth, vf->width, (u32)sizeof(struct vframe_s), line);
 	}
+	layer->display_cnt = 0;
 	return 0;
 }
 

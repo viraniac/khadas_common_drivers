@@ -603,6 +603,7 @@ struct video_layer_s {
 	u32 slice_num;
 	u32 pi_enable;
 	u32 vd1s1_vd2_prebld_en;
+	u32 display_cnt;//count the number of times vf is displayed
 	u32 mosaic_mode;
 	struct sub_slice_s sub_slice[SLICE_NUM - 1];
 	struct vframe_s *vf_top1;
