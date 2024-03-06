@@ -1941,6 +1941,7 @@ bool is_clk_stable(u8 port)
 	case CHIP_ID_T3:
 	case CHIP_ID_T5W:
 	case CHIP_ID_T5M:
+	case CHIP_ID_TXHD2:
 	case CHIP_ID_T3X:
 	default:
 		if (rx[port].clk.cable_clk > TMDS_CLK_MIN * KHz &&
@@ -3734,32 +3735,29 @@ bool rx_clk_rate_monitor(u8 port)
 		rx[port].phy.cablesel = 0;
 		rx[port].phy.phy_bw = phy_band;
 		rx[port].phy.pll_bw = pll_band;
+		changed = true;
 	}
-	/* } */
 
 	if (clk_rate != rx[port].phy.clk_rate) {
 		changed = true;
+		if (log_level & VIDEO_LOG)
+			rx_pr("clk_rate:%d, last_clk_rate: %d\n",
+					clk_rate, rx[port].phy.clk_rate);
+		rx[port].phy.clk_rate = clk_rate;
+	}
+	if (changed) {
+		rx[port].cableclk_stb_flg = false;
+		i2c_err_cnt[port] = 0;
 		if (rx_info.chip_id < CHIP_ID_TL1) {
 			for (i = 0; i < 3; i++) {
 				error = hdmirx_wr_bits_phy(PHY_CDR_CTRL_CNT,
 							   CLK_RATE_BIT, clk_rate);
-
 				if (error == 0)
 					break;
 			}
 		} else {
 			hdmirx_phy_init(port);
 		}
-		if (log_level & VIDEO_LOG)
-			rx_pr("clk_rate:%d, last_clk_rate: %d\n",
-			      clk_rate, rx[port].phy.clk_rate);
-		rx[port].phy.clk_rate = clk_rate;
-	}
-	if (changed) {
-		rx[port].cableclk_stb_flg = false;
-		//if (rx[port].state >= FSM_WAIT_CLK_STABLE)
-			//rx[port].state = FSM_WAIT_CLK_STABLE;
-		i2c_err_cnt[port] = 0;
 	}
 	return changed;
 }
