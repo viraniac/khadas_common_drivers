@@ -1,4 +1,4 @@
-From d2169a75ba8b77cd4b9b0298efa0f85b76da24c2 Mon Sep 17 00:00:00 2001
+From 9afa11de316534c792f0d277b16277b646771856 Mon Sep 17 00:00:00 2001
 From: Tao Zeng <tao.zeng@amlogic.com>
 Date: Mon, 9 Aug 2021 22:31:54 +0800
 Subject: [PATCH] crypto: add parameters to control zstd compress level [1/1]
@@ -22,7 +22,7 @@ Change-Id: I4c80eb8cd591c8a2197c7781e8afe589f121ffd7
  1 file changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/crypto/zstd.c b/crypto/zstd.c
-index 1a3309f066f7..7e5c5331d38e 100644
+index 1a3309f066f7..5389cd48a687 100644
 --- a/crypto/zstd.c
 +++ b/crypto/zstd.c
 @@ -12,10 +12,14 @@
@@ -33,7 +33,7 @@ index 1a3309f066f7..7e5c5331d38e 100644
  #include <crypto/internal/scompress.h>
  
 -
-+#ifdef CONFIG_AMLOGIC_ZSTD
++#ifdef CONFIG_AMLOGIC_MEMORY_OPT
 +static int zstd_def_level = 1;
 +#else
  #define ZSTD_DEF_LEVEL	3
@@ -45,7 +45,7 @@ index 1a3309f066f7..7e5c5331d38e 100644
  
  static ZSTD_parameters zstd_params(void)
  {
-+#ifdef CONFIG_AMLOGIC_ZSTD
++#ifdef CONFIG_AMLOGIC_MEMORY_OPT
 +	return ZSTD_getParams(zstd_def_level, 0, 0);
 +#else
  	return ZSTD_getParams(ZSTD_DEF_LEVEL, 0, 0);
@@ -57,7 +57,7 @@ index 1a3309f066f7..7e5c5331d38e 100644
  
  subsys_initcall(zstd_mod_init);
  module_exit(zstd_mod_fini);
-+#ifdef CONFIG_AMLOGIC_ZSTD
++#ifdef CONFIG_AMLOGIC_MEMORY_OPT
 +module_param_named(zstd_level, zstd_def_level, int, 0644);
 +#endif
  
