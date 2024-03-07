@@ -1082,9 +1082,8 @@ void frc_input_vframe_handle(struct frc_dev_s *devp, struct vframe_s *vf,
 			devp->buf.secured == 1) {
 			no_input = true;
 			frc_re_cfg_cnt = 0;  // need reopen instantly
-		} else {
-			schedule_work(&devp->frc_secure_work);
 		}
+		schedule_work(&devp->frc_secure_work);
 		//pr_frc(2, "frc_re_cfg_cnt:%d pre_secure_mode:%d\n",
 			//frc_re_cfg_cnt, devp->buf.secured);
 	} else {
