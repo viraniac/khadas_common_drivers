@@ -1717,16 +1717,18 @@ RESTART_ALL:
 
 	slice_num = get_slice_num(input->layer_id);
 	vd1s1_vd2_prebld_en = get_vd1s1_vd2_prebld_en(input->layer_id);
-	if (slice_num == 2  && !vd1s1_vd2_prebld_en) {
-		/* crop left must 2 aligned */
-		crop_left = (crop_left + 1) & ~0x01;
-		crop_right = (crop_right + 1) & ~0x01;
-	} else if (slice_num == 4  || vd1s1_vd2_prebld_en) {
-		/* crop left must 4 aligned */
-		crop_left = (crop_left + 3) & ~0x03;
-		crop_right = (crop_right + 3) & ~0x03;
+	/* for reverse or h mirror must aligned */
+	if (input->reverse || input->mirror == H_MIRROR) {
+		if (slice_num == 2  && !vd1s1_vd2_prebld_en) {
+			/* crop left must 2 aligned */
+			crop_left = (crop_left + 1) & ~0x01;
+			crop_right = (crop_right + 1) & ~0x01;
+		} else if (slice_num == 4  || vd1s1_vd2_prebld_en) {
+			/* crop left must 4 aligned */
+			crop_left = (crop_left + 3) & ~0x03;
+			crop_right = (crop_right + 3) & ~0x03;
+		}
 	}
-
 	if (src_crop_adjust) {
 		w_in = width_in - src_crop_right;
 		h_in = height_in - src_crop_bottom;
