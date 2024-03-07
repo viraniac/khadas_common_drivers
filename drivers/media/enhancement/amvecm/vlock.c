@@ -1046,7 +1046,7 @@ static void vlock_setting(struct vframe_s *vf, struct stvlock_sig_sts *pvlock)
 		} else {
 			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TL1)) {
 				if (input_hz > 0 && output_hz > 0 &&
-				    (input_hz * 2 == output_hz))
+				    ((input_hz * 2 == output_hz) || (input_hz * 4 == output_hz)))
 					WRITE_VPP_REG_BITS(VPU_VLOCK_MISC_CTRL  + offset_vlck,
 							   0, 28, 1);
 				else
@@ -1125,7 +1125,7 @@ static void vlock_setting(struct vframe_s *vf, struct stvlock_sig_sts *pvlock)
 		} else {
 			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TL1)) {
 				if (input_hz > 0 && output_hz > 0 &&
-				    (input_hz * 2 == output_hz))
+				    ((input_hz * 2 == output_hz) || (input_hz * 4 == output_hz)))
 					WRITE_VPP_REG_BITS(VPU_VLOCK_MISC_CTRL + offset_vlck,
 							   0, 28, 1);
 				else
@@ -1749,6 +1749,8 @@ static void vlock_enable_step3_soft_enc(struct stvlock_sig_sts *pvlock)
 	/*for 25Hz->50Hz, 30Hz->60Hz*/
 	if (READ_VPP_REG_BITS(VPU_VLOCK_MISC_CTRL + offset_vlck, 16, 8) == 2)
 		ia = ia / 2;
+	else if (READ_VPP_REG_BITS(VPU_VLOCK_MISC_CTRL + offset_vlck, 16, 8) == 4)
+		ia = ia / 4;
 
 	oa = READ_VPP_REG(VPU_VLOCK_RO_VS_O_DIST + offset_vlck);
 
@@ -1988,6 +1990,8 @@ static void vlock_enable_step3_pll(struct stvlock_sig_sts *pvlock)
 	/*for 25Hz->50Hz, 30Hz->60Hz*/
 	if (READ_VPP_REG_BITS(VPU_VLOCK_MISC_CTRL + offset_vlck, 16, 8) == 2)
 		ia = ia / 2;
+	else if (READ_VPP_REG_BITS(VPU_VLOCK_MISC_CTRL + offset_vlck, 16, 8) == 4)
+		ia = ia / 4;
 
 	oa = READ_VPP_REG(VPU_VLOCK_RO_VS_O_DIST + offset_vlck);
 
@@ -2158,6 +2162,9 @@ void vlock_enable_step3_auto_enc(struct stvlock_sig_sts *pvlock)
 
 	if (pvlock->enable_auto_enc_cnt++ < 10)
 		return;
+
+	if (pvlock->output_hz == pvlock->input_hz * 4)
+		vlock_oa_num = 15;
 
 	pvlock->enable_auto_enc_cnt = 0;
 	/*one line error*/
@@ -2633,7 +2640,8 @@ u32 vlock_fsm_check_support(struct stvlock_sig_sts *pvlock,
 		vs_support = true;
 	/* ex:30Hz->60Hz 25Hz->50Hz or in 24->60Hz */
 	if ((pvlock->input_hz > 0 &&
-	    ((pvlock->input_hz * 2) == pvlock->output_hz) &&
+	    (((pvlock->input_hz * 2) == pvlock->output_hz) ||
+		((pvlock->input_hz * 4) == pvlock->output_hz)) &&
 	    (vlock_support & VLOCK_SUPPORT_1TO2)) ||
 	    (pvlock->input_hz == 24 && pvlock->output_hz == 60))
 		vs_support = true;
@@ -2692,7 +2700,8 @@ u32 vlock_fsm_check_support(struct stvlock_sig_sts *pvlock,
 void vlock_vmd_input_check(struct stvlock_sig_sts *pvlock)
 {
 	if (vlock_input_pre != pvlock->input_hz && pvlock->md_support &&
-		(pvlock->output_hz == pvlock->input_hz * 2)) {
+		((pvlock->output_hz == pvlock->input_hz * 2) ||
+		(pvlock->output_hz == pvlock->input_hz * 4))) {
 		pvlock->fsm_sts = VLOCK_STATE_NULL;
 		pvlock->vmd_chg = true;
 
@@ -2917,6 +2926,8 @@ u32 vlock_fsm_check_lock_sts(struct stvlock_sig_sts *pvlock,
 
 	if (pvlock->input_hz * 2 == pvlock->output_hz)
 		all_lock_cnt = VLOCK_ALL_LOCK_CNT / 2;
+	else if (pvlock->input_hz * 4 == pvlock->output_hz)
+		all_lock_cnt = VLOCK_ALL_LOCK_CNT / 4;
 
 	if (pvlock->chk_lock_sts_cnt++ > 10)
 		pvlock->chk_lock_sts_cnt = 0;
