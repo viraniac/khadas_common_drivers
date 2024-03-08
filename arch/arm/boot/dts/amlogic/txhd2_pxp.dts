@@ -55,7 +55,7 @@
 		/*  POST PROCESS MANAGER */
 		ppmgr_reserved:linux,ppmgr {
 			compatible = "shared-dma-pool";
-			size = <0x0 0x0>;
+			size = <0x0>;
 		};
 
 		picdec_cma_reserved:linux,picdec {
@@ -76,9 +76,9 @@
 	ion_fb_reserved:linux,ion-fb {
 		compatible = "shared-dma-pool";
 		reusable;
-		size = <0x0 0x24000000>;
-		alignment = <0x0 0x400000>;
-		alloc-ranges = <0x0 0x0 0x0 0xe0000000>;
+		size = <0x24000000>;
+		alignment = <0x400000>;
+		alloc-ranges = <0x0 0xe0000000>;
 		};
 
 	logo_reserved:linux,meson-fb {

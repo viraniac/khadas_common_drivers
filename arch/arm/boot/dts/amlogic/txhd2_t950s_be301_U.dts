@@ -261,7 +261,7 @@
 		/*  POST PROCESS MANAGER */
 		ppmgr_reserved:linux,ppmgr {
 			compatible = "shared-dma-pool";
-			size = <0x0 0x0>;
+			size = <0x0>;
 		};
 
 		picdec_cma_reserved:linux,picdec {
@@ -308,7 +308,7 @@
 		 * 1920x1080x2x5 = 20 M
 		 */
 		/*	size = <0x0 0x01400000>;*/
-		/*	alignment = <0x0 0x400000>;*/
+		/*	alignment = <0x400000>;*/
 		/*};*/
 		/*  vdin1 CMA pool */
 		vdin1_cma_reserved:linux,vdin1_cma {
@@ -316,10 +316,10 @@
 			reusable;
 			/* up to 1280x720 yuv422 8bit and 4 buffers
 			 * 1280x720x2x4 = 8 M
-			 * size = <0x0 0x800000>;
+			 * size = <0x800000>;
 			 */
-			size = <0x0 0x800000>;
-			alignment = <0x0 0x400000>;
+			size = <0x800000>;
+			alignment = <0x400000>;
 			alloc-ranges = <0x0 0x3f000000>;
 		};
 
