@@ -7146,13 +7146,29 @@ inline void vdin_set_source_bitdepth(struct vdin_dev_s *devp,
 		vf->bitdepth = BITDEPTH_Y8 | BITDEPTH_U8 | BITDEPTH_V8;
 		break;
 	}
+	switch (devp->source_bitdepth_dw) {
+	case VDIN_COLOR_DEEPS_10BIT:
+		vf->bitdepth_dw = BITDEPTH_Y10 | BITDEPTH_U10 | BITDEPTH_V10;
+		break;
+	case VDIN_COLOR_DEEPS_9BIT:
+		vf->bitdepth_dw = BITDEPTH_Y9 | BITDEPTH_U9 | BITDEPTH_V9;
+		break;
+	case VDIN_COLOR_DEEPS_8BIT:
+		vf->bitdepth_dw = BITDEPTH_Y8 | BITDEPTH_U8 | BITDEPTH_V8;
+		break;
+	default:
+		vf->bitdepth_dw = BITDEPTH_Y8 | BITDEPTH_U8 | BITDEPTH_V8;
+		break;
+	}
 	if (devp->full_pack == VDIN_422_FULL_PK_EN &&
 	    devp->source_bitdepth > 8 &&
 	    (devp->format_convert == VDIN_FORMAT_CONVERT_YUV_YUV422 ||
 	     devp->format_convert == VDIN_FORMAT_CONVERT_RGB_YUV422 ||
 	     devp->format_convert == VDIN_FORMAT_CONVERT_GBR_YUV422 ||
-	     devp->format_convert == VDIN_FORMAT_CONVERT_BRG_YUV422))
+	     devp->format_convert == VDIN_FORMAT_CONVERT_BRG_YUV422)) {
 		vf->bitdepth |= FULL_PACK_422_MODE;
+		vf->bitdepth_dw |= FULL_PACK_422_MODE;
+	}
 }
 
 void vdin_set_lossy_param(struct vdin_dev_s *devp, struct vframe_s *vf)

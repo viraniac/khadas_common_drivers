@@ -1094,9 +1094,35 @@ static u32 vdin_is_delay_vfe2rd_list(struct vdin_dev_s *devp)
 	}
 }
 
+/* For DV HW5 on T3X only */
+static void vdin_dv_hw5_init(struct vdin_dev_s *devp)
+{
+	if (!is_meson_t3x_cpu())
+		return;
+
+	//not dv input,return
+	if (!(vdin_is_dolby_signal_in(devp) &&
+	    devp->index == devp->dv.dv_path_idx &&
+	    !devp->dv_is_not_std))
+		return;
+
+	/* Debugging commands take priority */
+	if (!devp->debug.dbg_dv_hw5) {
+		devp->dv_hw5.hw5_ctl = 0xd;
+		devp->dv_hw5.dw_out_w = 0;
+		devp->dv_hw5.dw_out_h = 0;
+		devp->dv_hw5.dw_dfmt = TVIN_YUV444;
+		devp->afbce_flag |=
+			(VDIN_AFBCE_EN_1080P | VDIN_AFBCE_EN_720P | VDIN_AFBCE_EN_SMALL);
+		pr_info("t3x dv hw5 init %#x\n", devp->afbce_flag);
+	}
+}
+
 static void vdin_scale_and_cutwin_handle(struct vdin_dev_s *devp)
 {
 	u32 vdin0_max_w_h;
+	u32 div_h = 1, div_v = 1;
+	u32 h_active, v_active;
 
 	if (!devp || !devp->fmt_info_p)
 		return;
@@ -1115,12 +1141,29 @@ static void vdin_scale_and_cutwin_handle(struct vdin_dev_s *devp)
 		devp->prop.scaling4h = devp->parm.dest_height;
 	}
 
-	if (devp->debug.dbg_dw_h && devp->debug.dbg_dw_v &&
-		devp->debug.dbg_dw_dfmt) {
-		devp->flags |= VDIN_FLAG_MANUAL_CONVERSION;
-		devp->debug.scaling4w = devp->fmt_info_p->h_active / devp->debug.dbg_dw_h;
-		devp->debug.scaling4h = devp->fmt_info_p->v_active / devp->debug.dbg_dw_v;
-		devp->debug.dest_cfmt = devp->debug.dbg_dw_dfmt;
+	h_active = devp->fmt_info_p->h_active /
+			(devp->prop.decimation_ratio + 1);
+	v_active = devp->fmt_info_p->v_active;
+
+	if (devp->dv_hw5.hw5_ctl) {
+		if (!devp->dv_hw5.dw_out_w && !devp->dv_hw5.dw_out_h) {
+			if (h_active > 1920 && v_active > 1080) {
+				div_h = 4;
+				div_v = 4;
+			} else if (h_active > 960) {
+				div_h = 2;
+				div_v = 2;
+			} else {
+				div_h = 1;
+				div_v = 1;
+			}
+		} else {
+			div_h = devp->dv_hw5.dw_out_w ? devp->dv_hw5.dw_out_w : 2;
+			div_v = devp->dv_hw5.dw_out_h ? devp->dv_hw5.dw_out_h : 2;
+		}
+		devp->prop.scaling4w = devp->fmt_info_p->h_active / div_h;
+		devp->prop.scaling4h = devp->fmt_info_p->v_active / div_v;
+		devp->prop.dest_cfmt = devp->dv_hw5.dw_dfmt;
 	}
 
 	/* prevent display of resolution beyond specification */
@@ -1152,6 +1195,16 @@ static void vdin_scale_and_cutwin_handle(struct vdin_dev_s *devp)
 		devp->prop.vs = devp->debug.cutwin.vs;
 		devp->prop.ve = devp->debug.cutwin.ve;
 	}
+}
+
+/* Parameter initialization at startup phase should be placed here */
+static void vdin_start_param_init(struct vdin_dev_s *devp)
+{
+	if (!devp->debug.dbg_dv_hw5)
+		memset(&devp->dv_hw5, 0, sizeof(devp->dv_hw5));
+
+	devp->afbce_flag = devp->dts_config.afbce_flag_cfg;
+	//todo:more parameter initializations will be move here
 }
 
 /*
@@ -1202,6 +1255,7 @@ int vdin_start_dec(struct vdin_dev_s *devp)
 		return -1;
 	}
 
+	vdin_start_param_init(devp);
 	if (devp->frontend && devp->frontend->sm_ops) {
 		sm_ops = devp->frontend->sm_ops;
 		sm_ops->get_sig_property(devp->frontend, &devp->prop, devp->port_type);
@@ -1223,6 +1277,7 @@ int vdin_start_dec(struct vdin_dev_s *devp)
 		if (!(devp->flags & VDIN_FLAG_V4L2_DEBUG))
 			devp->parm.info.cfmt = devp->prop.color_format;
 
+		vdin_dv_hw5_init(devp);
 		vdin_scale_and_cutwin_handle(devp);
 	}
 	/*gxbb/gxl/gxm use clkb as vdin clk,

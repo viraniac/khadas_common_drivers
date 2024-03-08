@@ -666,6 +666,8 @@ struct vframe_s {
 	u32 compHeight;
 	u32 ratio_control;
 	u32 bitdepth;
+	/* for mif if dw output */
+	u32 bitdepth_dw;
 
 	/*
 	 * bit 31: is_cuva
