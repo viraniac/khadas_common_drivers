@@ -3251,6 +3251,8 @@ static int lcd_timing_fr_update(struct aml_lcd_drv_s *pdrv)
 	char str[100];
 	int len = 0;
 
+	/* clear clk_change flag */
+	pdrv->config.timing.clk_change &= ~(LCD_CLK_FRAC_UPDATE | LCD_CLK_PLL_CHANGE);
 	switch (type) {
 	case 0: /* pixel clk adjust */
 		temp = duration_num;
@@ -3428,6 +3430,10 @@ static int lcd_timing_fr_update(struct aml_lcd_drv_s *pdrv)
 			len += sprintf(str + len, ", ppc=%d, enc_clk=%d",
 				pdrv->config.timing.ppc, pconf->timing.enc_clk);
 		}
+		if (pdrv->config.timing.clk_change & LCD_CLK_PLL_CHANGE)
+			lcd_clk_generate_parameter(pdrv);
+		else if (pdrv->config.timing.clk_change & LCD_CLK_FRAC_UPDATE)
+			lcd_clk_frac_generate(pdrv);
 	}
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
 		if (len > 0) {
@@ -3458,24 +3464,6 @@ void lcd_frame_rate_change(struct aml_lcd_drv_s *pdrv)
 	info->video_clk = pdrv->config.timing.enc_clk;
 	info->htotal = pdrv->config.timing.act_timing.h_period;
 	info->vtotal = pdrv->config.timing.act_timing.v_period;
-}
-
-void lcd_clk_change(struct aml_lcd_drv_s *pdrv)
-{
-	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("[%d]: %s: clk_change:0x%x\n",
-			pdrv->index, __func__, pdrv->config.timing.clk_change);
-	}
-
-	if ((pdrv->config.timing.clk_change & LCD_CLK_PLL_CHANGE) ||
-	    (pdrv->config.timing.clk_change & LCD_CLK_PLL_RESET)) {
-		lcd_clk_generate_parameter(pdrv);
-		lcd_set_clk(pdrv);
-	} else if (pdrv->config.timing.clk_change & LCD_CLK_FRAC_UPDATE) {
-		lcd_clk_frac_generate(pdrv);
-		lcd_update_clk_frac(pdrv);
-	}
-	pdrv->config.timing.clk_change = 0; /* clear clk flag */
 }
 
 void lcd_if_enable_retry(struct aml_lcd_drv_s *pdrv)
