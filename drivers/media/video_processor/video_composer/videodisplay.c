@@ -474,6 +474,32 @@ static void vd_vsync_video_pattern_13213(struct composer_dev *dev, struct vframe
 	}
 }
 
+static void vd_vsync_video_pattern_53(struct composer_dev *dev, struct vframe_s *vf)
+{
+	int i = 0, sum = 0, ave = 0;
+	int vsync_pts_inc = 16 * 90000 *
+		vsync_pts_inc_scale[dev->index] / vsync_pts_inc_scale_base[dev->index];
+	int vframe_duration = vf->duration * 15;
+
+	if (vsync_pts_inc * 4 != vframe_duration) {
+		vc_print(dev->index, PRINT_PATTERN, "%s: not 53 condition.\n", __func__);
+		return;
+	}
+
+	for (i = 0; i < PATTEN_FACTOR_MAX; i++)
+		sum += dev->patten_factor[i];
+
+	ave = sum / PATTEN_FACTOR_MAX;
+	if (ave == 4) {
+		dev->pattern_detected = PATTERN_44;
+		dev->pattern[PATTERN_44] = PATTERN_44_DETECT_RANGE;
+		dev->pattern_enter_cnt++;
+		vc_print(dev->index, PRINT_PATTERN, "%s: video 53 mode detected\n", __func__);
+	} else {
+		vc_print(dev->index, PRINT_PATTERN, "%s: not 53 mode.\n", __func__);
+	}
+}
+
 static void vsync_video_pattern(struct composer_dev *dev, struct vframe_s *vf)
 {
 	vd_vsync_video_pattern(dev, PATTERN_32, vf);
@@ -485,6 +511,10 @@ static void vsync_video_pattern(struct composer_dev *dev, struct vframe_s *vf)
 		(dev->pattern_detected == PATTERN_22 &&
 			dev->pattern[PATTERN_22] != PATTERN_22_DETECT_RANGE))
 		vd_vsync_video_pattern_13213(dev, vf);
+	if (dev->pattern_detected != PATTERN_44 ||
+		(dev->pattern_detected == PATTERN_44 &&
+			dev->pattern[PATTERN_44] != PATTERN_44_DETECT_RANGE))
+		vd_vsync_video_pattern_53(dev, vf);
 	/*vd_vsync_video_pattern(dev, PTS_41_PATTERN);*/
 }
 
