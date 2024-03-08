@@ -6922,6 +6922,29 @@ static int vdin_drv_resume(struct platform_device *pdev)
 	pr_info("%s id:%d ok.\n", __func__, devp->index);
 	return 0;
 }
+
+__maybe_unused static int vdin_drv_pm_restore(struct device *dev)
+{
+	return 0;
+}
+
+static int vdin_drv_pm_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+
+	return vdin_drv_suspend(pdev, PMSG_SUSPEND);
+}
+
+static int vdin_drv_pm_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+
+	return vdin_drv_resume(pdev);
+}
+
+const struct dev_pm_ops vdin_drv_pm = {
+	SET_SYSTEM_SLEEP_PM_OPS(vdin_drv_pm_suspend, vdin_drv_pm_resume)
+};
 #endif
 
 static void vdin_drv_shutdown(struct platform_device *pdev)
@@ -6955,10 +6978,13 @@ static struct platform_driver vdin_driver = {
 	.suspend	= vdin_drv_suspend,
 	.resume		= vdin_drv_resume,
 #endif
-	.shutdown   = vdin_drv_shutdown,
+	.shutdown	= vdin_drv_shutdown,
 	.driver	= {
 		.name	        = VDIN_DRV_NAME,
 		.of_match_table = vdin_dt_match,
+	#ifdef CONFIG_PM
+		.pm		= &vdin_drv_pm,
+	#endif
 	}
 };
 
