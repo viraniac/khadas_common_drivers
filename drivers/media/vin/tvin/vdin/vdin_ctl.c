@@ -4855,7 +4855,7 @@ void vdin_set_hv_scale(struct vdin_dev_s *devp)
 set_hv_shrink:
 
 	if ((devp->double_wr || K_FORCE_HV_SHRINK) &&
-	    devp->h_active > 1920 && devp->v_active > 1080) {
+	    devp->h_active > 1920 && devp->v_active >= 1080) {
 		devp->h_shrink_times = H_SHRINK_TIMES_4k;
 		devp->v_shrink_times = V_SHRINK_TIMES_4k;
 	} else if (devp->double_wr && devp->h_active > 1280 &&
@@ -5270,9 +5270,10 @@ static bool vdin_is_rgb_input(enum tvin_color_fmt_e color_format)
 		return false;
 }
 
+/* Whether 8-bit output is needed to save bandwidth */
 bool vdin_is_4k(struct vdin_dev_s *devp)
 {
-	if (devp->h_active >= 2500 && devp->v_active >= 1400)
+	if (devp->h_active >= 2500 && devp->v_active >= 1080)
 		return true;
 	else
 		return false;
