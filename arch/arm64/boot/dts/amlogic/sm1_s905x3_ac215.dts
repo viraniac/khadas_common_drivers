@@ -1965,7 +1965,7 @@
 &sd_emmc_b {
 	//vmmc-supply = <&vddao3v3_reg>;
 	//vqmmc-supply = <&vddio_c>;
-	status = "okay";
+	status = "disabled";
 	pinctrl-0 = <&sdcard_pins>;
 	pinctrl-1 = <&sdcard_clk_gate_pins>;
 	pinctrl-2 = <&sd_1bit_pins>;
