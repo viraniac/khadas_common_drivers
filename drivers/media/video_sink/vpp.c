@@ -1534,6 +1534,13 @@ static bool is_8k_in_1080p120hz_out(u32 width_in,
 }
 #endif
 
+#ifdef CONFIG_AMLOGIC_TXHD2_REMOVE
+bool get_uvm_open_nn(void)
+{
+	return 0;
+}
+#endif
+
 static int vpp_set_filters_internal
 	(struct disp_info_s *input,
 	u32 width_in,
