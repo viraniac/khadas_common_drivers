@@ -30,6 +30,8 @@
 #include <linux/amlogic/aml_sync_api.h>
 #include <linux/amlogic/media/canvas/canvas.h>
 #include <linux/amlogic/media/canvas/canvas_mgr.h>
+#include <../../video_sink/video_priv.h>
+
 #ifdef CONFIG_AMLOGIC_MEDIA_CODEC_MM
 #include <linux/amlogic/media/codec_mm/codec_mm.h>
 #endif
@@ -3164,6 +3166,74 @@ bool get_lowlatency_mode(void)
 }
 EXPORT_SYMBOL(get_lowlatency_mode);
 
+static unsigned int get_vf_ds_ratio(struct composer_dev *dev, struct vframe_s *vf)
+{
+	unsigned int ds_ratio = 0;
+	unsigned int hdctds_ratio = 0;
+	unsigned int src_fmt = 2;
+	unsigned int skip = 0;
+	bool need_ds = false;
+
+	if ((vf->type & VIDTYPE_VIU_422) && !(vf->type & 0x10000000)) {
+		src_fmt = 0;
+		need_ds = true;
+		/*422 is one plane, post not support, need pre out nv21*/
+	} else if ((vf->type & VIDTYPE_VIU_NV21) || (vf->type & 0x10000000)) {
+		/*hdmi in dw is nv21 VIDTYPE_DW_NV21*/
+		src_fmt = 2;
+	}
+
+	if (vf->type & VIDTYPE_INTERLACE) {
+		if (src_fmt == 2) {
+			skip = 1;
+		} else if (src_fmt == 0) {
+			need_ds = true;
+		/*hdmiin output, In the first half of the line*/
+			if (vf->width > 960 || (vf->height >> 1) > 540)
+				hdctds_ratio = 1;
+		}
+	} else {
+		if (vf->width > 1920 || vf->height > 1080) {
+			hdctds_ratio = 1;
+			skip = 1;
+		} else if (vf->width > 960 || vf->height > 540) {
+			if (src_fmt == 0) {
+				/*hdmi in always use ds*/
+				hdctds_ratio = 1;
+			} else {
+				/*decoder use mif skip for save ddr*/
+				hdctds_ratio = 0;
+				skip = 1;
+				vc_print(dev->index, PRINT_OTHER, "1080p use mif skip\n");
+			}
+		}
+	}
+
+	if (hdctds_ratio || skip || need_ds) {
+		ds_ratio = hdctds_ratio;
+		if (skip)
+			ds_ratio = ds_ratio + 1;
+
+		if (need_ds && (vf->type & VIDTYPE_COMPRESS))
+			ds_ratio = (vf->compWidth / vf->width) >> 1;
+	} else {
+		if (vf->type & VIDTYPE_COMPRESS) {
+			if (vf->width == vf->compWidth)
+				ds_ratio = 0;
+			else if (vf->width >= (vf->compWidth >> 1))
+				ds_ratio = 1;
+			else if (vf->width >= (vf->compWidth >> 2))
+				ds_ratio = 2;
+			else
+				ds_ratio = 3;
+		}
+	}
+	vc_print(dev->index, PRINT_OTHER, "skip=%d, need_ds=%d, src_fmt=%d.\n",
+		skip, need_ds, src_fmt);
+
+	return ds_ratio;
+}
+
 static bool check_mosaic_22(struct composer_dev *dev, struct received_frames_t *received_frames)
 {
 	struct vinfo_s *video_composer_vinfo;
@@ -3290,6 +3360,8 @@ static void video_composer_task(struct composer_dev *dev)
 	bool do_mosaic_22 = false;
 	struct vf_aiface_t *aiface_info = NULL;
 	struct vf_aicolor_t *aicolor_info = NULL;
+	bool enable_prelink = false;
+	unsigned int ds_ratio = 0;
 
 	if (!kfifo_peek(&dev->receive_q, &received_frames)) {
 		vc_print(dev->index, PRINT_ERROR, "task: peek failed\n");
@@ -3511,6 +3583,22 @@ static void video_composer_task(struct composer_dev *dev)
 
 		vf->pts_us64 = time_us64;
 		vf->disp_pts = 0;
+
+#ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
+		enable_prelink = dim_get_pre_link();
+#endif
+		if (enable_prelink &&
+			!IS_DI_PRELINK(vf->di_flag) &&
+			!IS_DI_PRELINK_BYPASS(vf->di_flag) &&
+			!(vf->type & VIDTYPE_INTERLACE)) {
+			vc_print(dev->index, PRINT_OTHER, "need set ds_ratio.\n");
+			ds_ratio = get_vf_ds_ratio(dev, vf);
+			ds_ratio = ds_ratio << DI_FLAG_DCT_DS_RATIO_BIT;
+			ds_ratio &= DI_FLAG_DCT_DS_RATIO_MASK;
+			vf->di_flag |= DI_FLAG_DI_PVPPLINK_BYPASS | DI_FLAG_DI_BYPASS;
+			vf->di_flag &= ~DI_FLAG_DCT_DS_RATIO_MASK;
+			vf->di_flag |= ds_ratio;
+		}
 
 		if (frame_info->type == 1 && !(is_dec_vf || is_v4l_vf)) {
 			if (frame_info->source_type == SOURCE_HWC_CREAT_ION)
