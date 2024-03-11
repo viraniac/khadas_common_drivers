@@ -93,6 +93,8 @@ int delay_num = 4;
 module_param(delay_num, int, 0664);
 MODULE_PARM_DESC(delay_num, "\n delay_num\n");
 
+int width_limit = 1900;
+int height_limit = 1050;
 int lc_reset_done;
 int lc_en_chflg = 0xff;
 static int lc_flag = 0xff;
@@ -942,14 +944,6 @@ void lc_config(int enable,
 		/*	__func__, lc_slice_num_changed);*/
 		return;
 	}
-
-	/*pr_amlc_dbg("sps_h_en/v_en/h_in/w_in: %d/%d/%d/%d\n",*/
-	/*	sps_h_en,*/
-	/*	sps_v_en,*/
-	/*	sps_h_in,*/
-	/*	sps_w_in);*/
-	/*pr_amlc_dbg("vf->height/width: %d/%d\n",*/
-	/*	vf->height, vf->width);*/
 
 	flag_full_pre = flag_full;
 	height = sps_h_in << sps_h_en;
@@ -2267,7 +2261,11 @@ void lc_process(struct vframe_s *vf,
 			dbg_monitor(vf, sps_h_en, sps_v_en, sps_w_in, sps_h_in);
 	}
 
-	if (!lc_en) {
+	height = sps_h_in << sps_v_en;
+	width = sps_w_in << sps_h_en;
+
+	if (!lc_en ||
+		(vf && width < width_limit && height < height_limit)) {
 		lc_disable(lc_rdma_mode, vpp_index);
 		pr_amlc_dbg("[%s] lc_en = %d\n", __func__, lc_en);
 		frc_status_pre = 0;
@@ -2275,11 +2273,7 @@ void lc_process(struct vframe_s *vf,
 		return;
 	}
 
-	height = sps_h_in << sps_v_en;
-	width = sps_w_in << sps_h_en;
-
-	if (!vf ||
-		(vf && (width < 1900 && height < 1050))) {
+	if (!vf) {
 		if (lc_flag == 0xff) {
 			lc_disable(lc_rdma_mode, vpp_index);
 			lc_bypass_flag = 0x0;

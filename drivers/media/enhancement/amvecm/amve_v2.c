@@ -2841,14 +2841,10 @@ void ve_lc_blk_num_get(int *h_num, int *v_num,
 
 void ve_lc_disable(int rdma_mode, int vpp_index)
 {
-	int i;
-	int slice_max;
 	int lc_reg;
 	int data32;
 
 	pr_amve_v2("[%s] vpp_index = %d\n", __func__, vpp_index);
-
-	slice_max = get_slice_max();
 
 	lc_reg = VPP_LC_STTS_HIST_REGION_IDX;
 	data32 = READ_VPP_REG_S5(lc_reg);
@@ -2859,43 +2855,25 @@ void ve_lc_disable(int rdma_mode, int vpp_index)
 	else
 		WRITE_VPP_REG_S5(lc_reg, data32);
 
-	for (i = SLICE0; i < slice_max; i++) {
-		lc_reg = VPP_SRSHARP1_LC_TOP_CTRL +
-			sr_sharp_reg_ofst[i];
-		if (rdma_mode) {
-			data32 = READ_VPP_REG_S5(lc_reg);
-			data32 &= 0xffffffef;
-			pr_amve_v2("[%s]: 0x%04x = 0x%08x\n",
-				__func__, lc_reg, data32);
-			VSYNC_WRITE_VPP_REG_VPP_SEL(lc_reg, data32, vpp_index);
-		} else {
-			WRITE_VPP_REG_BITS_S5(lc_reg, 0, 4, 1);
-		}
+	/*slice 0*/
+	lc_reg = VPP_SRSHARP1_LC_TOP_CTRL + sr_sharp_reg_ofst[0];
+	WRITE_VPP_REG_BITS_S5(lc_reg, 0, 4, 1);
 
-		lc_reg = VPP_LC1_CURVE_CTRL +
-			lc_reg_ofst[i];
-		if (rdma_mode) {
-			data32 = READ_VPP_REG_S5(lc_reg);
-			data32 &= 0xfffffffe;
-			pr_amve_v2("[%s]: 0x%04x = 0x%08x\n",
-				__func__, lc_reg, data32);
-			VSYNC_WRITE_VPP_REG_VPP_SEL(lc_reg, data32, vpp_index);
-		} else {
-			WRITE_VPP_REG_BITS_S5(lc_reg, 0, 0, 1);
-		}
+	lc_reg = VPP_LC1_CURVE_CTRL + lc_reg_ofst[0];
+	WRITE_VPP_REG_BITS_S5(lc_reg, 0, 0, 1);
 
-		lc_reg = VPP_LC1_CURVE_RAM_CTRL +
-			lc_reg_ofst[i];
-		if (rdma_mode) {
-			data32 = READ_VPP_REG_S5(lc_reg);
-			data32 &= 0xfffffffe;
-			pr_amve_v2("[%s]: 0x%04x = 0x%08x\n",
-				__func__, lc_reg, data32);
-			VSYNC_WRITE_VPP_REG_VPP_SEL(lc_reg, data32, vpp_index);
-		} else {
-			WRITE_VPP_REG_BITS_S5(lc_reg, 0, 0, 1);
-		}
-	}
+	lc_reg = VPP_LC1_CURVE_RAM_CTRL + lc_reg_ofst[0];
+	WRITE_VPP_REG_BITS_S5(lc_reg, 0, 0, 1);
+
+	/*slice 1*/
+	lc_reg = VPP_SRSHARP1_LC_TOP_CTRL + sr_sharp_reg_ofst[1];
+	WRITE_VPP_REG_BITS_S5(lc_reg, 0, 4, 1);
+
+	lc_reg = VPP_LC1_CURVE_CTRL + lc_reg_ofst[1];
+	WRITE_VPP_REG_BITS_S5(lc_reg, 0, 0, 1);
+
+	lc_reg = VPP_LC1_CURVE_RAM_CTRL + lc_reg_ofst[1];
+	WRITE_VPP_REG_BITS_S5(lc_reg, 0, 0, 1);
 }
 
 void ve_lc_curve_ctrl_cfg(int enable,
@@ -3027,25 +3005,42 @@ void ve_lc_top_cfg(int enable, int h_num, int v_num,
 	/*lc curve mapping config*/
 	_lc_blk_bdry_cfg(height, width, h_num, v_num, rdma_mode, vpp_index);
 
-	for (i = SLICE0; i < slice_max; i++) {
-		lc_reg = VPP_SRSHARP1_LC_TOP_CTRL +
-			sr_sharp_reg_ofst[i];
-		/*lc enable need set at last*/
-		/*bit0: lc blend mode, default 1*/
-		data32 = READ_VPP_REG_S5(lc_reg);
-		data32 = (data32 & 0xfffe00ee) |
-			((lc_mapping_en & 0x1) << 4) |
-			(0x8 << 8) | (0x1 << 0) |
-			((sync_ctrl & 0x1) << 16);
-		if (!slice_case && i == SLICE1)
-			data32 &= 0xfffe00ee;
-		pr_amve_v2("[%s][%d]: mapping 0x%04x = 0x%08x\n",
-			__func__, i, lc_reg, data32);
-		if (rdma_mode)
-			VSYNC_WRITE_VPP_REG_VPP_SEL(lc_reg, data32, vpp_index);
-		else
-			WRITE_VPP_REG_S5(lc_reg, data32);
+	/*slice 0*/
+	lc_reg = VPP_SRSHARP1_LC_TOP_CTRL + sr_sharp_reg_ofst[0];
+	/*lc enable need set at last*/
+	/*bit0: lc blend mode, default 1*/
+	data32 = READ_VPP_REG_S5(lc_reg);
+	data32 = (data32 & 0xfffe00ee) |
+		((lc_mapping_en & 0x1) << 4) |
+		(0x8 << 8) | (0x1 << 0) |
+		((sync_ctrl & 0x1) << 16);
+	/*pr_amve_v2("[%s]: mapping 0x%04x = 0x%08x\n",*/
+	/*	__func__, lc_reg, data32);*/
+	if (rdma_mode)
+		VSYNC_WRITE_VPP_REG_VPP_SEL(lc_reg, data32, vpp_index);
+	else
+		WRITE_VPP_REG_S5(lc_reg, data32);
 
+	/*slice 1*/
+	lc_reg = VPP_SRSHARP1_LC_TOP_CTRL + sr_sharp_reg_ofst[1];
+	data32 = READ_VPP_REG_S5(lc_reg);
+	slice_case = ve_multi_slice_case_get();
+	if (slice_case) {
+		data32 = (data32 & 0xfffe00ee) |
+		((lc_mapping_en & 0x1) << 4) |
+		(0x8 << 8) | (0x1 << 0) |
+		((sync_ctrl & 0x1) << 16);
+	} else {
+		data32 &= 0xfffe00ee;
+	}
+	/*pr_amve_v2("[%s]: mapping 0x%04x = 0x%08x\n",*/
+	/*	__func__, lc_reg, data32);*/
+	if (rdma_mode)
+		VSYNC_WRITE_VPP_REG_VPP_SEL(lc_reg, data32, vpp_index);
+	else
+		WRITE_VPP_REG_S5(lc_reg, data32);
+
+	for (i = SLICE0; i < slice_max; i++) {
 		if (flag == 0x3) {
 			/* bt601 use 601 matrix */
 			_lc_mtrx_set(INP_MTX, LC_MTX_YUV601L_RGB,
