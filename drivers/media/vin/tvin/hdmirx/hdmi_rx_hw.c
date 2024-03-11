@@ -6607,6 +6607,11 @@ void rx_phy_power_on(u32 onoff)
 	}
 }
 
+bool rx_is_phy_power_off(u8 port)
+{
+	return rx_is_power_off_t3x(port);
+}
+
 void aml_phy_iq_skew_monitor(void)
 {
 	if (rx_info.phy_ver == PHY_VER_T5)

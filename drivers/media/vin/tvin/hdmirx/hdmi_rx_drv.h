@@ -463,7 +463,6 @@ struct rx_aml_phy {
 	int cdr_fr_en_auto;
 	int hyper_gain_en;
 	int eye_height_min;
-	bool phy_power_off_en;
 	int buf_gain;
 };
 

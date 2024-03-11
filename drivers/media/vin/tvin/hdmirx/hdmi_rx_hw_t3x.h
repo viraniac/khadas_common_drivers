@@ -270,10 +270,8 @@ bool s_tmds_transmission_detected(u8 port);
 bool hdmirx_flt_update_cleared_wait(u32 addr, u8 port);
 void hdmirx_vga_gain_tuning(u8 port);
 void rx_set_term_value_t3x(unsigned char port, bool value);
-void aml_phy_power_off_t3x_port0(void);
-void aml_phy_power_off_t3x_port1(void);
-void aml_phy_power_off_t3x_port2(void);
-void aml_phy_power_off_t3x_port3(void);
+void aml_phy_power_off_t3x_20(u8 port);
+void aml_phy_power_off_t3x_21(u8 port);
 void rx_cor_reset_t3x(u8 port);
 void cor_debug_t3x(u8 port);
 void clr_frl_fifo_status(u8 port);
@@ -286,6 +284,8 @@ bool rx_get_valid_m_sts(u8 port);
 void rx_i2c_dbg_monitor(void);
 void rx_i2c_monitor(u8 sel, u8 smp_mod, u8 trig_mod, u8 dump_mod);
 void rx_i2c_dump(void);
+bool rx_is_power_off_t3x(u8 port);
+
 //void reset_pcs(void);
 
 /*function declare end*/

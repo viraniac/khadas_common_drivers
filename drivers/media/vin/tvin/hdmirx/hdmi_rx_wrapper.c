@@ -309,7 +309,6 @@ void hdmirx_phy_var_init(void)
 		rx_info.aml_phy.eye_height = 5;
 		rx_info.aml_phy.hyper_gain_en = 0;
 		rx_info.aml_phy.eye_height_min = 8;
-		rx_info.aml_phy.phy_power_off_en = 0;
 		// for t3x 2.1 phy
 		if (rx_info.phy_ver == PHY_VER_T3X && !rx_info.aml_phy.phy_debug_en) {
 			rx_info.aml_phy_21.phy_bwth = 1;
@@ -4064,7 +4063,6 @@ void rx_get_global_variable(const char *buf)
 	pr_var(rx_info.aml_phy.tap1_byp, i++);
 	pr_var(rx_info.aml_phy.eq_byp, i++);
 	pr_var(rx_info.aml_phy.long_cable, i++);
-	pr_var(rx_info.aml_phy.phy_power_off_en, i++);
 	pr_var(rx_info.aml_phy.osc_mode, i++);
 	pr_var(rx_info.aml_phy.pll_div, i++);
 	pr_var(rx_info.aml_phy.eq_fix_val, i++);
@@ -4606,9 +4604,6 @@ int rx_set_global_variable(const char *buf, int size)
 	if (set_pr_var(tmpbuf, var_to_str(rx_info.aml_phy.phy_debug_en),
 	    &rx_info.aml_phy.phy_debug_en, value))
 		return pr_var(rx_info.aml_phy.phy_debug_en, index);
-	if (set_pr_var(tmpbuf, var_to_str(rx_info.aml_phy.phy_power_off_en),
-	    &rx_info.aml_phy.phy_power_off_en, value))
-		return pr_var(rx_info.aml_phy.phy_power_off_en, index);
 	if (set_pr_var(tmpbuf, var_to_str(rx_info.aml_phy.enhance_dfe_en_old),
 	    &rx_info.aml_phy.enhance_dfe_en_old, value))
 		return pr_var(rx_info.aml_phy.enhance_dfe_en_old, index);
@@ -5037,22 +5032,19 @@ void rx_5v_monitor(void)
 	else
 		tmp_5v = rx_get_hdmi5v_sts();
 
-	if (rx_info.chip_id == CHIP_ID_T3X) {
-		if (tmp_5v == 0 && pwr_sts == 0) {
-			aml_phy_power_off_t3x(E_PORT0);
-			aml_phy_power_off_t3x(E_PORT1);
-			aml_phy_power_off_t3x(E_PORT2);
-			aml_phy_power_off_t3x(E_PORT3);
-		}
-		for (i = 0; i < rx_info.port_num; i++) {
-			if (((tmp_5v >> i) & 1) == 0)
-				aml_phy_power_off_t3x(i);
-		}
-	}
-
 	if (tmp_5v != pwr_sts)
 		check_cnt++;
 
+	for (i = 0; i < rx_info.port_num; i++) {
+		if (rx_info.chip_id == CHIP_ID_T3X) {
+			if (rx[i].cur_5v_sts == 0) {
+				if (rx_get_hpd_sts(i) == 1)
+					rx_set_cur_hpd(0, 5, i);
+				if (!rx_is_phy_power_off(i))
+					aml_phy_power_off_t3x(i);
+			}
+		}
+	}
 	if (check_cnt >= pow5v_max_cnt) {
 		check_cnt = 0;
 		pwr_sts = tmp_5v;
@@ -5067,8 +5059,8 @@ void rx_5v_monitor(void)
 				if (rx_info.chip_id == CHIP_ID_T3X) {
 					if (rx[i].cur_5v_sts == 0) {
 						set_fsm_state(FSM_5V_LOST, i);
-						rx_set_cur_hpd(0, 5, i);
-						aml_phy_power_off_t3x(i);
+						//rx_set_cur_hpd(0, 5, i);
+						//aml_phy_power_off_t3x(i);
 						//rx_cor_reset_t3x(i);
 						rx[i].tx_type = DEV_UNKNOWN;
 						rx_clr_edid_type(i);
@@ -8716,7 +8708,7 @@ void rx_hpd_monitor(void)
 	if (rx_info.main_port_open)
 		port_hpd_rst_flag &= ~(1 << rx_info.main_port);
 
-	if (port_hpd_rst_flag & 1) {
+	if ((port_hpd_rst_flag & 1) && rx[E_PORT0].cur_5v_sts) {
 		if (hpd_wait_cnt0++ > hpd_wait_max) {
 			rx_set_port_hpd(0, 1);
 			hpd_wait_cnt0 = 0;
@@ -8725,7 +8717,7 @@ void rx_hpd_monitor(void)
 	} else {
 		hpd_wait_cnt0 = 0;
 	}
-	if (port_hpd_rst_flag & 2) {
+	if ((port_hpd_rst_flag & 2) && rx[E_PORT1].cur_5v_sts) {
 		if (hpd_wait_cnt1++ > hpd_wait_max) {
 			rx_set_port_hpd(1, 1);
 			hpd_wait_cnt1 = 0;
@@ -8734,7 +8726,7 @@ void rx_hpd_monitor(void)
 	} else {
 		hpd_wait_cnt1 = 0;
 	}
-	if (port_hpd_rst_flag & 4) {
+	if ((port_hpd_rst_flag & 4) && rx[E_PORT2].cur_5v_sts) {
 		if (hpd_wait_cnt2++ > hpd_wait_max) {
 			rx_set_port_hpd(2, 1);
 			hpd_wait_cnt2 = 0;
@@ -8743,7 +8735,7 @@ void rx_hpd_monitor(void)
 	} else {
 		hpd_wait_cnt2 = 0;
 	}
-	if (port_hpd_rst_flag & 8) {
+	if ((port_hpd_rst_flag & 8) && rx[E_PORT3].cur_5v_sts) {
 		if (hpd_wait_cnt3++ > hpd_wait_max) {
 			rx_set_port_hpd(3, 1);
 			hpd_wait_cnt3 = 0;
