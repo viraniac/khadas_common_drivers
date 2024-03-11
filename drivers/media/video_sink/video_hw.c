@@ -6614,14 +6614,16 @@ void check_video_mute(void)
 					mute_vpp();
 					if (is_aisr_enable(&vd_layer[0]))
 						aisr_sr1_nn_enable_sync(false);
-					pr_info("DV: %s: VIDEO_MUTE_ON_VPP\n", __func__);
+					if (vd_layer[0].global_debug & DEBUG_FLAG_BASIC_INFO)
+						pr_info("%s: VIDEO_MUTE_ON_VPP\n", __func__);
 				}
 				video_mute_status = VIDEO_MUTE_ON_VPP;
 			} else {
 				/* core 3 black */
 				if (video_mute_status != VIDEO_MUTE_ON_DV) {
 					amdv_set_toggle_flag(1);
-					pr_info("DOLBY: %s: VIDEO_MUTE_ON_DV\n", __func__);
+					if (vd_layer[0].global_debug & DEBUG_FLAG_BASIC_INFO)
+						pr_info("%s: VIDEO_MUTE_ON_DV\n", __func__);
 				}
 				video_mute_status = VIDEO_MUTE_ON_DV;
 			}
@@ -6642,13 +6644,15 @@ void check_video_mute(void)
 					unmute_vpp();
 					if (is_aisr_enable(&vd_layer[0]))
 						aisr_sr1_nn_enable_sync(true);
-					pr_info("DV: %s: VIDEO_MUTE_OFF dv off\n", __func__);
+					if (vd_layer[0].global_debug & DEBUG_FLAG_BASIC_INFO)
+						pr_info("%s: VIDEO_MUTE_OFF tv\n", __func__);
 				}
 				video_mute_status = VIDEO_MUTE_OFF;
 			} else {
 				if (video_mute_status != VIDEO_MUTE_OFF) {
 					amdv_set_toggle_flag(2);
-					pr_info("DOLBY: %s: VIDEO_MUTE_OFF dv off\n", __func__);
+					if (vd_layer[0].global_debug & DEBUG_FLAG_BASIC_INFO)
+						pr_info("%s: VIDEO_MUTE_OFF stb\n", __func__);
 				}
 				video_mute_status = VIDEO_MUTE_OFF;
 			}
