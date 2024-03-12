@@ -1018,6 +1018,11 @@ static void osd_color_config(struct meson_vpu_block *vblk,
 
 	if (is_meson_t3x_cpu()) {
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+		/*
+		 * color_expand_mode is 1 for 16-bit pixel format, expand each color component
+		 * to 8bits by padding right-most bits with left-most bits
+		 */
+		reg_ops->rdma_write_reg_bits(reg->viu_osd_ctrl_stat2, 1, 0, 1);
 		blk_mode = meson_drm_format_hw_blkmode_t3x(pixel_format, afbc_en);
 		color = meson_drm_format_hw_colormat_t3x(pixel_format, afbc_en);
 		alpha_replace = (pixel_blend == DRM_MODE_BLEND_PIXEL_NONE) ||
