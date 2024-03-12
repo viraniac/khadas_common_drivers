@@ -1103,10 +1103,15 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->timer_dbg.timer_en = (u8)val1;
 		if (kstrtoint(parm[2], 10, &val1) == 0)
-			devp->timer_dbg.timer_level = (u8)val1;
+			devp->timer_dbg.timer_level = (u16)val1;
 		if (kstrtoint(parm[3], 10, &val1) == 0)
 			devp->timer_dbg.time_interval = (u8)val1;
 		frc_timer_proc(devp);
+	} else if (!strcmp(parm[0], "frm_show")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->in_sts.frm_en = val1;
 	}
 exit:
 	kfree(buf_orig);
@@ -1240,7 +1245,8 @@ free_buf:
 // timer
 static enum hrtimer_restart frc_timer_callback(struct hrtimer *timer)
 {
-	u8 i, log, time;
+	u8 i, time;
+	u16 log;
 	u32 reg_val;
 	struct frc_dev_s *devp = get_frc_devp();
 
@@ -1276,4 +1282,71 @@ void frc_timer_proc(struct frc_dev_s *devp)
 			ktime_set(0, time * 1000000), HRTIMER_MODE_REL); // unit: ns
 	else
 		hrtimer_cancel(&frc_hi_timer);
+}
+
+/* column: 1~8, color: 0~7, number: 0~15 */
+static void update_seg_7_show(u8 enable, u8 column, u8 color, u8 number)
+{
+	u8 value;
+
+	value = ((enable & 0x01) << 7) + ((color & 0x07) << 4) + (number & 0x0F);
+
+	// enable flag_number 2_1 ~ 2_8
+	if (column == 1)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM17_NUM18_NUM21_NUM22,
+			value << 8, 0xFF00);
+	else if (column == 2)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM17_NUM18_NUM21_NUM22,
+			value, 0xFF);
+	else if (column == 3)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value << 24, 0xFF000000);
+	else if (column == 4)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value << 16, 0xFF0000);
+	else if (column == 5)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value << 8, 0xFF00);
+	else if (column == 6)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value, 0xFF);
+	else if (column == 7)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM27_NUM28,
+			value << 24, 0xFF000000);
+	else if (column == 8)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM27_NUM28,
+			value << 16, 0xFF0000);
+}
+
+void frc_dbg_frame_show(struct frc_dev_s *devp)
+{
+	u8 i, enable, tmp_cnt;
+	static u8 pre_flag;
+
+	if (!devp)
+		return;
+
+	enable = devp->in_sts.frm_en;
+
+	if (enable) {
+		// in cnt
+		tmp_cnt = (devp->in_sts.vs_cnt / 100) % 10;
+		update_seg_7_show(1, 1, 1, tmp_cnt);
+		tmp_cnt = (devp->in_sts.vs_cnt / 10) % 10;
+		update_seg_7_show(1, 2, 1, tmp_cnt);
+		tmp_cnt = devp->in_sts.vs_cnt % 10;
+		update_seg_7_show(1, 3, 1, tmp_cnt);
+		// out cnt
+		tmp_cnt = (devp->out_sts.vs_cnt / 100) % 10;
+		update_seg_7_show(1, 6, 2, tmp_cnt);
+		tmp_cnt = (devp->out_sts.vs_cnt / 10) % 10;
+		update_seg_7_show(1, 7, 2, tmp_cnt);
+		tmp_cnt = devp->out_sts.vs_cnt % 10;
+		update_seg_7_show(1, 8, 2, tmp_cnt);
+	} else if (enable == 0 && enable != pre_flag) {
+		for (i = 1; i < 9; i++)
+			update_seg_7_show(0, i, 0, 0);  // clear
+	}
+
+	pre_flag = enable;
 }

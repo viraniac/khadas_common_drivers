@@ -50,6 +50,7 @@
 #include "frc_proc.h"
 #include "frc_hw.h"
 #include "frc_rdma.h"
+#include "frc_dbg.h"
 #if IS_ENABLED(CONFIG_AMLOGIC_DEBUG_IOTRACE)
 #include <linux/amlogic/aml_iotrace.h>
 #endif
@@ -411,6 +412,7 @@ void frc_output_tasklet_pro(unsigned long arg)
 		if (devp->ud_dbg.outud_time_en)
 			frc_out_task_print(sched_clock() - timestamp);
 	}
+	frc_dbg_frame_show(devp);
 #if IS_ENABLED(CONFIG_AMLOGIC_DEBUG_IOTRACE)
 	iotrace_misc_record_write(RECORD_TYPE_FRC_OUTPUT_OUT, 0, 0, 0);
 #endif
