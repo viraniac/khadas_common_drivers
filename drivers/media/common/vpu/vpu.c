@@ -2980,6 +2980,12 @@ static int vpu_suspend(struct device *dev)
 static int vpu_resume(struct device *dev)
 {
 	unsigned int clk;
+	int ret;
+
+	ret = vpu_power_init_check();
+	vpu_clktree_init(dev);
+	if (ret)
+		vpu_power_init();
 
 	if (!vpu_conf.data)
 		return 0;
