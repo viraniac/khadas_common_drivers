@@ -6717,11 +6717,10 @@ static const struct vframe_receiver_op_s video_vf_receiver = {
  * -----------------------------------------------------------------
  */
 #ifdef CONFIG_PM
-static int amlvideo2_drv_suspend(struct platform_device *pdev,
-				 pm_message_t state)
+static int amlvideo2_drv_suspend(struct device *dev)
 {
 	int i;
-	struct v4l2_device *v4l2_dev = platform_get_drvdata(pdev);
+	struct v4l2_device *v4l2_dev = dev_get_drvdata(dev);
 	struct amlvideo2_device *vid_dev =
 		container_of(v4l2_dev, struct amlvideo2_device, v4l2_dev);
 	struct amlvideo2_node_dmaqueue *dma_q;
@@ -6740,10 +6739,10 @@ static int amlvideo2_drv_suspend(struct platform_device *pdev,
 	return 0;
 }
 
-static int amlvideo2_drv_resume(struct platform_device *pdev)
+static int amlvideo2_drv_resume(struct device *dev)
 {
 	int i;
-	struct v4l2_device *v4l2_dev = platform_get_drvdata(pdev);
+	struct v4l2_device *v4l2_dev = dev_get_drvdata(dev);
 	struct amlvideo2_device *vid_dev =
 		container_of(v4l2_dev, struct amlvideo2_device, v4l2_dev);
 	struct amlvideo2_node_dmaqueue *dma_q;
@@ -6759,6 +6758,14 @@ static int amlvideo2_drv_resume(struct platform_device *pdev)
 	}
 	return 0;
 }
+
+static const struct dev_pm_ops meson_amlvideo2_pm_ops = {
+	.suspend = amlvideo2_drv_suspend,
+	.resume = amlvideo2_drv_resume,
+	.freeze = amlvideo2_drv_suspend,
+	.thaw = amlvideo2_drv_resume,
+	.restore = amlvideo2_drv_resume,
+};
 #endif
 
 static int amlvideo2_release_node(struct amlvideo2_device *vid_dev)
@@ -7075,14 +7082,13 @@ static const struct of_device_id amlvideo2_dt_match[] = {
 static struct platform_driver amlvideo2_drv = {
 	.probe = amlvideo2_driver_probe,
 	.remove = amlvideo2_drv_remove,
-#ifdef CONFIG_PM
-	.suspend = amlvideo2_drv_suspend,
-	.resume = amlvideo2_drv_resume,
-#endif
 	.driver = {
 		.name = "amlvideo2",
 		.owner = THIS_MODULE,
 		.of_match_table = amlvideo2_dt_match,
+#ifdef CONFIG_PM
+		.pm = &meson_amlvideo2_pm_ops,
+#endif
 	}
 };
 

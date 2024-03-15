@@ -2155,19 +2155,6 @@ static int video_queue_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int video_queue_suspend(struct platform_device *pdev,
-				 pm_message_t state)
-{
-	return 0;
-}
-
-static int video_queue_resume(struct platform_device *pdev)
-{
-	return 0;
-}
-#endif
-
 static const struct of_device_id video_queue_dt_match[] = {
 	{
 		.compatible = "amlogic, video_queue",
@@ -2175,17 +2162,36 @@ static const struct of_device_id video_queue_dt_match[] = {
 	{},
 };
 
+#ifdef CONFIG_PM
+static int video_queue_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int video_queue_resume(struct device *dev)
+{
+	return 0;
+}
+
+static const struct dev_pm_ops meson_videoqueue_pm_ops = {
+	.suspend = video_queue_suspend,
+	.resume = video_queue_resume,
+	.freeze = video_queue_suspend,
+	.thaw = video_queue_resume,
+	.restore = video_queue_resume,
+};
+#endif
+
 static struct platform_driver videoqueue_driver = {
 	.probe = video_queue_probe,
 	.remove = video_queue_remove,
-#ifdef CONFIG_PM
-	.suspend = video_queue_suspend,
-	.resume = video_queue_resume,
-#endif
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "videoqueue",
 		.of_match_table = video_queue_dt_match,
+#ifdef CONFIG_PM
+		.pm = &meson_videoqueue_pm_ops,
+#endif
 	}
 };
 
