@@ -704,13 +704,9 @@
 		#sound-dai-cells = <0>;
 		clocks = <&clkc CLKID_HIFI_PLL
 				&clkc CLKID_HIFI1_PLL
-				&clkc CLKID_FCLK_DIV4
-				&clkaudio CLKID_AUDIO_GATE_SPDIFIN
 				&clkaudio CLKID_AUDIO_GATE_SPDIFOUT_A
-				&clkaudio CLKID_AUDIO_SPDIFIN
 				&clkaudio CLKID_AUDIO_SPDIFOUT_A>;
-		clock-names = "sysclk", "clk_src_cd", "fixed_clk", "gate_spdifin",
-				"gate_spdifout", "clk_spdifin", "clk_spdifout";
+		clock-names = "sysclk", "clk_src_cd", "gate_spdifout","clk_spdifout";
 		interrupts =
 				<GIC_SPI 35 IRQ_TYPE_EDGE_RISING>;
 

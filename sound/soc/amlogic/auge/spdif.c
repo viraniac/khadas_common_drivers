@@ -2032,28 +2032,27 @@ static int aml_spdif_parse_of(struct platform_device *pdev)
 		p_spdif->gate_spdifin = devm_clk_get(dev, "gate_spdifin");
 		if (IS_ERR(p_spdif->gate_spdifin)) {
 			dev_err(dev, "Can't get spdifin gate\n");
-			return PTR_ERR(p_spdif->gate_spdifin);
 		}
 		/* pll */
 		p_spdif->fixed_clk = devm_clk_get(dev, "fixed_clk");
 		if (IS_ERR(p_spdif->fixed_clk)) {
 			dev_err(dev, "Can't retrieve fixed_clk\n");
-			return PTR_ERR(p_spdif->fixed_clk);
+
 		}
 		/* spdif in clk */
 		p_spdif->clk_spdifin = devm_clk_get(dev, "clk_spdifin");
 		if (IS_ERR(p_spdif->clk_spdifin)) {
 			dev_err(dev, "Can't retrieve spdifin clock\n");
-			return PTR_ERR(p_spdif->clk_spdifin);
 		}
-		ret = clk_set_parent(p_spdif->clk_spdifin, p_spdif->fixed_clk);
-		if (ret) {
-			dev_err(dev,
-				"Can't set clk_spdifin parent clock\n");
-			ret = PTR_ERR(p_spdif->clk_spdifin);
-			return ret;
+		if (!IS_ERR(p_spdif->fixed_clk) && !IS_ERR(p_spdif->clk_spdifin)) {
+			ret = clk_set_parent(p_spdif->clk_spdifin, p_spdif->fixed_clk);
+			if (ret) {
+				dev_err(dev,
+					"Can't set clk_spdifin parent clock\n");
+				ret = PTR_ERR(p_spdif->clk_spdifin);
+				return ret;
+			}
 		}
-
 		/* irqs */
 		p_spdif->irq_spdifin =
 			platform_get_irq_byname(pdev, "irq_spdifin");
