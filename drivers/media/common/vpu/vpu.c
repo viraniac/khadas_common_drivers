@@ -2911,8 +2911,7 @@ static int vpu_remove(struct platform_device *pdev)
 
 static void vpu_shutdown(struct platform_device *pdev)
 {
-	if (vpu_conf.data->gp_pll_valid &&
-		!IS_ERR_OR_NULL(vpu_conf.vpu_clk) &&
+	if (!IS_ERR_OR_NULL(vpu_conf.vpu_clk) &&
 		__clk_is_enabled(vpu_conf.vpu_clk))
 		clk_disable_unprepare(vpu_conf.vpu_clk);
 
@@ -2921,7 +2920,43 @@ static void vpu_shutdown(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-static int vpu_suspend(struct platform_device *pdev, pm_message_t state)
+static int restore_clk(int restore_flag)
+{
+	int ret;
+
+	if (!IS_ERR_OR_NULL(vpu_conf.vpu_intr))
+		clk_prepare_enable(vpu_conf.vpu_intr);
+	if (restore_flag) {
+		if ((IS_ERR_OR_NULL(vpu_conf.vapb_clk0)) ||
+			(IS_ERR_OR_NULL(vpu_conf.vapb_clk1)) ||
+			(IS_ERR_OR_NULL(vpu_conf.vapb_clk))) {
+			if (IS_ERR_OR_NULL(vpu_conf.vapb_clk))
+				VPUERR("%s: vapb_clk\n", __func__);
+			else
+				clk_prepare_enable(vpu_conf.vapb_clk);
+		} else {
+			ret = clk_set_parent(vpu_conf.vapb_clk, vpu_conf.vapb_clk0);
+			if (ret)
+				VPUERR("%s: %d clk_set_parent error\n", __func__, __LINE__);
+
+			clk_prepare_enable(vpu_conf.vapb_clk);
+			ret = clk_set_rate(vpu_conf.vapb_clk1, 50000000);
+			if (ret)
+				VPUERR("%s: clk_set_rate error\n", __func__);
+		}
+	}
+	if ((!IS_ERR_OR_NULL(vpu_conf.vpu_clk0)) ||
+		(!IS_ERR_OR_NULL(vpu_conf.vpu_clk1)) ||
+		(!IS_ERR_OR_NULL(vpu_conf.vpu_clk))) {
+		ret = clk_set_parent(vpu_conf.vpu_clk, vpu_conf.vpu_clk0);
+		if (ret)
+			VPUERR("%s: %d clk_set_parent error\n", __func__, __LINE__);
+		clk_prepare_enable(vpu_conf.vpu_clk);
+	}
+		return 0;
+}
+
+static int vpu_suspend(struct device *dev)
 {
 	if (!vpu_conf.data)
 		return 0;
@@ -2942,7 +2977,7 @@ static int vpu_suspend(struct platform_device *pdev, pm_message_t state)
 	return 0;
 }
 
-static int vpu_resume(struct platform_device *pdev)
+static int vpu_resume(struct device *dev)
 {
 	unsigned int clk;
 
@@ -2963,21 +2998,60 @@ static int vpu_resume(struct platform_device *pdev)
 	      vpu_clk_get(), (vpu_clk_read(vpu_conf.data->vpu_clk_reg)));
 	return 0;
 }
+
+static int vpu_freeze(struct device *dev)
+{
+	if (!IS_ERR_OR_NULL(vpu_conf.vpu_clk) &&
+		__clk_is_enabled(vpu_conf.vpu_clk))
+		clk_disable_unprepare(vpu_conf.vpu_clk);
+
+	if (!IS_ERR_OR_NULL(vpu_conf.vpu_intr))
+		clk_disable_unprepare(vpu_conf.vpu_intr);
+
+	return 0;
+}
+
+static int vpu_thaw(struct device *dev)
+{
+	int ret;
+
+	ret = restore_clk(0);
+	return ret;
+}
+
+static int vpu_restore(struct device *dev)
+{
+	int ret;
+
+	ret = vpu_power_init_check();
+	restore_clk(1);
+	mutex_lock(&vpu_clk_mutex);
+	set_vpu_clk(vpu_conf.clk_level);
+	mutex_unlock(&vpu_clk_mutex);
+	if (ret)
+		vpu_power_init();
+	return 0;
+}
+
+static const struct dev_pm_ops vpu_pm_ops = {
+	.freeze = vpu_freeze,
+	.thaw = vpu_thaw,
+	.restore = vpu_restore,
+	.suspend = vpu_suspend,
+	.resume = vpu_resume,
+};
 #endif
 
 static struct platform_driver vpu_driver = {
 	.driver = {
 		.name = "vpu",
 		.owner = THIS_MODULE,
+		.pm = &vpu_pm_ops,
 		.of_match_table = of_match_ptr(vpu_of_table),
 	},
 	.probe = vpu_probe,
 	.remove = vpu_remove,
 	.shutdown = vpu_shutdown,
-#ifdef CONFIG_PM
-	.suspend    = vpu_suspend,
-	.resume     = vpu_resume,
-#endif
 };
 
 int __init vpu_init(void)
