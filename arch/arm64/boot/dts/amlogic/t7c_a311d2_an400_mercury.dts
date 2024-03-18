@@ -1688,7 +1688,7 @@
 				<&clkc CLKID_MCLK_PLL>,
 				<&xtal>;
 		clock-names = "mclk","mclk_sel","mclk_pre","mclk_p","mclk_x";
-		pwdn-gpios = <&gpio GPIOM_4 GPIO_ACTIVE_HIGH>;
+		//pwdn-gpios = <&gpio GPIOM_4 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio GPIOM_10 GPIO_ACTIVE_HIGH>;
 		port {
 			amlsens_2_ep: endpoint {
