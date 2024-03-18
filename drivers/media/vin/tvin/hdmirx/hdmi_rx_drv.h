@@ -924,6 +924,8 @@ struct rx_s {
 	struct rx_edid_auto_mode edid_type;
 	bool resume_flag;
 	bool spec_vendor_id;
+	u32 irq_err_cnt;
+	u32 de_err_cnt;
 };
 
 struct reg_map {

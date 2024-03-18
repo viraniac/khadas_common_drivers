@@ -1677,6 +1677,8 @@ void hdmirx_top_irq_en(int en, int lvl, u8 port)
 
 		hdmirx_wr_top(TOP_INTR_MASKN, top_intr_maskn_value, port);
 	} else {
+		rx[port].irq_err_cnt = 0;
+		rx[port].de_err_cnt = 0;
 		hdmirx_wr_top(TOP_INTR_MASKN, 0, port);
 	}
 }
@@ -1927,7 +1929,7 @@ bool is_clk_stable(u8 port)
 	port = (rx_info.chip_id >= CHIP_ID_T3X) ? port : rx_info.main_port;
 
 	//t3x frl todo
-	if (force_clk_stable)
+	if (rx[port].var.frl_rate)
 		return true;
 	switch (rx_info.chip_id) {
 	case CHIP_ID_TXHD:
