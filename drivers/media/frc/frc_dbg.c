@@ -962,9 +962,12 @@ ssize_t frc_debug_other_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "pre_vsync\t=%d\n", devp->use_pre_vsync);
 	len += sprintf(buf + len, "mute_en\t\t=%d\t%d\n",
 		devp->in_sts.enable_mute_flag, devp->in_sts.mute_vsync_cnt);
-	len += sprintf(buf + len, "task_hi_en\t in_hi_en:%d out_hi_en:%d\n",
+	len += sprintf(buf + len, "task_hi_en\t=%d\t%d\n",
 		devp->in_sts.hi_en, devp->out_sts.hi_en);
-	len += sprintf(buf + len, "timer_ctrl\t[en 0/1][dbg_lvl][time:1-16ms]\n");
+	len += sprintf(buf + len, "timer_ctrl\t=en:%d level:%d interval:%d\n",
+			devp->timer_dbg.timer_en, devp->timer_dbg.timer_level,
+			devp->timer_dbg.time_interval);
+	len += sprintf(buf + len, "frm_seg_en\t=%d\n", devp->in_sts.frm_en);
 	return len;
 }
 
@@ -1073,7 +1076,7 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 				devp->frc_sts.re_config = true;
 			}
 		}
-	} else if (!strcmp(parm[0], "en_mute")) {
+	} else if (!strcmp(parm[0], "mute_en")) {
 		if (!parm[2])
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0) {
@@ -1105,9 +1108,10 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 		if (kstrtoint(parm[2], 10, &val1) == 0)
 			devp->timer_dbg.timer_level = (u16)val1;
 		if (kstrtoint(parm[3], 10, &val1) == 0)
-			devp->timer_dbg.time_interval = (u8)val1;
+			devp->timer_dbg.time_interval =
+				(u8)(val1 > 16 ? 16 : val1);
 		frc_timer_proc(devp);
-	} else if (!strcmp(parm[0], "frm_show")) {
+	} else if (!strcmp(parm[0], "frm_seg_en")) {
 		if (!parm[1])
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
@@ -1255,7 +1259,7 @@ static enum hrtimer_restart frc_timer_callback(struct hrtimer *timer)
 
 	for (i = 0; i < rdma_trace_num; i++) {
 		reg_val = READ_FRC_REG(rdma_trace_reg[i]);
-		pr_frc(log, "reg[%04x]=%08x\n", rdma_trace_reg[i], reg_val);
+		pr_frc(log, "reg[%04x]=0x%08x %9d\n", rdma_trace_reg[i], reg_val, reg_val);
 	}
 
 	hrtimer_forward(&frc_hi_timer,

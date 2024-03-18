@@ -114,8 +114,9 @@
 // frc_20240104 open clk when sys resume
 // frc_20240116 frc rdma process optimisation
 // frc_20240306 high-priority task and timestamp debug
+// frc_20240312 frc protect badedit effect
 
-#define FRC_FW_VER			"2024-0312  frc protect badedit effect"
+#define FRC_FW_VER			"2024-0319 frc sync alg macro"
 #define FRC_KERDRV_VER                  3205
 
 #define FRC_DEVNO	1
