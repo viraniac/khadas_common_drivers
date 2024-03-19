@@ -328,7 +328,8 @@ static unsigned char dim_dbg_is_disable_nr(void)
 
 static bool dpvpp_is_bypass(void)
 {
-	if (tst_pre_vpp & DI_BIT8)
+	if (tst_pre_vpp & DI_BIT8 ||
+		dimp_get(edi_mp_di_debug_flag) & 0x100000)
 		return true;
 	return false;
 }
