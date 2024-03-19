@@ -1527,8 +1527,10 @@
 				clocks = <&clkc CLKID_SYS_CLK_SPICC0>,
 					 <&clkc CLKID_SPICC0>;
 				clock-names = "sys", "spi";
-				assigned-clocks = <&clkc CLKID_SPICC0>;
-				assigned-clock-rates = <500000000>;
+				assigned-clocks = <&clkc CLKID_SPICC0_SEL>,
+						  <&clkc CLKID_SPICC0>;
+				assigned-clock-parents = <&clkc CLKID_FCLK_DIV4>, <0>;
+				assigned-clock-rates = <0>, <500000000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
@@ -1541,8 +1543,10 @@
 				clocks = <&clkc CLKID_SYS_CLK_SPICC1>,
 					 <&clkc CLKID_SPICC1>;
 				clock-names = "sys", "spi";
-				assigned-clocks = <&clkc CLKID_SPICC1>;
-				assigned-clock-rates = <500000000>;
+				assigned-clocks = <&clkc CLKID_SPICC1_SEL>,
+						  <&clkc CLKID_SPICC1>;
+				assigned-clock-parents = <&clkc CLKID_FCLK_DIV4>, <0>;
+				assigned-clock-rates = <0>, <500000000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
@@ -1555,8 +1559,10 @@
 				clocks = <&clkc CLKID_SYS_CLK_SPICC2>,
 					 <&clkc CLKID_SPICC2>;
 				clock-names = "sys", "spi";
-				assigned-clocks = <&clkc CLKID_SPICC2>;
-				assigned-clock-rates = <500000000>;
+				assigned-clocks = <&clkc CLKID_SPICC2_SEL>,
+						  <&clkc CLKID_SPICC2>;
+				assigned-clock-parents = <&clkc CLKID_FCLK_DIV4>, <0>;
+				assigned-clock-rates = <0>, <500000000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
@@ -1568,8 +1574,10 @@
 				interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clkc CLKID_SPICC3>;
 				clock-names = "spi";
-				assigned-clocks = <&clkc CLKID_SPICC3>;
-				assigned-clock-rates = <500000000>;
+				assigned-clocks = <&clkc CLKID_SPICC3_SEL>,
+						  <&clkc CLKID_SPICC3>;
+				assigned-clock-parents = <&clkc CLKID_FCLK_DIV4>, <0>;
+				assigned-clock-rates = <0>, <500000000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
@@ -1581,8 +1589,10 @@
 				interrupts = <GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clkc CLKID_SPICC4>;
 				clock-names = "spi";
-				assigned-clocks = <&clkc CLKID_SPICC4>;
-				assigned-clock-rates = <500000000>;
+				assigned-clocks = <&clkc CLKID_SPICC4_SEL>,
+						  <&clkc CLKID_SPICC4>;
+				assigned-clock-parents = <&clkc CLKID_FCLK_DIV4>, <0>;
+				assigned-clock-rates = <0>, <500000000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
@@ -1594,8 +1604,10 @@
 				interrupts = <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clkc CLKID_SPICC5>;
 				clock-names = "spi";
-				assigned-clocks = <&clkc CLKID_SPICC5>;
-				assigned-clock-rates = <500000000>;
+				assigned-clocks = <&clkc CLKID_SPICC5_SEL>,
+						  <&clkc CLKID_SPICC5>;
+				assigned-clock-parents = <&clkc CLKID_FCLK_DIV4>, <0>;
+				assigned-clock-rates = <0>, <500000000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
