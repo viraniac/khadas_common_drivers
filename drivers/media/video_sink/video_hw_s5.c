@@ -3762,18 +3762,20 @@ static void set_vd_src_info(struct video_layer_s *layer)
 				}
 				if (glayer_info[0].reverse) {
 					/* swap slice 0 and slice 1 x, y */
-					temp_start_x_lines =
-						layer->slice_mif_setting[1].start_x_lines;
-					temp_end_x_lines =
-						layer->slice_mif_setting[1].end_x_lines;
-					layer->slice_mif_setting[1].start_x_lines =
-						layer->slice_mif_setting[0].start_x_lines;
-					layer->slice_mif_setting[1].end_x_lines =
-						layer->slice_mif_setting[0].end_x_lines;
 					layer->slice_mif_setting[0].start_x_lines =
-						temp_start_x_lines;
+						vd_proc_slice_info->vd1_slice_x_end[1] -
+						(vd_proc_slice_info->vd1_slice_x_end[0] -
+						vd_proc_slice_info->vd1_slice_x_st[0]);
 					layer->slice_mif_setting[0].end_x_lines =
-						temp_end_x_lines;
+						vd_proc_slice_info->vd1_slice_x_end[1];
+
+					layer->slice_mif_setting[1].start_x_lines =
+						vd_proc_slice_info->vd1_slice_x_st[0];
+					layer->slice_mif_setting[1].end_x_lines =
+						layer->slice_mif_setting[1].start_x_lines +
+						vd_proc_slice_info->vd1_slice_x_end[1] -
+						vd_proc_slice_info->vd1_slice_x_st[1];
+
 					temp_start_y_lines =
 						layer->slice_mif_setting[1].start_y_lines;
 					temp_end_y_lines =
@@ -3788,18 +3790,19 @@ static void set_vd_src_info(struct video_layer_s *layer)
 						temp_end_y_lines;
 				} else if (glayer_info[0].mirror == H_MIRROR) {
 					/* swap slice 0 and slice 1 x */
-					temp_start_x_lines =
-						layer->slice_mif_setting[1].start_x_lines;
-					temp_end_x_lines =
-						layer->slice_mif_setting[1].end_x_lines;
-					layer->slice_mif_setting[1].start_x_lines =
-						layer->slice_mif_setting[0].start_x_lines;
-					layer->slice_mif_setting[1].end_x_lines =
-						layer->slice_mif_setting[0].end_x_lines;
 					layer->slice_mif_setting[0].start_x_lines =
-						temp_start_x_lines;
+						vd_proc_slice_info->vd1_slice_x_end[1] -
+						(vd_proc_slice_info->vd1_slice_x_end[0] -
+						vd_proc_slice_info->vd1_slice_x_st[0]);
 					layer->slice_mif_setting[0].end_x_lines =
-						temp_end_x_lines;
+						vd_proc_slice_info->vd1_slice_x_end[1];
+
+					layer->slice_mif_setting[1].start_x_lines =
+						vd_proc_slice_info->vd1_slice_x_st[0];
+					layer->slice_mif_setting[1].end_x_lines =
+						layer->slice_mif_setting[1].start_x_lines +
+						vd_proc_slice_info->vd1_slice_x_end[1] -
+						vd_proc_slice_info->vd1_slice_x_st[1];
 				} else if (glayer_info[0].mirror == V_MIRROR) {
 					/* swap slice 0 and slice 1 y */
 					temp_start_y_lines =

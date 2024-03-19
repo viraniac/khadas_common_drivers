@@ -1750,8 +1750,10 @@ RESTART_ALL:
 
 	slice_num = get_slice_num(input->layer_id);
 	vd1s1_vd2_prebld_en = get_vd1s1_vd2_prebld_en(input->layer_id);
+	#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	/* for reverse or h mirror must aligned */
-	if (input->reverse || input->mirror == H_MIRROR) {
+	if ((input->reverse || input->mirror == H_MIRROR) &&
+		video_is_meson_s5_cpu()) {
 		if (slice_num == 2  && !vd1s1_vd2_prebld_en) {
 			/* crop left must 2 aligned */
 			crop_left = (crop_left + 1) & ~0x01;
@@ -1762,6 +1764,7 @@ RESTART_ALL:
 			crop_right = (crop_right + 3) & ~0x03;
 		}
 	}
+	#endif
 	if (src_crop_adjust) {
 		w_in = width_in - src_crop_right;
 		h_in = height_in - src_crop_bottom;
