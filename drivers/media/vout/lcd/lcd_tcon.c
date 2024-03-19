@@ -3105,6 +3105,7 @@ static void lcd_tcon_reserved_memory_release(struct aml_lcd_drv_s *pdrv)
 	struct device_node *mem_node;
 	struct resource res;
 	unsigned long end;
+	unsigned int highmem_flag = 0;
 	int ret;
 
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
@@ -3125,10 +3126,19 @@ static void lcd_tcon_reserved_memory_release(struct aml_lcd_drv_s *pdrv)
 	}
 
 	end = PAGE_ALIGN(res.end);
-	aml_free_reserved_area(__va(res.start), __va(end), 0, "lcd_tcon_reserved");
+
+	highmem_flag = PageHighMem(phys_to_page(res.start));
+	if (!highmem_flag) {
+		aml_free_reserved_area(__va(res.start), __va(end),
+			0, "lcd_tcon_reserved");
+	}
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("free reserved area: paddr:0x%lx, size:0x%lx\n",
-			(long)res.start, (long)resource_size(&res));
+		if (highmem_flag) {
+			LCDPR("Release memory need to confirm linear address\n");
+		} else {
+			LCDPR("free reserved area: paddr:0x%lx, size:0x%lx\n",
+				(long)res.start, (long)resource_size(&res));
+		}
 	}
 }
 
