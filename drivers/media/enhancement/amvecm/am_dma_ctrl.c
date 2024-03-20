@@ -181,21 +181,21 @@ static void _set_vpu_lut_dma_mif_wr_unit(int enable,
 void am_dma_init(void)
 {
 	/*lut_dma_wr initial*/
-	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_0].stride = 48;
+	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_0].stride = 12;/*24;*/
 	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_0].addr_mode = 1;
-	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_0].rpt_num = 8;
+	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_0].rpt_num = 32;/*16;*/
 
-	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_1].stride = 48;
+	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_1].stride = 12;
 	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_1].addr_mode = 1;
-	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_1].rpt_num = 8;
+	lut_dma_wr[EN_DMA_WR_ID_LC_STTS_1].rpt_num = 32;
 
-	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_0].stride = 2;/*22;*/
-	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_0].addr_mode = 1;/*3;*/
-	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_0].rpt_num = 11;/*0;*/
+	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_0].stride = 22;/*2;*/
+	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_0].addr_mode = 3;/*1;*/
+	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_0].rpt_num = 0;/*11;*/
 
-	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_1].stride = 2;/*22;*/
-	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_1].addr_mode = 1;/*3;*/
-	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_1].rpt_num = 11;/*0;*/
+	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_1].stride = 22;
+	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_1].addr_mode = 3;
+	lut_dma_wr[EN_DMA_WR_ID_VI_HIST_SPL_1].rpt_num = 0;
 
 	lut_dma_wr[EN_DMA_WR_ID_CM2_HIST_0].stride = 12;
 	lut_dma_wr[EN_DMA_WR_ID_CM2_HIST_0].addr_mode = 3;
@@ -205,13 +205,13 @@ void am_dma_init(void)
 	lut_dma_wr[EN_DMA_WR_ID_CM2_HIST_1].addr_mode = 3;
 	lut_dma_wr[EN_DMA_WR_ID_CM2_HIST_1].rpt_num = 0;
 
-	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_0].stride = 2;/*26;*/
-	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_0].addr_mode = 1;/*3;*/
-	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_0].rpt_num = 13;/*0;*/
+	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_0].stride = 26;/*2;*/
+	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_0].addr_mode = 3;/*1;*/
+	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_0].rpt_num = 0;/*13;*/
 
-	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_1].stride = 2;/*26;*/
-	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_1].addr_mode = 1;/*3;*/
-	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_1].rpt_num = 13;/*0;*/
+	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_1].stride = 26;
+	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_1].addr_mode = 3;
+	lut_dma_wr[EN_DMA_WR_ID_VD1_HDR_1].rpt_num = 0;
 
 	lut_dma_wr[EN_DMA_WR_ID_VD2_HDR].stride = 26;
 	lut_dma_wr[EN_DMA_WR_ID_VD2_HDR].addr_mode = 3;
