@@ -70,6 +70,9 @@ struct meson_of_conf {
 	u32 crtcmask_video[MESON_MAX_VIDEO];
 
 	char *pref_mode;
+
+	/* force osd slice_mode: 1*/
+	u32 force_slice;
 };
 
 struct meson_drm {

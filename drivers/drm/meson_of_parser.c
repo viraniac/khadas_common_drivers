@@ -78,6 +78,7 @@ static void meson_video_parse_config(struct drm_device *dev, struct meson_of_con
 static void meson_osd_parse_config(struct drm_device *dev, struct meson_of_conf *conf)
 {
 	u32 osd_afbc_mask = 0xff;
+	u32 osd_force_slice = 0;
 	int ret;
 
 	ret = of_property_read_u32(dev->dev->of_node,
@@ -86,6 +87,14 @@ static void meson_osd_parse_config(struct drm_device *dev, struct meson_of_conf 
 		DRM_DEBUG("%s parse osd afbc mask fail!\n", __func__);
 
 	conf->osd_afbc_mask = osd_afbc_mask;
+
+	ret = of_property_read_u32(dev->dev->of_node,
+				   "force_slice", &osd_force_slice);
+	if (ret)
+		DRM_DEBUG("%s parse osd_force_slice fail!\n", __func__);
+
+	conf->force_slice = osd_force_slice;
+
 }
 
 static void am_meson_vpu_get_plane_crtc_mask(struct meson_drm *priv,
