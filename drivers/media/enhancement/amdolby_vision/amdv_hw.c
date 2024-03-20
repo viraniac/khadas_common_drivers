@@ -538,7 +538,7 @@ int tv_dv_core1_set(u64 *dma_data,
 	VSYNC_WR_DV_REG_BITS(AMDV_TV_SWAP_CTRL5, 0x2c2d0, 14, 18);
 	VSYNC_WR_DV_REG_BITS(AMDV_TV_SWAP_CTRL5, 0xa, 0, 4);
 
-	if (hdmi && !hdr10) {
+	if (hdmi && !hdr10 && !dv_unique_drm && !disable_detunnel && !bypass_detunnel) {
 		/*hdmi DV STD and DV LL:  need detunnel*/
 		VSYNC_WR_DV_REG_BITS(AMDV_TV_SWAP_CTRL5, 1, 4, 1);
 	} else {

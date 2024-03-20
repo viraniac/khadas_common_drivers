@@ -422,6 +422,7 @@ int force_priority;
 
 /*1:HDR10, 2:HLG, 3: DV LL*/
 int force_hdmin_fmt;
+bool bypass_detunnel;
 
 u32 force_sdr10;
 
@@ -7542,7 +7543,7 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 				}
 			}
 		}
-
+		dv_unique_drm = is_dv_unique_drm(vf);
 		/* w/t vsif and no dv_vsem */
 		if (vf->vsif.size && !dv_vsem) {
 			memset(vsem_if_buf, 0, VSEM_IF_BUF_SIZE);
@@ -7550,6 +7551,30 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 			vsem_if_size = vf->vsif.size;
 			if (debug_dolby & 4) {
 				pr_info("vsif size = %d\n", vf->vsif.size);
+				for (i = 0; i < vsem_if_size; i += 8) {
+					pr_info("%02x %02x %02x %02x %02x %02x %02x %02x\n",
+						vsem_if_buf[i],
+						vsem_if_buf[i + 1],
+						vsem_if_buf[i + 2],
+						vsem_if_buf[i + 3],
+						vsem_if_buf[i + 4],
+						vsem_if_buf[i + 5],
+						vsem_if_buf[i + 6],
+						vsem_if_buf[i + 7]);
+				}
+			}
+		} else if (dv_unique_drm && !dv_vsem) { /* dv unique drm and no dv_vsem */
+			memset(vsem_if_buf, 0, VSEM_IF_BUF_SIZE);
+			if (force_hdmin_fmt >= 3 && force_hdmin_fmt <= 9) {
+				memcpy(vsem_if_buf, force_drm, 32);
+				vsem_if_size = 32;
+			} else if (vf->drm_if.size > 0 && vf->drm_if.addr) {
+				memcpy(vsem_if_buf, vf->drm_if.addr, vf->drm_if.size);
+				vsem_if_size = vf->drm_if.size;
+			}
+			if (debug_dolby & 4) {
+				pr_info("drm size = %d, dv_unique_drm = %d\n",
+					vf->drm_if.size, dv_unique_drm);
 				for (i = 0; i < vsem_if_size; i += 8) {
 					pr_info("%02x %02x %02x %02x %02x %02x %02x %02x\n",
 						vsem_if_buf[i],
@@ -11768,10 +11793,12 @@ int amdolby_vision_process_v1(struct vframe_s *vf,
 		last_vf = vf;
 	}
 
-	if (vf && (debug_dolby & 0x8))
-		pr_dv_dbg("%s: vf %p(index %d), mode %d, core1_on %d\n",
+	if (vf && (debug_dolby & 0x8)) {
+		disable_detunnel = (vf->type_ext & VIDTYPE_EXT_BYPASS_DETUNNEL) ? true : false;
+		pr_dv_dbg("%s: vf %p(index %d), mode %d, core1_on %d, disable_detunnel %d\n",
 			     __func__, vf, vf->omx_index,
-			     dolby_vision_mode, amdv_core1_on);
+			     dolby_vision_mode, amdv_core1_on, disable_detunnel);
+	}
 
 	if (dolby_vision_flags & FLAG_TOGGLE_FRAME) {
 		h_size = (display_size >> 16) & 0xffff;
@@ -15452,6 +15479,11 @@ static ssize_t amdolby_vision_debug_store
 			return -EINVAL;
 		force_hdmin_fmt = val;
 		pr_info("set force_hdmin_fmt %d\n", force_hdmin_fmt);
+	} else if (!strcmp(parm[0], "bypass_detunnel")) {
+		if (kstrtoul(parm[1], 10, &val) < 0)
+			return -EINVAL;
+		bypass_detunnel = val;
+		pr_info("set bypass_detunnel %d\n", bypass_detunnel);
 	} else if (!strcmp(parm[0], "force_bypass_pps_sr_cm")) {
 		if (kstrtoul(parm[1], 10, &val) < 0)
 			return -EINVAL;
