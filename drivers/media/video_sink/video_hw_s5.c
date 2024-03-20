@@ -1954,7 +1954,7 @@ static void vd_proc_sr1_set(u32 vpp_index,
 		sr_core1_max_width = vd_sr->core_v_enable_width_max;
 	/* top config */
 	tmp_data = rdma_rd(vd_sr_slice_reg->vd_proc_sr1_ctrl);
-
+	vd_sr->sr_force_disable = false;
 	if (vd_sr->din_hsize > sr_core1_max_width) {
 		if (((tmp_data >> 1) & 0x1) != 0)
 			rdma_wr_bits(vd_sr_slice_reg->vd_proc_sr1_ctrl,
@@ -1966,6 +1966,7 @@ static void vd_proc_sr1_set(u32 vpp_index,
 			pr_info("%s:disable sr1 core tmp_data: %x\n",
 				__func__,
 				tmp_data);
+		vd_sr->sr_force_disable = true;
 		vpu_module_clk_disable_s5(vpp_index, SR1, 0);
 	} else {
 		if (debug_flag_s5 & DEBUG_SR)
@@ -7755,6 +7756,7 @@ static void vd1_scaler_setting_s5(struct video_layer_s *layer,
 	const u32 *vpp_horz_coeff;
 	struct vd_proc_s *vd_proc = NULL;
 	struct vd_proc_pps_s *vd_proc_pps = NULL;
+	struct vd_proc_sr_s *vd_sr1 = NULL;
 	u32 vd1_work_mode, vd1_slices_dout_dpsel;
 	u32 mosaic_mode, use_frm_horz_phase_step, slice_num;
 	u32 frm_horz_phase_step, slice_x_st;
@@ -7766,8 +7768,13 @@ static void vd1_scaler_setting_s5(struct video_layer_s *layer,
 
 	if (!setting || !setting->frame_par)
 		return;
+	frame_par = setting->frame_par;
+	vpp_filter = &frame_par->vpp_filter;
+	aisr_vpp_filter = &cur_dev->aisr_frame_parms.vpp_filter;
+
 	vd_proc = get_vd_proc_info();
 	vd_proc_pps = &vd_proc->vd_proc_unit[slice].vd_proc_pps;
+	vd_sr1 = &vd_proc->vd_proc_unit[slice].vd_proc_sr1;
 	vd1_work_mode = vd_proc->vd_proc_vd1_info.vd1_work_mode;
 	vd1_slices_dout_dpsel = vd_proc->vd_proc_vd1_info.vd1_slices_dout_dpsel;
 	mosaic_mode = vd1_work_mode == VD1_2_2SLICES_MODE &&
@@ -7777,6 +7784,31 @@ static void vd1_scaler_setting_s5(struct video_layer_s *layer,
 	use_frm_horz_phase_step = ((vd1_work_mode == VD1_4SLICES_MODE &&
 		vd1_slices_dout_dpsel != VD1_SLICES_DOUT_4S4P &&
 		!mosaic_mode) || vd1_work_mode == VD1_1SLICES_MODE) ? 0 : 1;
+	if (vd_sr1->sr_en &&
+		vd_sr1->v_scaleup_en &&
+		frame_par->supsc1_vert_ratio &&
+		vd_sr1->sr_force_disable) {
+		frame_par->supsc1_enable = 0;
+		frame_par->supsc1_vert_ratio = 0;
+		vpp_filter->vpp_vsc_start_phase_step >>= 1;
+		if (debug_flag_s5 & DEBUG_SR)
+			pr_info("%s:disable sr1 core vpp_vsc_start_phase_step adjust 0x%x\n",
+				__func__,
+				vpp_filter->vpp_vsc_start_phase_step);
+	}
+	if (vd_sr1->sr_en &&
+		vd_sr1->h_scaleup_en &&
+		frame_par->supsc1_hori_ratio &&
+		vd_sr1->sr_force_disable) {
+		frame_par->supsc1_enable = 0;
+		frame_par->supsc1_hori_ratio = 0;
+		vpp_filter->vpp_hsc_start_phase_step >>= 1;
+		vd_proc_pps->horz_phase_step >>= 1;
+		if (debug_flag_s5 & DEBUG_SR)
+			pr_info("%s:disable sr1 core vpp_hsc_start_phase_step adjust 0x%x\n",
+				__func__,
+				vpp_filter->vpp_hsc_start_phase_step);
+	}
 	frm_horz_phase_step = vd_proc_pps->horz_phase_step;
 	slice_x_st = vd_proc_pps->slice_x_st;
 	slice_num = get_slice_num(layer->layer_id);
@@ -7792,10 +7824,8 @@ static void vd1_scaler_setting_s5(struct video_layer_s *layer,
 		slice_ini_phase_exp = slice_ini_phase & 0xFF;
 		slice_ini_phase_ori = slice_ini_phase >> 8;
 	}
-	frame_par = setting->frame_par;
 	vpp_index = layer->vpp_index;
 	/* vpp super scaler */
-
 	if (is_amdv_on() &&
 	    is_amdv_stb_mode() &&
 	    !frame_par->supsc0_enable &&
@@ -7804,8 +7834,6 @@ static void vd1_scaler_setting_s5(struct video_layer_s *layer,
 		//cur_dev->rdma_func[vpp_index].rdma_wr(VPP_SRSHARP1_CTRL, 0);
 	}
 
-	vpp_filter = &frame_par->vpp_filter;
-	aisr_vpp_filter = &cur_dev->aisr_frame_parms.vpp_filter;
 	if (setting->sc_top_enable) {
 		u32 sc_misc_val;
 

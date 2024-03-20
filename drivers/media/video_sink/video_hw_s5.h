@@ -103,6 +103,7 @@ struct vd_proc_sr_s {
 	u32 sr_support;
 	u32 core_v_enable_width_max;
 	u32 core_v_disable_width_max;
+	bool sr_force_disable;
 };
 
 struct vd_proc_hwin_s {
