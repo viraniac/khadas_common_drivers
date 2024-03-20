@@ -148,6 +148,10 @@ struct rdma_device_info {
 
 static struct rdma_device_data_s rdma_meson_dev;
 static struct rdma_irq_reg_s irq_status;
+static int vdisp_async_hold_ctrl_val;
+static int vpuarb2_async_hold_ctrl_val;
+static int reset4_register_val;
+static int rdma_ctrl_val;
 static int rdma_ctrl;
 static int rdma_access_man;
 int rdma_status_reg;
@@ -2213,7 +2217,6 @@ static int __init rdma_probe(struct platform_device *pdev)
 #ifdef CONFIG_AMLOGIC_VPU
 	rdma_vpu_dev = vpu_dev_register(VPU_RDMA, "rdma");
 	vpu_dev_mem_power_on(rdma_vpu_dev);
-
 	WRITE_VCBUS_REG(VPU_VDISP_ASYNC_HOLD_CTRL, 0x18101810);
 	WRITE_VCBUS_REG(VPU_VPUARB2_ASYNC_HOLD_CTRL, 0x18101810);
 #endif
@@ -2334,17 +2337,51 @@ static int __init rdma_probe(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-static int rdma_suspend(struct platform_device *dev, pm_message_t state)
+static int rdma_suspend(struct device *dev)
 {
 	set_rdma_channel_enable(0);
 	return 0;
 }
 
-static int rdma_resume(struct platform_device *dev)
+static int rdma_resume(struct device *dev)
 {
 	set_rdma_channel_enable(1);
 	return 0;
 }
+
+static int rdma_freeze(struct device *dev)
+{
+	vdisp_async_hold_ctrl_val = READ_VCBUS_REG(VPU_VDISP_ASYNC_HOLD_CTRL);
+	vpuarb2_async_hold_ctrl_val = READ_VCBUS_REG(VPU_VPUARB2_ASYNC_HOLD_CTRL);
+	if (rdma_meson_dev.cpu_type < CPU_SC2)
+		reset4_register_val = READ_MPEG_REG(RESET4_REGISTER);
+	rdma_ctrl_val = READ_VCBUS_REG(rdma_ctrl);
+	return 0;
+}
+
+static int rdma_thaw(struct device *dev)
+{
+	return 0;
+}
+
+static int rdma_restore(struct device *dev)
+{
+	WRITE_VCBUS_REG(VPU_VDISP_ASYNC_HOLD_CTRL, vdisp_async_hold_ctrl_val);
+	WRITE_VCBUS_REG(VPU_VPUARB2_ASYNC_HOLD_CTRL, vpuarb2_async_hold_ctrl_val);
+	if (rdma_meson_dev.cpu_type < CPU_SC2)
+		WRITE_MPEG_REG(RESET4_REGISTER, reset4_register_val);
+	WRITE_VCBUS_REG(rdma_ctrl, rdma_ctrl_val);
+	return 0;
+}
+
+static const struct dev_pm_ops rdma_pm_ops = {
+	.freeze = rdma_freeze,
+	.thaw = rdma_thaw,
+	.restore = rdma_restore,
+	.suspend = rdma_suspend,
+	.resume = rdma_resume,
+};
+
 #endif
 
 /* static int __devexit rdma_remove(struct platform_device *pdev) */
@@ -2362,13 +2399,10 @@ static int rdma_remove(struct platform_device *pdev)
 
 static struct platform_driver rdma_driver = {
 	.remove = rdma_remove,
-#ifdef CONFIG_PM
-	.suspend  = rdma_suspend,
-	.resume    = rdma_resume,
-#endif
 	.driver = {
 		.name = "amlogic-rdma",
 		.of_match_table = rdma_dt_match,
+		.pm = &rdma_pm_ops,
 	},
 };
 
