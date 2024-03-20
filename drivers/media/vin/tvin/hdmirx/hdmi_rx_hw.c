@@ -7253,6 +7253,7 @@ void rx_ddc_active_monitor(u8 port)
 
 	temp = temp & 0xff;
 	/*0x0a, 0x15 for hengyi ops-pc. refer to 88378
+	 *0x6 for X86 GTX1050Ti 4GB
 	 *0x14 for special spliter. refer to 72949
 	 *0x13 for 8268 refer to 73940
 	 *fix edid filter setting
@@ -7260,6 +7261,7 @@ void rx_ddc_active_monitor(u8 port)
 	if (temp < 0x3f &&
 		temp != 0x1 &&
 		temp != 0x3 &&
+		temp != 0x6 &&
 		temp != 0x8 &&
 		temp != 0xa &&
 		temp != 0xc &&
