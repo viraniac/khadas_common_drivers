@@ -12679,7 +12679,10 @@ int video_hw_init_s5(void)
 	/* vpp_arb2:  vd1 slice2-slice3 aisr */
 	WRITE_VCBUS_REG(S5_VPP_RDARB_MODE, 0x9a205000);
 	/* VPU_RDARB_MODE_L2C1 */
-	WRITE_VCBUS_REG(S5_VPU_RDARB_MODE_L2C1, 0x924000);
+	if (video_is_meson_t3x_cpu())
+		WRITE_VCBUS_REG(S5_VPU_RDARB_MODE_L2C1, 0x124000);
+	else
+		WRITE_VCBUS_REG(S5_VPU_RDARB_MODE_L2C1, 0x924000);
 	/* set vpu read super urgent default */
 	WRITE_VCBUS_REG(S5_VPU_RDARB_UGT_L2C1, 0xffff);
 	if (video_is_meson_t3x_cpu()) {
