@@ -4917,8 +4917,7 @@ static void hdmirx_open_main_port(u8 port)
 	sm_pause = fsmst;
 	rx[port].pre_state = rx[port].state;
 	if (rx_info.phy_ver >= PHY_VER_TM2)
-		//rx_info.aml_phy.pre_int = 1;
-		hdmirx_phy_var_init();
+		rx_info.aml_phy.pre_int = 1;
 	rx_pr("%s:%d\n", __func__, port);
 }
 

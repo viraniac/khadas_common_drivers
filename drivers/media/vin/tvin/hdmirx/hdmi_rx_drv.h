@@ -66,7 +66,7 @@
 //2024.01.10 optimize eq setting for 75m~115m frequency
 //2024.02.21 fix t3x hbr audio clk not correct issue
 //2024.03.04 fix repeat issue
-#define RX_VER0 "ver.2024/03/04"
+#define RX_VER0 "ver.2024/03/21"
 
 
 /*print type*/
