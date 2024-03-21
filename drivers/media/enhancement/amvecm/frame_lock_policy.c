@@ -605,6 +605,8 @@ void vrrlock_process(struct vframe_s *vf,
 	ret_hz = (96000 / duration);
 
 	memset(&vdata, 0, sizeof(struct vrr_notifier_data_s));
+	memset(&freesync_vsif_data, 0, sizeof(struct freesync_vsif_s));
+	memcpy(&freesync_vsif_data, vf->spd.addr, vf->spd.size * sizeof(u8));
 
 	vinfo = get_current_vinfo();
 	if (!vinfo)
@@ -655,8 +657,15 @@ void vrrlock_process(struct vframe_s *vf,
 			if (frame_sts.vrr_frame_sts != frame_sts.vrr_frame_pre_sts ||
 					vdata.line_dly != vrr_delay_line_pre) {
 				if (frame_sts.vrr_frame_sts == FRAMELOCK_VRRLOCK) {
-					vlock_set_sts_by_frame_lock(false);
-					frame_lock_vrr_ctrl(true, &vdata);
+					if (freesync_vsif_data.freesync_max_fps != 0 &&
+						freesync_vsif_data.freesync_max_fps !=
+						vinfo->sync_duration_num) {
+						frame_lock_vrr_ctrl(false, &vdata);
+						vlock_set_sts_by_frame_lock(true);
+					} else {
+						vlock_set_sts_by_frame_lock(false);
+						frame_lock_vrr_ctrl(true, &vdata);
+					}
 				} else {
 					frame_lock_vrr_ctrl(false, &vdata);
 					vlock_set_sts_by_frame_lock(true);
@@ -704,6 +713,9 @@ void vrrlock_process(struct vframe_s *vf,
 			vdata.line_dly,
 			vrr_delay_line_pre,
 			line);
+		framelock_pr_info("spd_max:%d spd_min:%d\n",
+			freesync_vsif_data.freesync_max_fps,
+			freesync_vsif_data.freesync_min_fps);
 	}
 
 	vrr_delay_line_pre = vdata.line_dly;
