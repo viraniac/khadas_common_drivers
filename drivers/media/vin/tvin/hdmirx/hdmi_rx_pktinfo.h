@@ -1079,6 +1079,7 @@ void rx_get_em_info(u8 port);
 void rx_get_aif_info(u8 port);
 void rx_check_pkt_flag(u8 port);
 void dump_pktinfo_status(u8 port);
-void rx_get_dev_type(u8 port);
+enum spec_dev_e rx_get_dev_type(u8 port);
 struct emp_info_s *rx_get_emp_info(u8 port);
+bool rx_is_xbox_dev(u8 port);
 #endif

@@ -335,6 +335,12 @@ static enum tvin_sg_chg_flg vdin_hdmirx_fmt_chg_detect(struct vdin_dev_s *devp)
 						__func__,
 						temp,
 						devp->prop.latency.allm_mode);
+				if (sm_ops->hdmi_is_xbox_dev) {
+					if (sm_ops->hdmi_is_xbox_dev(devp->frontend,
+						devp->port_type) && !devp->dv.dv_flag &&
+						!devp->pre_prop.latency.allm_mode)
+						devp->chg_drop_frame_cnt = vdin_re_cfg_drop_cnt;
+				}
 				devp->pre_prop.latency.allm_mode =
 					devp->prop.latency.allm_mode;
 			}

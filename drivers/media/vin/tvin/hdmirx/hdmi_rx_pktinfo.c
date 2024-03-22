@@ -401,7 +401,7 @@ const struct spec_dev_table_s spd_white_list[SPEC_DEV_CNT] = {
 	 */
 };
 
-void rx_get_dev_type(u8 port)
+enum spec_dev_e rx_get_dev_type(u8 port)
 {
 	struct spd_infoframe_st *spdpkt;
 	int i;
@@ -413,8 +413,20 @@ void rx_get_dev_type(u8 port)
 			if (log_level & 0x1000)
 				rx_pr("white dev=%d\n", i);
 			rx[port].tx_type = spd_white_list[i].dev_type;
+			return i;
 		}
 	}
+	return i;
+}
+
+bool rx_is_xbox_dev(u8 port)
+{
+	u8 dev = rx_get_dev_type(port);
+
+	if (dev == SPEC_DEV_XBOX || dev == SPEC_DEV_XBOX_SERIES)
+		return true;
+	else
+		return false;
 }
 
 static void rx_pktdump_spd(void *pdata)

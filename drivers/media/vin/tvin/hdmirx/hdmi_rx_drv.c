@@ -1715,6 +1715,11 @@ bool hdmirx_clr_pkts(struct tvin_frontend_s *fe, enum tvin_port_type_e port_type
 	return 0;
 }
 
+bool hdmirx_is_xbox_dev(struct tvin_frontend_s *fe, enum tvin_port_type_e port_type)
+{
+	return rx_is_xbox_dev(rx_get_port_from_type(port_type));
+}
+
 static struct tvin_state_machine_ops_s hdmirx_sm_ops = {
 	.nosig            = hdmirx_is_nosig,
 	.fmt_changed      = hdmirx_fmt_chg,
@@ -1732,6 +1737,7 @@ static struct tvin_state_machine_ops_s hdmirx_sm_ops = {
 	.hdmi_reset_pcs = hdmirx_pcs_reset,
 	.hdmi_de_hactive = hdmirx_de_hactive,
 	.hdmi_clr_pkts	= hdmirx_clr_pkts,
+	.hdmi_is_xbox_dev = hdmirx_is_xbox_dev, //TODO: temp patch for xbox game mode
 };
 
 /*
