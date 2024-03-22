@@ -7993,6 +7993,18 @@ static ssize_t video_test_screen_store(struct class *cla,
 				WRITE_VCBUS_REG
 				(VPP_POST_BLEND_BLEND_DUMMY_DATA,
 				 test_screen & 0x00ffffff);
+		} else {
+			struct vpp_post_blend_reg_s *vpp_reg = &vpp_post_reg.vpp_post_blend_reg;
+
+			if (is_amdv_enable() &&
+			    is_amdv_stb_mode())
+				WRITE_VCBUS_REG
+				(vpp_reg->vpp_post_blend_blend_dummy_data,
+				 0x00008080);
+			else
+				WRITE_VCBUS_REG
+				(vpp_reg->vpp_post_blend_blend_dummy_data,
+				 test_screen & 0x00ffffff);
 		}
 	}
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
@@ -8099,6 +8111,17 @@ static ssize_t video_rgb_screen_store(struct class *cla,
 			}
 			if (amvideo_meson_dev.has_vpp2) {
 				WRITE_VCBUS_REG(VPP2_BLEND_BLEND_DUMMY_DATA,
+					yuv_eight & 0x00ffffff);
+			}
+		} else {
+			struct vpp_post_blend_reg_s *vpp_reg = &vpp_post_reg.vpp_post_blend_reg;
+			struct vpp1_post_blend_reg_s *vpp1_reg = &vpp_post_reg.vpp1_post_blend_reg;
+
+			WRITE_VCBUS_REG
+				(vpp_reg->vpp_post_blend_blend_dummy_data,
+				yuv_eight & 0x00ffffff);
+			if (amvideo_meson_dev.has_vpp1) {
+				WRITE_VCBUS_REG(vpp1_reg->vpp_post_blend_blend_dummy_data,
 					yuv_eight & 0x00ffffff);
 			}
 		}
