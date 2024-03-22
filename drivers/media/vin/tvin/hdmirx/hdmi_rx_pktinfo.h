@@ -952,9 +952,10 @@ struct rxpkt_st {
 };
 
 enum emp_pkt_type_e {
-	EMP_VTEM,
+	EMP_VTEM_CLASS0,
+	EMP_VTEM_CLASS1,
 	EMP_SBTM,
-	EMP_DV,
+	EMP_AMDV,
 	EMP_CUVA
 };
 

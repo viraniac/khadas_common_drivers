@@ -640,12 +640,16 @@ struct vsi_info_s {
 
 //===============emp start
 struct vtem_info_s {
+	/* gaming-vrr & FVA */
 	u8 vrr_en;
+	u8 fva_factor_m1;
+
+	/* qms-vrr */
 	u8 m_const;
 	u8 qms_en;
-	u8 fva_factor_m1;
+	u32 next_tfr;
+
 	u8 base_vfront;
-	u8 rb;
 	u16 base_framerate;
 };
 

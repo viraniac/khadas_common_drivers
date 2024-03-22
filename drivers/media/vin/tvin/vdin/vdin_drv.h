@@ -755,6 +755,7 @@ struct vdin_vrr_s {
 	enum vdin_vrr_mode_e pre_vrr_status;
 	/* driver detect status */
 	enum vdin_vrr_mode_e cur_vrr_status;
+	unsigned int qms_chg_cnt;
 };
 
 /* scatter start */

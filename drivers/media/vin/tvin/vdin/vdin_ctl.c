@@ -6575,6 +6575,19 @@ bool vdin_is_vrr_state_chg(struct vdin_dev_s *devp)
 		return false;
 }
 
+/*
+ * check qms state change
+ */
+bool vdin_is_qms_state_chg(struct vdin_dev_s *devp)
+{
+	if (devp->pre_prop.vtem_data.qms_en != devp->prop.vtem_data.qms_en ||
+		(devp->prop.vtem_data.qms_en && devp->pre_prop.vtem_data.next_tfr !=
+		devp->prop.vtem_data.next_tfr))
+		return true;
+	else
+		return false;
+}
+
 /* describe:
  *	vdin isr is Vsync run,
  *	but HDMI is DE start complete packet reception

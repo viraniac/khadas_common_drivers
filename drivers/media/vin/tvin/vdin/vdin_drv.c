@@ -315,8 +315,8 @@ void tvin_update_vdin_prop(u8 port_type)
 		vdin_set_vframe_prop_info(update_wr_vf, devp);
 		vdin_set_freesync_data(devp, update_wr_vf);
 	}
-	if (sm_ops->hdmi_clr_pkts)
-		sm_ops->hdmi_clr_pkts(devp->frontend, devp->port_type);
+	//if (sm_ops->hdmi_clr_pkts)
+	//	sm_ops->hdmi_clr_pkts(devp->frontend, devp->port_type);
 	spin_unlock_irqrestore(&devp->isr_lock, flags);
 
 	if (vdin_isr_monitor & DBG_RX_UPDATE_VDIN_PROP && update_wr_vf)
@@ -2705,6 +2705,7 @@ int vdin_vs_duration_check(struct vdin_dev_s *devp)
 	int ret = 0;
 	int cur_time, diff_time;
 	int temp;
+	unsigned int input_fps;
 
 	if (devp->game_mode || !IS_HDMI_SRC(devp->parm.port) ||
 	    vdin_is_auto_game_mode(devp))
@@ -2716,10 +2717,13 @@ int vdin_vs_duration_check(struct vdin_dev_s *devp)
 	if (vdin_isr_monitor & VDIN_ISR_MONITOR_VS)
 		pr_info("isr:diff_time:%d, cycle:%d\n",
 			diff_time, devp->cycle);
-
+	if (devp->prop.vtem_data.qms_en)
+		input_fps = devp->prop.vtem_data.next_tfr;
+	else
+		input_fps = devp->parm.info.fps;
 	/* In a duration 50M clk theory value */
-	if (devp->parm.info.fps)
-		devp->vs_time_stamp = devp->msr_clk_val / devp->parm.info.fps;
+	if (input_fps)
+		devp->vs_time_stamp = devp->msr_clk_val / input_fps;
 	else
 		devp->vs_time_stamp = cur_time;
 
@@ -4408,6 +4412,7 @@ static long vdin_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	unsigned int idx = 0;
 	unsigned int recovery_idx = 0;
 	struct vdin_vrr_freesync_param_s vdin_vrr_status;
+	struct vdin_qms_param_s vdin_qms_status;
 	unsigned int tmp = 0;
 
 	/* Get the per-device structure that contains this cdev */
@@ -4930,6 +4935,19 @@ static long vdin_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				devp->prop.spd_data.data[0],
 				devp->prop.spd_data.data[5],
 				devp->pre_prop.spd_data.data[5]);
+		break;
+	case TVIN_IOC_G_QMS_STATUS:
+		vdin_qms_status.qms_en = devp->pre_prop.vtem_data.qms_en;
+		vdin_qms_status.qms_fr = devp->pre_prop.vtem_data.next_tfr;
+		vdin_qms_status.qms_base_fr = devp->pre_prop.vtem_data.base_framerate;
+		if (copy_to_user(argp, &vdin_qms_status, sizeof(vdin_qms_status))) {
+			pr_info("vdin_qms_status copy fail\n");
+			ret = -EFAULT;
+			break;
+		}
+
+		pr_info("vdin%d,TVIN_IOC_G_QMS_STATUS qms_en:%d,qms_fr:%d\n\n",
+			devp->index, vdin_qms_status.qms_en, vdin_qms_status.qms_fr);
 		break;
 	case TVIN_IOC_GET_COLOR_RANGE:
 		if (copy_to_user(argp, &color_range_force,

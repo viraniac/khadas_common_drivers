@@ -167,6 +167,10 @@ static unsigned int vdin_vrr_chg_cnt = 1;
 module_param(vdin_vrr_chg_cnt, uint, 0664);
 MODULE_PARM_DESC(vdin_vrr_chg_cnt, "vdin_vrr_chg_cnt");
 
+static unsigned int vdin_qms_chg_cnt = 1;
+module_param(vdin_qms_chg_cnt, uint, 0664);
+MODULE_PARM_DESC(vdin_qms_chg_cnt, "vdin_qms_chg_cnt");
+
 enum tvin_color_fmt_range_e
 	tvin_get_force_fmt_range(enum tvin_color_fmt_e color_fmt)
 {
@@ -460,6 +464,15 @@ static enum tvin_sg_chg_flg vdin_hdmirx_fmt_chg_detect(struct vdin_dev_s *devp)
 			devp->vrr_data.freesync_chg_cnt = 0;
 		}
 
+		if (vdin_is_qms_state_chg(devp)) {
+			devp->vrr_data.qms_chg_cnt++;
+			if (devp->vrr_data.qms_chg_cnt >= vdin_qms_chg_cnt) {
+				devp->vrr_data.qms_chg_cnt = 0;
+				signal_chg |= TVIN_SIG_CHG_QMS;
+			}
+		} else {
+			devp->vrr_data.qms_chg_cnt = 0;
+		}
 		if (color_range_force)
 			prop->color_fmt_range =
 			tvin_get_force_fmt_range(pre_prop->color_format);
@@ -595,11 +608,11 @@ u32 tvin_hdmirx_signal_type_check(struct vdin_dev_s *devp, enum tvin_sm_status_e
 			pr_info("data[%d ~ %d]=%#x %#x %#x %#x\n", i, i + 3,
 				devp->prop.spd_data.data[i], devp->prop.spd_data.data[i + 1],
 				devp->prop.spd_data.data[i + 2], devp->prop.spd_data.data[i + 3]);
-		pr_info("vrr_en:%d,const:%#x,qms:%#x,fva:%#x,v_front:%d,rb:%d,fr:%d,vic:%d\n",
+		pr_info("vrr_en:%d,const:%#x,qms:%#x,fva:%#x,v_front:%d,fr:%d,vic:%d\n",
 			devp->prop.vtem_data.vrr_en, devp->prop.vtem_data.m_const,
 			devp->prop.vtem_data.qms_en, devp->prop.vtem_data.fva_factor_m1,
-			devp->prop.vtem_data.base_v_front, devp->prop.vtem_data.rb,
-			devp->prop.vtem_data.base_framerate, devp->prop.hw_vic);
+			devp->prop.vtem_data.base_vfront, devp->prop.vtem_data.base_framerate,
+			devp->prop.hw_vic);
 	}
 
 	if (devp->prop.dolby_vision)
@@ -789,6 +802,19 @@ void tvin_sig_chg_event_process(struct vdin_dev_s *devp, u32 chg)
 				devp->prop.vtem_data.vrr_en;
 			devp->vrr_data.vdin_vrr_en_flag =
 				devp->prop.vtem_data.vrr_en;
+		} else if (chg & TVIN_SIG_CHG_QMS) {
+			devp->event_info.event_sts = TVIN_SIG_CHG_QMS;
+			memcpy(&devp->pre_prop.vtem_data, &devp->prop.vtem_data,
+				sizeof(devp->prop.vtem_data));
+			if (sm_debug_enable & VDIN_SM_LOG_L_1) {
+				pr_info("qms_chg:(%d->%d) const:%d,fr:%d,vf:%d,base:%d\n",
+					devp->pre_prop.vtem_data.qms_en,
+					devp->prop.vtem_data.qms_en,
+					devp->prop.vtem_data.m_const,
+					devp->prop.vtem_data.next_tfr,
+					devp->prop.vtem_data.base_vfront,
+					devp->prop.vtem_data.base_framerate);
+			}
 		} else {
 			return;
 		}
