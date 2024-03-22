@@ -47,7 +47,7 @@ int  lcd_debug_parse_param(char *buf_orig, char **parm, int max_parm)
 	return n;
 }
 
-static void lcd_debug_info_print(char *print_buf)
+void lcd_debug_info_print(char *print_buf)
 {
 	char *ps, *token;
 	char str[3] = {'\n', '\0'};

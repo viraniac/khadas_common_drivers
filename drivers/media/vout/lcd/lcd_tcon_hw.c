@@ -157,10 +157,8 @@ static void lcd_tcon_core_reg_pre_od(struct lcd_tcon_config_s *tcon_conf,
 	unsigned int *table32;
 	unsigned int reg, bit, en = 0;
 
-	if (!mm_table || !mm_table->core_reg_table) {
-		LCDERR("%s: table is NULL\n", __func__);
+	if (!mm_table || !mm_table->core_reg_table)
 		return;
-	}
 	if (tcon_conf->reg_core_od == REG_LCD_TCON_MAX)
 		return;
 
@@ -181,8 +179,7 @@ static void lcd_tcon_core_reg_pre_od(struct lcd_tcon_config_s *tcon_conf,
 		}
 		if (en == 0) {
 			table8[reg] &= ~(1 << bit);
-			LCDPR("%s: invalid buf, disable od function\n",
-			      __func__);
+			LCDPR("%s: invalid buf, disable od\n", __func__);
 		}
 	} else {
 		table32 = (unsigned int *)mm_table->core_reg_table;
@@ -198,20 +195,18 @@ static void lcd_tcon_core_reg_pre_od(struct lcd_tcon_config_s *tcon_conf,
 		}
 		if (en == 0) {
 			table32[reg] &= ~(1 << bit);
-			LCDPR("%s: invalid buf, disable od function\n",
-			      __func__);
+			LCDPR("%s: invalid buf, disable od\n", __func__);
 		}
 	}
 }
 
 void lcd_tcon_init_table_pre_proc(unsigned char *table)
 {
-	struct lcd_tcon_config_s *tcon_conf = get_lcd_tcon_config();
 	struct tcon_rmem_s *tcon_rmem = get_lcd_tcon_rmem();
 	unsigned int reg = 0, paddr, i;
 	unsigned int *table32;
 
-	if (!table || !tcon_conf || !tcon_rmem)
+	if (!table || !tcon_rmem)
 		return;
 	table32 = (unsigned int *)table;
 
@@ -224,11 +219,11 @@ void lcd_tcon_init_table_pre_proc(unsigned char *table)
 	table32[0x1a3] &= ~(1 << 31);
 
 	//update axi paddr
-	if (tcon_rmem->flag == 0 || !tcon_rmem->axi_rmem || !tcon_conf->axi_reg) {
+	if (tcon_rmem->flag == 0 || !tcon_rmem->axi_rmem || !tcon_rmem->axi_reg) {
 		LCDPR("%s: invalid axi_rmem\n", __func__);
 	} else {
-		for (i = 0; i < tcon_conf->axi_bank; i++) {
-			reg = tcon_conf->axi_reg[i];
+		for (i = 0; i < tcon_rmem->axi_bank; i++) {
+			reg = tcon_rmem->axi_reg[i];
 			paddr = tcon_rmem->axi_rmem[i].mem_paddr;
 			table32[reg] = paddr;
 			if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
@@ -440,12 +435,6 @@ static int lcd_tcon_demura_set_tl1(struct aml_lcd_drv_s *pdrv)
 		return 0;
 	}
 
-	if (lcd_debug_print_flag & LCD_DBG_PR_TCON) {
-		for (i = 0; i < 30; i++)
-			LCDPR("demura_set data[%d]: 0x%x\n",
-			      i, tcon_rmem->demura_set_rmem.mem_vaddr[i]);
-	}
-
 	/*demura_setting:
 	 *  8byte chk_data + demura_set_data: 161byte
 	 */
@@ -488,12 +477,6 @@ static int lcd_tcon_demura_lut_tl1(struct aml_lcd_drv_s *pdrv)
 	lcd_tcon_write_byte(pdrv, 0x184, 0x01);
 	lcd_tcon_write_byte(pdrv, 0x185, 0x87);
 
-	if (lcd_debug_print_flag & LCD_DBG_PR_TCON) {
-		for (i = 0; i < 30; i++)
-			LCDPR("demura_lut data[%d]: 0x%x\n",
-			      i, tcon_rmem->demura_lut_rmem.mem_vaddr[i]);
-	}
-
 	/*demura_lut is
 	 *chk_data: 8byte + demura_lut_data: 391053byte
 	 */
@@ -512,7 +495,7 @@ static int lcd_tcon_demura_lut_tl1(struct aml_lcd_drv_s *pdrv)
 	lcd_tcon_setb_byte(pdrv, 0x23d, 1, 0, 1);
 
 	LCDPR("tcon demura_lut cnt %d\n", data_cnt);
-	LCDPR("lcd_tcon 0x23d = 0x%02x\n", lcd_tcon_read_byte(pdrv, 0x23d));
+	//LCDPR("lcd_tcon 0x23d = 0x%02x\n", lcd_tcon_read_byte(pdrv, 0x23d));
 
 	return 0;
 }
@@ -561,7 +544,6 @@ void lcd_tcon_axi_rmem_lut_load(struct aml_lcd_drv_s *pdrv,
 		unsigned int index, unsigned char *buf, unsigned int size)
 {
 	struct tcon_rmem_s *tcon_rmem = get_lcd_tcon_rmem();
-	struct lcd_tcon_config_s *tcon_conf = get_lcd_tcon_config();
 	unsigned long paddr;
 	unsigned char *vaddr = NULL;
 
@@ -569,9 +551,7 @@ void lcd_tcon_axi_rmem_lut_load(struct aml_lcd_drv_s *pdrv,
 		LCDERR("axi_rmem is NULL\n");
 		return;
 	}
-	if (!tcon_conf)
-		return;
-	if (index >= tcon_conf->axi_bank) {
+	if (index >= tcon_rmem->axi_bank) {
 		LCDERR("axi_rmem index %d invalid\n", index);
 		return;
 	}
@@ -1148,7 +1128,7 @@ static int lcd_tcon_data_set(struct aml_lcd_drv_s *pdrv,
 	struct lcd_tcon_data_block_header_s *block_header;
 	unsigned char *data_buf;
 	unsigned int temp_crc32;
-	unsigned int i, index, chk_size;
+	unsigned int i, chk_size;
 	phys_addr_t paddr = 0;
 	int ret;
 
@@ -1157,46 +1137,31 @@ static int lcd_tcon_data_set(struct aml_lcd_drv_s *pdrv,
 		return -1;
 	}
 
-	if (!mm_table->data_priority) {
-		LCDERR("%s: data_priority is null\n", __func__);
-		return -1;
-	}
-
 	for (i = 0; i < mm_table->block_cnt; i++) {
-		index = mm_table->data_priority[i].index;
-		if (index >= mm_table->block_cnt) {
-			LCDERR("%s: data index %d is invalid\n",
-			       __func__, index);
-			return -1;
-		}
-		if (!mm_table->data_mem_vaddr[index]) {
-			LCDERR("%s: data_mem_vaddr[%d] is null\n",
-			       __func__, index);
+		if (!mm_table->data_mem_vaddr[i]) {
+			LCDERR("%s: data_mem_vaddr[%d] is null\n", __func__, i);
 			continue;
 		}
-		data_buf = mm_table->data_mem_vaddr[index];
-		paddr = mm_table->data_mem_paddr[index];
+		data_buf = mm_table->data_mem_vaddr[i];
+		paddr = mm_table->data_mem_paddr[i];
 		block_header = (struct lcd_tcon_data_block_header_s *)data_buf;
 		if (block_header->block_size < sizeof(struct lcd_tcon_data_block_header_s)) {
-			LCDERR("%s: block_size[%d] 0x%x is invalid\n",
-			       __func__, index, block_header->block_size);
+			LCDERR("%s: block[%d] size 0x%x is invalid\n",
+			       __func__, i, block_header->block_size);
 			continue;
 		}
 		chk_size = block_header->block_size - 4;
 		temp_crc32 = cal_crc32(0, &data_buf[4], chk_size);
 		if (temp_crc32 != block_header->crc32) {
-			LCDERR("%s: block %d, %s data crc error\n",
-				__func__, mm_table->data_priority[i].index,
-				block_header->name);
+			LCDERR("%s: block[%d] %s: data crc error\n",
+				__func__, i, block_header->name);
 			continue;
 		}
 
 		if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-			LCDPR
-	("%s: block %d, %s, priority %d: size=0x%x, type=0x%02x, ctrl=0x%x\n",
-			      __func__, mm_table->data_priority[i].index,
+			LCDPR("%s: block[%d] %s: size=0x%x, type=0x%02x, ctrl=0x%x\n",
+			      __func__, i,
 			      block_header->name,
-			      mm_table->data_priority[i].priority,
 			      block_header->block_size,
 			      block_header->block_type,
 			      block_header->block_ctrl);
@@ -1214,7 +1179,7 @@ static int lcd_tcon_data_set(struct aml_lcd_drv_s *pdrv,
 			if (!lcd_tcon_mem_od_is_valid()) {
 				if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
 					LCDERR("%s: bypass block[%d]: type 0x%x\n",
-						__func__, index, block_header->block_type);
+						__func__, i, block_header->block_type);
 				continue;
 			}
 			break;
@@ -1224,7 +1189,7 @@ static int lcd_tcon_data_set(struct aml_lcd_drv_s *pdrv,
 			if (!lcd_tcon_mem_demura_is_valid()) {
 				if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
 					LCDERR("%s: bypass block[%d]: type 0x%x\n",
-						__func__, index, block_header->block_type);
+						__func__, i, block_header->block_type);
 				continue;
 			}
 			break;
@@ -1238,7 +1203,7 @@ static int lcd_tcon_data_set(struct aml_lcd_drv_s *pdrv,
 				ret = lcd_tcon_data_common_parse_set(pdrv, data_buf, paddr,  1);
 				if (ret == 0) {
 					lcd_tcon_data_multi_current_update(mm_table,
-						block_header, index);
+						block_header, i);
 				}
 			}
 		} else {
@@ -1378,10 +1343,6 @@ int lcd_tcon_enable_tl1(struct aml_lcd_drv_s *pdrv)
 		return -1;
 	if (!tcon_conf || !mm_table || !local_cfg)
 		return -1;
-	if (mm_table->init_load == 0) {
-		if (mm_table->tcon_data_flag == 0)
-			lcd_tcon_bin_load(pdrv);
-	}
 
 	/* step 1: tcon top */
 	lcd_tcon_top_set_tl1(pdrv);
@@ -1406,20 +1367,20 @@ int lcd_tcon_enable_tl1(struct aml_lcd_drv_s *pdrv)
 		}
 	}
 	if (mm_table->version == 0) {
-		if (mm_table->valid_flag & LCD_TCON_DATA_VALID_VAC) {
-			if (mm_table->valid_flag & LCD_TCON_DATA_VALID_DEMURA)
+		if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_VAC) {
+			if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_DEMURA)
 				flag = 1;
 			else
 				flag = 0;
 			lcd_tcon_vac_set_tl1(pdrv, flag);
 		}
-		if (mm_table->valid_flag & LCD_TCON_DATA_VALID_DEMURA) {
+		if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_DEMURA) {
 			lcd_tcon_demura_set_tl1(pdrv);
 			lcd_tcon_demura_lut_tl1(pdrv);
 		}
-		if (mm_table->valid_flag & LCD_TCON_DATA_VALID_ACC)
+		if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_ACC)
 			lcd_tcon_acc_lut_tl1(pdrv);
-	} else {
+	} else if (mm_table->version < 0xff) {
 		lcd_tcon_data_set(pdrv, mm_table);
 	}
 
@@ -1491,10 +1452,6 @@ int lcd_tcon_enable_t5(struct aml_lcd_drv_s *pdrv)
 		return -1;
 	if (!tcon_conf || !mm_table || !local_cfg)
 		return -1;
-	if (mm_table->init_load == 0) {
-		if (mm_table->tcon_data_flag == 0)
-			lcd_tcon_bin_load(pdrv);
-	}
 
 	//don't disable encl for system continuous vsync,
 	//  just disable tcon pre_proc_clk in tcon bin
@@ -1513,7 +1470,7 @@ int lcd_tcon_enable_t5(struct aml_lcd_drv_s *pdrv)
 	}
 
 	/* step 3: tcon data set */
-	if (mm_table->version)
+	if (mm_table->version > 0 && mm_table->version < 0xff)
 		lcd_tcon_data_set(pdrv, mm_table);
 
 	/* step 4: tcon_top_output_set */
@@ -1583,7 +1540,7 @@ int lcd_tcon_reload_t3(struct aml_lcd_drv_s *pdrv)
 	//lcd_venc_enable(pdrv, 1);
 
 	local_time[1] = sched_clock();
-	if (mm_table->version)
+	if (mm_table->version > 0 && mm_table->version < 0xff)
 		lcd_tcon_data_set(pdrv, mm_table);
 
 	lcd_tcon_setb(pdrv, 0x207, 1, 4, 1);//enable pre_proc_clk

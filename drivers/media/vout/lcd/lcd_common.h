@@ -126,6 +126,7 @@ void *lcd_alloc_dma_buffer(struct aml_lcd_drv_s *pdrv, unsigned int size, dma_ad
 u8 *lcd_vmap(ulong addr, u32 size);
 void lcd_unmap_phyaddr(u8 *vaddr);
 int  lcd_debug_parse_param(char *buf_orig, char **parm, int max_parm);
+void lcd_debug_info_print(char *print_buf);
 
 void lcd_cpu_gpio_probe(struct aml_lcd_drv_s *pdrv, unsigned int index);
 void lcd_cpu_gpio_set(struct aml_lcd_drv_s *pdrv, unsigned int index, int value);
