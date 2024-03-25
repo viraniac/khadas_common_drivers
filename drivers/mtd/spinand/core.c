@@ -800,11 +800,11 @@ int spinand_mtd_read_unlock(struct mtd_info *mtd, loff_t from,
 
 		ret = spinand_select_target(spinand, iter.req.pos.target);
 		if (ret)
-			break;
+			return ret;
 
 		ret = spinand_read_page(spinand, &iter.req);
 		if (ret < 0 && ret != -EBADMSG)
-			break;
+			return ret;
 
 		if (ret == -EBADMSG)
 			ecc_failed = true;
@@ -817,9 +817,9 @@ int spinand_mtd_read_unlock(struct mtd_info *mtd, loff_t from,
 	}
 
 	if (ecc_failed && !ret)
-		ret = -EBADMSG;
+		return -EBADMSG;
 
-	return ret ? ret : max_bitflips;
+	return max_bitflips >= mtd->bitflip_threshold ? -EUCLEAN : 0;
 }
 
 static int spinand_mtd_write(struct mtd_info *mtd, loff_t to,
