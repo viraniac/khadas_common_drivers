@@ -1952,6 +1952,14 @@ int start_tvin_service(int no, struct vdin_parm_s  *para)
 	if (devp->parm.port == TVIN_PORT_VIU1_VIDEO)
 		devp->flags |= VDIN_FLAG_V4L2_DEBUG;
 
+	/* g12a/g12b/sm1 do not have wb0_vpp */
+	if ((is_meson_g12a_cpu() || (is_meson_g12b_cpu()) ||
+		is_meson_sm1_cpu()) && para->port == TVIN_PORT_VIU1_WB0_VPP) {
+		pr_info("line:%d, cpu :%#x, vdin%d force to use postblend\n",
+			__LINE__, get_cpu_type(), devp->index);
+		para->port = TVIN_PORT_VIU1_WB0_POST_BLEND;
+	}
+
 	devp->parm.info.fmt = para->fmt;
 	fmt = devp->parm.info.fmt;
 	/* add for camera random resolution */
@@ -2265,6 +2273,14 @@ int start_tvin_capture_ex(int dev_num, enum port_vpp_e port, struct vdin_parm_s 
 		loop_port = TVIN_PORT_VIU3_OSD1;
 	else
 		loop_port = para->port;
+
+	/* g12a/g12b/sm1 do not have wb0_vpp */
+	if ((is_meson_g12a_cpu() || (is_meson_g12b_cpu()) ||
+		is_meson_sm1_cpu()) && loop_port == TVIN_PORT_VIU1_WB0_VPP) {
+		pr_info("line:%d, cpu :%#x, vdin1 force to use postblend\n",
+			__LINE__, get_cpu_type());
+		loop_port = TVIN_PORT_VIU1_WB0_POST_BLEND;
+	}
 
 	/* For chips before T7,only vpp0 + VIU2 ENCP/I/L */
 	if (!cpu_after_eq(MESON_CPU_MAJOR_ID_T7) &&
