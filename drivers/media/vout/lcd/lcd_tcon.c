@@ -3130,6 +3130,12 @@ static void lcd_tcon_reserved_memory_release(struct aml_lcd_drv_s *pdrv)
 		return;
 	}
 
+	if (of_find_property(mem_node, "no-map", NULL)) {
+		if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
+			LCDPR("no-map memory source, skip release\n");
+		return;
+	}
+
 	end = PAGE_ALIGN(res.end);
 
 	highmem_flag = PageHighMem(phys_to_page(res.start));
