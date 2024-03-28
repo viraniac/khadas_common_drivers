@@ -234,6 +234,8 @@ enum rw_md_e {
 	WR_MOD
 };
 
+struct vpp_hist_param_s *get_vpp_hist(void);
+
 struct ve_pq_table_s {
 	unsigned int src_timing;
 	unsigned int value1;

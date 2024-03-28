@@ -23,8 +23,7 @@ struct cm_port_s {
 int get_slice_max(void);
 
 struct cm_port_s get_cm_port(void);
-void cm_hist_get(struct vframe_s *vf,
-	unsigned int hue_bin0, unsigned int sat_bin0);
+void cm_hist_get(struct vpp_hist_param_s *vp, unsigned int hue_bin0, unsigned int sat_bin0);
 void cm_hist_by_type_get(enum cm_hist_e hist_sel,
 	unsigned int *data, unsigned int length,
 	unsigned int addr_bin0);
@@ -63,7 +62,7 @@ void post_wb_ctl(enum wr_md_e mode, int en, int vpp_index);
 void post_pre_gamma_ctl(enum wr_md_e mode, int en, int vpp_index);
 void post_pre_gamma_set(int *lut);
 void vpp_luma_hist_init(void);
-void get_luma_hist(struct vframe_s *vf);
+void get_luma_hist(struct vframe_s *vf, struct vpp_hist_param_s *vp);
 void cm_top_ctl(enum wr_md_e mode, int en, int vpp_index);
 
 void ve_multi_picture_case_set(int enable);
