@@ -28,9 +28,9 @@
 #include <linux/amlogic/media/vout/vout_notify.h>
 #endif
 #include <linux/amlogic/media/video_sink/video_signal_notify.h>
-#ifdef CONFIG_AMLOGIC_MEDIA_VIN
+//#ifdef CONFIG_AMLOGIC_MEDIA_VIN
 #include <linux/amlogic/media/frame_provider/tvin/tvin.h>
-#endif
+//#endif
 #include <linux/amlogic/media/vfm/vfm_ext.h>
 #include <linux/sched.h>
 #include <linux/sched/clock.h>

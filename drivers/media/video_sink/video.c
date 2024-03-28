@@ -4540,11 +4540,16 @@ static void hdmi_in_delay_maxmin_new1(struct tvin_to_vpp_info_s *tvin_info)
 	 *di keep 1/2 buf, 8/7 left
 	 *count = (7 + 8/7) * vdin_vsync+ 3 * vpp_vsync;
 	 */
+
+#ifdef CONFIG_AMLOGIC_MEDIA_VIN
 	vdin_buf_count = get_vdin_buffer_num();
 	if (vdin_buf_count <= 0) {
 		pr_info("%s:Get count failed, use default value.\n", __func__);
 		vdin_buf_count = VDIN_BUF_COUNT;
 	}
+#else
+	vdin_buf_count = VDIN_BUF_COUNT;
+#endif
 	if (di_has_vdin_vf || !do_di || di_backend_en) {
 		vdin_count = vdin_buf_count - 3 - display_path_count - 1;
 		vpp_count = display_path_count + 1;
