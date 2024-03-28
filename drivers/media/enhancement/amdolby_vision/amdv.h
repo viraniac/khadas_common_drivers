@@ -930,16 +930,30 @@ extern int cfg_size;
 extern int bin_size;
 extern u32 vpp_vsync_id;
 extern int force_vsync_id;
-extern bool top1_enable_changed;
 extern bool force_bypass_precision;
 extern bool force_bypass_precision_once;
 extern bool miss_top1_and_bypass_pr_once;
 extern bool update_top2_control_path_flag;
+extern bool disable_detunnel;
 extern u32 top1_scale;
 extern bool enable_top1_scale;
 extern bool wait_first_frame_top1;
 extern const char level_str[4][10];
 extern bool update_top2_cfg;
+extern u32 last_top2_ro5;
+extern u32 last_top2_ro4;
+extern u32 last_top2_ro3;
+extern u32 last_top2_ro2;
+extern u32 last_top2_ro1;
+extern u32 last_top2_ro0;
+extern u32 last_top1_ro6;
+extern u32 last_top1_ro5;
+extern u32 last_top1_ro4;
+extern u32 last_top1_ro3;
+extern u32 last_top1_ro2;
+extern u32 last_top1_ro1;
+extern u32 last_top1_ro0;
+extern u32 enable_ro_check;
 /************/
 
 #define pr_dv_dbg(fmt, args...)\

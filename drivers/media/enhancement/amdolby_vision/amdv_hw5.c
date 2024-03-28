@@ -73,12 +73,21 @@ struct vd_proc_info_t *vd_proc_info;
 
 bool force_bypass_precision_once;
 bool miss_top1_and_bypass_pr_once;
-static u32 last_top2_ro5;
-static u32 last_top2_ro4;
-static u32 last_top2_ro3;
-static u32 last_top1_ro6;
-static u32 top2_err_cnt;
-bool top1_enable_changed;
+u32 last_top2_ro5;
+u32 last_top2_ro4;
+u32 last_top2_ro3;
+u32 last_top2_ro2;
+u32 last_top2_ro1;
+u32 last_top2_ro0;
+u32 last_top1_ro6;
+u32 last_top1_ro5;
+u32 last_top1_ro4;
+u32 last_top1_ro3;
+u32 last_top1_ro2;
+u32 last_top1_ro1;
+u32 last_top1_ro0;
+u32 enable_ro_check;
+u32 top2_err_cnt;
 bool force_bypass_precision;
 bool bypass_shadow = true;
 u32 top1_scale;
@@ -117,6 +126,7 @@ ulong fixed_y_buf_paddr;
 ulong fixed_uv_buf_paddr;
 u8 *y_vaddr;
 u8 *uv_vaddr;
+/*true: top2 should not start until top1 done*/
 bool wait_first_frame_top1;
 
 void fixed_buf_config(void)
@@ -1570,7 +1580,7 @@ int tv_top1_set(u64 *top1_reg,
 		(1 << 16) |
 		0x95);
 
-	if (!top1_info.core_on) {/*update lut data when top2 not on*/
+	if (!top1_info.core_on && wait_first_frame_top1) {/*update lut data when top2 not on*/
 		set_dovi_setting_update_flag(true);
 		amdv_update_setting(NULL);
 		dma_lut_write();
@@ -1752,7 +1762,7 @@ int tv_top2_set(u64 *reg_data,
 		if (hdmi)
 			VSYNC_WR_DV_REG(VPU_DOLBY_WRAP_DTNL, (hsize << 18) | 0x2c2d0);
 
-		if (hdmi && !hdr10 && !dv_unique_drm) {
+		if (hdmi && !hdr10 && !dv_unique_drm && !disable_detunnel) {
 			/*hdmi DV STD and DV LL:  need detunnel*/
 			if (slice_num == 2)
 				VSYNC_WR_DV_REG_BITS(VPU_DOLBY_WRAP_IRQ, 3, 19, 2);
@@ -1797,10 +1807,12 @@ int tv_top2_set(u64 *reg_data,
 		else
 			VSYNC_WR_DV_REG_BITS(VPU_DOLBY_WRAP_CTRL, 0, 31, 1);//top2 enable
 
-		if (!enable_top1 || (test_dv & DEBUG_ENABLE_TOP2_INT))
+		if (!enable_top1 || (test_dv & DEBUG_ENABLE_TOP2_INT)) {
 			VSYNC_WR_DV_REG_BITS(VPU_DOLBY_WRAP_IRQ, 1, 1, 1); //top2 dolby int, pulse
-		else
+			VSYNC_WR_DV_REG_BITS(VPU_DOLBY_WRAP_IRQ, 0, 0, 1); //top1 dolby int, disable
+		} else {
 			VSYNC_WR_DV_REG_BITS(VPU_DOLBY_WRAP_IRQ, 0, 1, 1); //top2 dolby int, disable
+		}
 
 		/*if not get a frame in advance,there will no pyramid.use zero pyramid*/
 		//if ((enable_top1 && !pr_done) || (test_dv & DEBUG_FORCE_ZERO_PYRAMID)) {
@@ -1873,7 +1885,8 @@ void amdv_sw_reset(u64 *top2_reg)
 
 	if (top2_reg && p_reg[5] == 4) {
 		cntrl_value = p_reg[4];
-		pr_dv_dbg("sw reset top2[%x]: 0x%x\n", p_reg[5] >> 2, p_reg[4]);
+		if (debug_dolby & 1)
+			pr_dv_dbg("sw reset top2[%x]: 0x%x\n", p_reg[5] >> 2, p_reg[4]);
 		cntrl_value = cntrl_value | 0xC0000000;
 		VSYNC_WR_DV_REG(DOLBY5_CORE2_REG_BASE0 + 1, cntrl_value);
 		cntrl_value = cntrl_value & 0x3FFFFFFF;
@@ -1915,6 +1928,7 @@ int tv_top_set(u64 *top1_reg,
 	u32 debug_reg;
 	static u32 pr_done_continue_cnt;
 	bool sw_reset = false;
+	static bool last_force_bypass_precision;
 
 	if (!top2_info.core_on) {
 		last_py_enabled = py_enabled;
@@ -1929,8 +1943,8 @@ int tv_top_set(u64 *top1_reg,
 	if (!top1_info.core_on && !top2_info.core_on) {
 		force_bypass_precision_once = false;
 		miss_top1_and_bypass_pr_once = false;
-		top1_enable_changed = false;
 		force_bypass_precision = false;
+		last_force_bypass_precision = false;
 	}
 
 	if (debug_dolby & 0x1)
@@ -1945,13 +1959,6 @@ int tv_top_set(u64 *top1_reg,
 				READ_VPP_DV_REG(0x0d01),
 				(top2_reg[2] & 0xFFFFFFFF),
 				pr_done, top1_done);
-	debug_reg = READ_VPP_DV_REG(DOLBY_TOP2_RDMA_SIZE5);
-	if (debug_reg != (last_debug_reg + 1) && top2_info.core_on) {
-		pr_dv_dbg("rdma error cur=%x last=%x\n", debug_reg, last_debug_reg);
-		reset = true;/*need hw reset*/
-		toggle = true;
-	}
-	last_debug_reg = debug_reg;
 
 	//enable tvcore clk
 	if (!top2_info.core_on && !top1_info.core_on) {/*enable once*/
@@ -2001,20 +2008,21 @@ int tv_top_set(u64 *top1_reg,
 		//reset = true;
 		sw_reset = true;
 		toggle = true;
-		pr_dv_dbg("debug top2 status changed %d->%d\n",
-			last_top2_status, cur_top2_status);
+		if (debug_dolby & 1)
+			pr_dv_dbg("debug top2 status changed %d->%d\n",
+				last_top2_status, cur_top2_status);
 	} else if (!cur_top2_status && last_top2_status) {
 		toggle = true;
 	}
 	last_top2_status = cur_top2_status;
 	/*******check top2 status changed done********/
 
-	if (top1_enable_changed) {
+	if (last_force_bypass_precision != force_bypass_precision) {
 		//reset = true;
 		sw_reset = true;
 		toggle = true;
-		top1_enable_changed = false;
 	}
+	last_force_bypass_precision = force_bypass_precision;
 
 	top2_info.py_level = level;
 	if (enable_top1) {
@@ -2086,6 +2094,7 @@ int tv_top_set(u64 *top1_reg,
 				pr_done_continue_cnt = 0;
 			}
 			/*******check precision status changed done********/
+
 			/*******check precision bypass changed********/
 			if ((test_dv & DEBUG_FORCE_BYPASS_PRECISION_RENDERING) ||
 				miss_top1_and_bypass_pr_once)
@@ -2103,26 +2112,57 @@ int tv_top_set(u64 *top1_reg,
 			last_pr = cur_pr;
 			/*******check precision bypass changed done********/
 
+			/*******check rdma ************/
+			debug_reg = READ_VPP_DV_REG(DOLBY_TOP2_RDMA_SIZE5);
+			if (debug_reg != (last_debug_reg + 1) && top2_info.core_on_cnt > 2) {
+				if (debug_dolby & 0x40000000)
+					pr_info("rdma error cur=%x last=%x\n",
+							debug_reg, last_debug_reg);
+				if (!force_bypass_precision_once &&
+					!miss_top1_and_bypass_pr_once &&
+					!force_bypass_precision) {
+					reset = true;/*need hw reset*/
+					if (debug_dolby & 0x40000000)
+						pr_info("rdma error, reset hw5\n");
+				}
+				toggle = true;
+			}
+			last_debug_reg = debug_reg;
+			/*******check rdma done********/
+
 			/*check RO status*/
-			last_top1_ro6 = READ_VPP_DV_REG(DOLBY_TOP1_RO_6);
-			last_top2_ro5 = READ_VPP_DV_REG(DOLBY_TOP2_RO_5);
-			last_top2_ro4 = READ_VPP_DV_REG(DOLBY_TOP2_RO_4);
-			last_top2_ro3 = READ_VPP_DV_REG(DOLBY_TOP2_RO_3);
-			if (!miss_top1_and_bypass_pr_once && !force_bypass_precision_once &&
-				!force_bypass_precision &&
-				cur_pr && py_enabled && top2_info.core_on &&
-				cur_top2_status &&
-				(last_top2_ro4 != 0x120024 || last_top2_ro3 != 0x480090))
-				top2_err_cnt++;
-			else
-				top2_err_cnt = 0;
-			if (top2_err_cnt > 3 &&
-				(last_top2_ro5 & 0xff000000) == 0 &&
-				(last_top1_ro6 & 0xffff0000) == 0) {/*reset only when axi=0*/
-				pr_dv_dbg("top2 err %x %x %x %x for %d\n", last_top2_ro5,
-					last_top2_ro4, last_top2_ro3, last_top1_ro6, top2_err_cnt);
-				//reset = true;
-				top2_err_cnt = 0;
+			if (enable_ro_check) {
+				last_top1_ro6 = READ_VPP_DV_REG(DOLBY_TOP1_RO_6);
+				last_top1_ro5 = READ_VPP_DV_REG(DOLBY_TOP1_RO_5);
+				last_top1_ro4 = READ_VPP_DV_REG(DOLBY_TOP1_RO_4);
+				last_top1_ro3 = READ_VPP_DV_REG(DOLBY_TOP1_RO_3);
+				last_top1_ro2 = READ_VPP_DV_REG(DOLBY_TOP1_RO_2);
+				last_top1_ro1 = READ_VPP_DV_REG(DOLBY_TOP1_RO_1);
+				last_top1_ro0 = READ_VPP_DV_REG(DOLBY_TOP1_RO_0);
+				last_top2_ro5 = READ_VPP_DV_REG(DOLBY_TOP2_RO_5);
+				last_top2_ro4 = READ_VPP_DV_REG(DOLBY_TOP2_RO_4);
+				last_top2_ro3 = READ_VPP_DV_REG(DOLBY_TOP2_RO_3);
+				last_top2_ro2 = READ_VPP_DV_REG(DOLBY_TOP2_RO_2);
+				last_top2_ro1 = READ_VPP_DV_REG(DOLBY_TOP2_RO_1);
+				last_top2_ro0 = READ_VPP_DV_REG(DOLBY_TOP2_RO_0);
+				if (!miss_top1_and_bypass_pr_once && !force_bypass_precision_once &&
+					!force_bypass_precision &&
+					cur_pr && py_enabled && top2_info.core_on &&
+					cur_top2_status &&
+					(last_top2_ro4 != 0x120024 || last_top2_ro3 != 0x480090))
+					top2_err_cnt++;
+				else
+					top2_err_cnt = 0;
+				if (top2_err_cnt > 3 &&
+					(last_top2_ro5 & 0xff000000) == 0 &&
+					(last_top1_ro6 & 0xffff0000) == 0) {
+					/*reset only when axi=0*/
+					pr_dv_dbg("top2 err %x %x %x %x for %d\n", last_top2_ro5,
+						last_top2_ro4, last_top2_ro3,
+						last_top1_ro6, top2_err_cnt);
+					//reset = true;
+					top2_err_cnt = 0;
+				}
 			}
 		}
 		if (delay_reset && force_bypass_precision_once) {
@@ -2229,8 +2269,8 @@ int tv_top_set(u64 *top1_reg,
 			++top2_info.core_on_cnt;
 	}
 
-	/*first frame with only top1, trigger lut dma*/
-	if (enable_top1 && top2_info.core_on_cnt == 0) {
+	/*first frame with only top1 and without top2, trigger lut dma*/
+	if (enable_top1 && top2_info.core_on_cnt == 0 && wait_first_frame_top1) {
 		if (lut_trigger_by_reg) {/*set every vsync*/
 			/*use reg to trigger lut, should after DOLBY_TOP_RDMA set */
 			top_misc = VSYNC_RD_DV_REG(VPU_TOP_MISC);
