@@ -5709,9 +5709,10 @@ unsigned char dim_pre_de_buf_config(unsigned int channel)
 			  jiffies_to_msecs(jiffies_64 -
 			  vframe->ready_jiffies64));
 
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 		if (DIM_IS_IC_TXHD2) {
-			ppre->di_nrwr_mif.nr_wr_mif_8bit = -1;
+			if (pch->record_10bit_flag && pch->record_8bit_flag)
+				ppre->di_nrwr_mif.nr_wr_mif_8bit = -1;
 			if (!dimp_get(edi_mp_force_422_8bit)) {
 				if (pch->record_10bit_flag) {
 					pch->switch_index = pch->cur_index;
@@ -7672,7 +7673,7 @@ static void dimpst_fill_outvf(struct vframe_s *vfm,
 	unsigned int ch;
 	struct di_ch_s *pch;
 	bool ext_buf = false;
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 	unsigned int ori_vfm_bitdepth;
 #endif
 
@@ -7778,7 +7779,7 @@ static void dimpst_fill_outvf(struct vframe_s *vfm,
 				  BITDEPTH_U8	|
 				  BITDEPTH_V8);
 	}
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 	ori_vfm_bitdepth = vfm->bitdepth;
 	if (di_buf->bit_8_flag == 1) {
 		dim_print("bitdepth: 0x%x\n", vfm->bitdepth);
@@ -8135,7 +8136,7 @@ int dim_post_process(void *arg, unsigned int zoom_start_x_lines,
 	}
 	if (dip_itf_is_ins(pch) && dim_dbg_new_int(2))
 		dim_dbg_buffer2(di_buf->c.buffer, 7);
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 	if (DIM_IS_IC_TXHD2) {
 		ppost->di_buf2_mif.bit8_flag = ppre->di_nrwr_mif.nr_wr_mif_8bit;
 		dim_print("di_nrwr_mif.nr_wr_mif_8bit:%d\n", ppre->di_nrwr_mif.nr_wr_mif_8bit);
@@ -8877,7 +8878,7 @@ int dim_post_process(void *arg, unsigned int zoom_start_x_lines,
 			}
 			/* */
 		} else {
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 			if (DIM_IS_IC_TXHD2) {
 				ppost->di_buf0_mif.bit8_flag = ppre->di_chan2_mif.bit8_flag;
 				ppost->di_buf1_mif.bit8_flag = ppre->di_mem_mif.bit8_flag;
@@ -8948,7 +8949,7 @@ int dim_post_process(void *arg, unsigned int zoom_start_x_lines,
 				dim_print("0x%px:\n", acfg->buf_o->vframe);
 			}
 		} else {
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 			if (DIM_IS_IC_TXHD2) {
 				ppost->di_buf0_mif.bit8_flag = ppre->di_chan2_mif.bit8_flag;
 				ppost->di_buf1_mif.bit8_flag = ppre->di_mem_mif.bit8_flag;
@@ -9650,7 +9651,7 @@ static void set_pulldown_mode(struct di_buf_s *di_buf, unsigned int channel)
 			if (pre_buf_p) {
 				di_buf->pd_config.global_mode =
 					pre_buf_p->pd_config.global_mode;
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 				if (DIM_IS_IC_TXHD2) {
 					if (ppre->di_nrwr_mif.nr_wr_mif_8bit == 1 ||
 						ppre->di_nrwr_mif.nr_wr_mif_8bit == 0) {
@@ -10930,7 +10931,7 @@ void di_unreg_variable(unsigned int channel)
 	pch->self_trig_need = 0;
 	pch->rsc_bypass.d32 = 0;
 	pch->sts_keep = 0;
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 	pch->record_10bit_flag = 0;
 	pch->record_8bit_flag = 0;
 #endif

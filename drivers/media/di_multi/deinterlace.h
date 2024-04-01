@@ -49,6 +49,9 @@
  ************************************************/
 #define DIM_HAVE_HDR	(1)
 
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#define	CONFIG_AMLOGIC_MEDIA_THERMAL1	(1)
+#endif
 /************************************************
  * function:decontour use detect border
  *	char aml_ldim_get_bbd_state(void) in
@@ -382,7 +385,7 @@ struct di_buf_s {
 	bool hf_irq;
 	bool dw_have;
 	bool flg_dummy;
-#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 	bool bit_8_flag;
 #endif
 };
