@@ -1029,8 +1029,7 @@
 					<&clkc CLKID_FCLK_DIV2>;
 			clock-names = "gate", "fdiv2pll";
 			nand_clk_ctrl = <0xfe08c000>;
-			/* disabled host ecc poc bit */
-			dis_host_ecc = <4>;
+			infopage_force_hostecc;
 			#address-cells = <1>;
 			#size-cells = <0>;
 		};

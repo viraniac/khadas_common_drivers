@@ -728,9 +728,10 @@ static int spinand_write_page(struct spinand_device *spinand,
 		last_req = *req;
 	}
 	/* information page is in front of BL2 */
-	if (page < SPI_NAND_BOOT_TOTAL_PAGES && version != PAGE_INFO_V1)
+	if (page < SPI_NAND_BOOT_TOTAL_PAGES && version != PAGE_INFO_V1) {
 		nanddev_pos_next_page(nand, &last_req.pos);
-
+		page_info_is_page(nanddev_pos_to_row(nand, &last_req.pos));
+	}
 	return _spinand_write_page(spinand, &last_req);
 }
 
