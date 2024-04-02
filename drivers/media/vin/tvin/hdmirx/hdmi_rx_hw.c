@@ -4676,8 +4676,13 @@ void rx_aud_pll_ctl(bool en, u8 port)
 			}
 		} else if (rx_info.chip_id == CHIP_ID_TXHD2) {
 			if (en) {
-				wr_reg_hhi(HHI_VDAC_CNTL0, 0x00000880);
-				wr_reg_hhi(TXHD2_PWR_CTL, 0x2);
+				tmp = rd_reg_hhi(HHI_VDAC_CNTL0);
+				tmp |= (1 << 7);
+				tmp |= (1 << 11);
+				wr_reg_hhi(HHI_VDAC_CNTL0, tmp);
+				tmp = rd_reg_hhi(TXHD2_PWR_CTL);
+				tmp |= (1 << 1);
+				wr_reg_hhi(TXHD2_PWR_CTL, tmp);
 
 				tmp = rd_reg_clk_ctl(CLK_MUX_TXHD2);
 				/* [    8] clk_en for cts_hdmirx_aud_pll_clk */
