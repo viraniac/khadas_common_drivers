@@ -121,11 +121,6 @@
 			reg = <0x0 0xdf800000 0x0 0x800000>;
 		};
 
-		lcd_tcon_reserved:linux,lcd_tcon {
-			compatible = "amlogic, lcd_tcon";
-			reg = <0x0 0x5e800000 0x0 0x00a02840>;
-			//no-map;
-		};
 
 		codec_mm_cma:linux,codec_mm_cma {
 			compatible = "shared-dma-pool";
