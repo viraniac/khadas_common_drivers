@@ -11482,18 +11482,26 @@ void lc_load_curve(struct ve_lc_curve_parm_s *p)
 	lc_alg_parm.dbg_parm3 = p->param[lc_dbg_parm3];
 	lc_alg_parm.dbg_parm4 = p->param[lc_dbg_parm4];
 
-	/*load lc_saturation curve*/
-	lc_wr_reg(p->ve_lc_saturation, 0x1);
-	/*load lc_yminval_lmt*/
-	lc_wr_reg(p->ve_lc_yminval_lmt, 0x2);
-	/*load lc_ypkbv_ymaxval_lmt*/
-	lc_wr_reg(p->ve_lc_ypkbv_ymaxval_lmt, 0x4);
-	/*load lc_ypkbV_ratio*/
-	lc_wr_reg(p->ve_lc_ypkbv_ratio, 0x8);
-	/*load lc_ymaxval_ratio*/
-	lc_wr_reg(p->ve_lc_ymaxval_lmt, 0x10);
-	/*load lc_ypkbV_ratio*/
-	lc_wr_reg(p->ve_lc_ypkbv_lmt, 0x20);
+	if (chip_type_id != chip_t3x) {
+		/*load lc_saturation curve*/
+		lc_wr_reg(p->ve_lc_saturation, 0x1);
+		/*load lc_yminval_lmt*/
+		lc_wr_reg(p->ve_lc_yminval_lmt, 0x2);
+		/*load lc_ypkbv_ymaxval_lmt*/
+		lc_wr_reg(p->ve_lc_ypkbv_ymaxval_lmt, 0x4);
+		/*load lc_ypkbv_ratio*/
+		lc_wr_reg(p->ve_lc_ypkbv_ratio, 0x8);
+		/*load lc_ymaxval_ratio*/
+		lc_wr_reg(p->ve_lc_ymaxval_lmt, 0x10);
+		/*load lc_ypkbv_lmt*/
+		lc_wr_reg(p->ve_lc_ypkbv_lmt, 0x20);
+	} else {
+		ve_lc_sat_lut_set(p->ve_lc_saturation);
+		ve_lc_ymin_lmt_set(p->ve_lc_yminval_lmt);
+		ve_lc_ymax_lmt_set(p->ve_lc_ymaxval_lmt);
+		ve_lc_ypkbv_lmt_set(p->ve_lc_ypkbv_lmt);
+		ve_lc_ypkbv_rat_set(p->ve_lc_ypkbv_ratio);
+	}
 }
 
 static int lc_dbg_flag;
