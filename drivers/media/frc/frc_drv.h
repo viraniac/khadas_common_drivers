@@ -117,8 +117,9 @@
 // frc_20240312 frc protect badedit effect
 // frc_2024-0319 frc sync alg macro
 // frc_2024-0315 buf num configure
+// frc_2024-0325 frc sync motion from drv
 
-#define FRC_FW_VER			"2024-0325 frc sync motion from drv"
+#define FRC_FW_VER			"2024-0407 frc modify urgent control"
 #define FRC_KERDRV_VER                  3500
 
 #define FRC_DEVNO	1

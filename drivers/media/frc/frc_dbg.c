@@ -720,6 +720,7 @@ void frc_debug_param_if(struct frc_dev_s *devp, const char *buf, size_t count)
 	char *buf_orig, *parm[47] = {NULL};
 	int val1;
 	int val2;
+	int val3;
 
 	if (!devp)
 		return;
@@ -919,11 +920,12 @@ void frc_debug_param_if(struct frc_dev_s *devp, const char *buf, size_t count)
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->prot_mode = val1;
 	} else if (!strcmp(parm[0], "set_urgent")) {
-		if (!parm[1] || !parm[2])
+		if (!parm[1] || !parm[2] || !parm[3])
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0) {
-			if (kstrtoint(parm[2], 16, &val2) == 0)
-				frc_set_urgent_cfg(val1, val2);
+			if (kstrtoint(parm[2], 10, &val2) == 0)
+				if (kstrtoint(parm[3], 10, &val3) == 0)
+					frc_set_arb_ugt_cfg(val1, val2, val3);
 		}
 	} else if (!strcmp(parm[0], "no_ko_mode")) {
 		if (!parm[1])
