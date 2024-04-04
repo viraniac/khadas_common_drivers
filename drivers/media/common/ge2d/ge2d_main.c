@@ -1721,6 +1721,9 @@ static struct ge2d_device_data_s ge2d_s1a = {
 	.chip_type = MESON_CPU_MAJOR_ID_S1A,
 	.adv_matrix = 1,
 	.src2_repeat = 1,
+	.dst_repeat = 1,
+	.dst_sign_mode = 1,
+	.blk_stride_mode = 1,
 	.cmd_queue_mode = 1,
 };
 #endif
