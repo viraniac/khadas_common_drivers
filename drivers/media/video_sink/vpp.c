@@ -726,7 +726,7 @@ static unsigned int force_vskip_cnt;
 MODULE_PARM_DESC(force_vskip_cnt, "force_vskip_cnt");
 module_param(force_vskip_cnt, uint, 0664);
 
-/* bit0: disable adaptive ar; bit1: disable adaptive crop alignment for pre-link */
+/* bit0: disable adaptive ar; bit1: disable adaptive crop alignment for plink */
 #define DISABLE_ADAPTIVE_AR 1
 #define DISABLE_ADAPTIVE_ALIGN 2
 static unsigned int disable_adapted;
@@ -980,7 +980,7 @@ static int vpp_process_speed_check
 	u32 video_speed_check_height,
 	struct vpp_frame_par_s *next_frame_par,
 	const struct vinfo_s *vinfo, struct vframe_s *vf,
-	u32 vpp_flags)
+	u32 vpp_flags, u32 op_flag)
 {
 	u32 cur_ratio, bpp = 1;
 	int min_ratio_1000 = 0;
@@ -1016,7 +1016,8 @@ static int vpp_process_speed_check
 		sync_duration_num = vinfo->sync_duration_num;
 	sync_duration_den = vinfo->sync_duration_den;
 
-	if (IS_DI_POST(vf->type)) {
+	if (IS_DI_POST(vf->type) &&
+	    !(op_flag & OP_HAS_DI_LOCAL)) {
 		if (is_meson_txlx_cpu())
 			clk_in_pps = 250000000;
 		else
@@ -1098,7 +1099,8 @@ static int vpp_process_speed_check
 	/*according vlsi suggest,
 	 *if di work need check mif input and vpu process speed
 	 */
-	if (IS_DI_POST(vf->type)) {
+	if (IS_DI_POST(vf->type) &&
+	    !(op_flag & OP_HAS_DI_LOCAL)) {
 		u32 input_time_us_per_line10 = 0, display_time_us_per_line10 = 0;
 
 		htotal = vinfo->htotal;
@@ -1127,6 +1129,8 @@ static int vpp_process_speed_check
 			display_time_us = (height_out * display_time_us) / vtotal;
 			dummy_time_us = dummy_time_us - display_time_us;
 		} else {
+			/* old post link or new post link mode */
+			/* TODO: use htotal to replace width_out */
 			width_out = next_frame_par->VPP_hsc_endp -
 				next_frame_par->VPP_hsc_startp + 1;
 			if (clk_temp)
@@ -1189,7 +1193,8 @@ static int vpp_process_speed_check
 					height_out * max_height);
 				/* di process first, need more a bit of ratio */
 				if (IS_DI_POST(vf->type) &&
-				    !IS_DI_PRELINK(vf->di_flag))
+				    !IS_DI_PRELINK(vf->di_flag) &&
+				    !(op_flag & OP_HAS_DI_LOCAL))
 					cur_ratio = (cur_ratio * 105) / 100;
 				if (!is_meson_t7_cpu() &&
 				    !is_meson_t5m_cpu() &&
@@ -1226,7 +1231,8 @@ static int vpp_process_speed_check
 				u32 cur_bypass_ratio;
 
 				if (IS_DI_POST(vf->type) &&
-				    IS_DI_PRELINK(vf->di_flag)) {
+				    IS_DI_PRELINK(vf->di_flag) &&
+				    !(op_flag & OP_HAS_DI_LOCAL)) {
 					cur_vpp_speed_factor = 0x100; //adjust factor for prelink
 					cur_bypass_ratio = bypass_ratio;
 				} else {
@@ -2232,10 +2238,12 @@ RESTART:
 		next_frame_par->VPP_pic_in_height_ /
 		(next_frame_par->vscale_skip_count + 1);
 
-	if (!(disable_adapted & DISABLE_ADAPTIVE_ALIGN)) {
+	if (!(disable_adapted & DISABLE_ADAPTIVE_ALIGN) &&
+	    !(input->op_flag & OP_HAS_DI_LOCAL)) {
 		if (!next_frame_par->vscale_skip_count &&
 		    (IS_DI_PRELINK(vf->di_flag) ||
-		     IS_DI_PRELINK_BYPASS(vf->di_flag))) {
+		     IS_DI_PSTLINK(vf->di_flag) ||
+		     IS_DI_PLINK_BYPASS(vf->di_flag))) {
 			u32 align_val = 2, ds_ratio;
 			u32 aligned_start, aligned_size;
 
@@ -2408,10 +2416,12 @@ RESTART:
 		next_frame_par->VPP_hd_end_lines_ -
 		next_frame_par->VPP_hd_start_lines_ + 1;
 
-	if (!(disable_adapted & DISABLE_ADAPTIVE_ALIGN)) {
+	if (!(disable_adapted & DISABLE_ADAPTIVE_ALIGN) &&
+	    !(input->op_flag & OP_HAS_DI_LOCAL)) {
 		if (!next_frame_par->hscale_skip_count &&
 		    (IS_DI_PRELINK(vf->di_flag) ||
-		     IS_DI_PRELINK_BYPASS(vf->di_flag))) {
+		     IS_DI_PSTLINK(vf->di_flag) ||
+		     IS_DI_PLINK_BYPASS(vf->di_flag))) {
 			u32 align_val = 2, ds_ratio;
 			u32 aligned_start, aligned_size;
 
@@ -2525,7 +2535,8 @@ RESTART:
 			speed_check_width,
 			speed_check_height,
 			next_frame_par,
-			vinfo, vf, vpp_flags);
+			vinfo, vf, vpp_flags,
+			input->op_flag);
 
 		if (skip == SPEED_CHECK_VSKIP) {
 			u32 next_vskip =
@@ -5353,6 +5364,10 @@ RERTY:
 		src_width = vf->width;
 		src_height = vf->height;
 	}
+
+	if (input->op_flag & OP_HAS_DI_LOCAL)
+		src_height >>= 1;
+
 	update_vd_src_info(input->layer_id,
 		src_width, src_height, vf->compWidth, vf->compHeight);
 	if (super_debug)
@@ -5604,6 +5619,11 @@ RERTY:
 
 	dst_width = vinfo->width;
 	dst_height = vinfo->height;
+
+	if (input->op_flag & OP_HAS_DI_LOCAL) {
+		local_input.crop_top >>= 1;
+		local_input.crop_bottom >>= 1;
+	}
 	if (local_input.pps_support) {
 		ret = vpp_set_filters_internal
 			(&local_input, src_width, src_height,

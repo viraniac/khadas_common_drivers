@@ -1107,7 +1107,8 @@ static void video_vf_unreg_provider(void)
 			vf_local[0].uvm_vf = NULL;
 			vf_local_ext[0].ratio_control = vf_local[0].ratio_control;
 		} else if (cur_dispbuf[0]->vf_ext &&
-			is_pre_link_source(cur_dispbuf[0])) {
+			is_plink_source(cur_dispbuf[0]) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1115,8 +1116,8 @@ static void video_vf_unreg_provider(void)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("video_unreg: prelink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("video_unreg: #1 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);
 			tmp_rc = cur_dispbuf[0]->ratio_control;
@@ -1127,7 +1128,8 @@ static void video_vf_unreg_provider(void)
 			vf_local[0].vf_ext = NULL;
 			vf_local[0].uvm_vf = NULL;
 		} else if (IS_DI_POST(cur_dispbuf[0]->type) &&
-			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf)) {
+			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1135,8 +1137,8 @@ static void video_vf_unreg_provider(void)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("video_unreg: pre/post link: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("video_unreg: #2 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);
 			tmp_rc = cur_dispbuf[0]->ratio_control;
@@ -1364,7 +1366,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 			vf_local[0].uvm_vf = NULL;
 			vf_local_ext[0].ratio_control = vf_local[0].ratio_control;
 		} else if (cur_dispbuf[0]->vf_ext &&
-			is_pre_link_source(cur_dispbuf[0])) {
+			is_plink_source(cur_dispbuf[0]) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1372,8 +1375,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("%s: prelink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("%s: #1 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					__func__,
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);
@@ -1385,7 +1388,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 			vf_local[0].vf_ext = NULL;
 			vf_local[0].uvm_vf = NULL;
 		} else if (IS_DI_POST(cur_dispbuf[0]->type) &&
-			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf)) {
+			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1393,8 +1397,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("%s: pre/post link: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("%s: #2 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					__func__,
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);

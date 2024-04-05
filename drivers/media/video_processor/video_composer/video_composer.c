@@ -132,6 +132,8 @@ u32 dewarp_load_flag; /*0 dynamic load, 1 load bin file*/
 #define to_dst_buf(vf)	\
 	container_of(vf, struct dst_buf_t, frame)
 
+#define IS_DI_PRELINK_BYPASS(di_flag) ((di_flag) & DI_FLAG_DI_PVPPLINK_BYPASS)
+
 static void vd_dump_afbc_vf(u8 *data_y, u8 *data_uv, struct vframe_s *vf, int flag)
 {
 #ifdef CONFIG_AMLOGIC_ENABLE_VIDEO_PIPELINE_DUMP_DATA

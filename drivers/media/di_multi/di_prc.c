@@ -312,7 +312,13 @@ const struct di_cfg_ctr_s di_cfg_top_ctr[K_DI_CFG_NUB] = {
 	[EDI_CFG_PRE_NUB]  = {"pre_nub",
 			/* 0:not config pre nub;*/
 			EDI_CFG_PRE_NUB,
-			5,
+			MAX_LOCAL_BUF_NUM,
+			K_DI_CFG_T_FLG_DTS},
+	[EDI_CFG_EN_POST_LINK]  = {"postlink_en",
+			/* 0:disable;	*/
+			/* 1:enable */
+			EDI_CFG_EN_POST_LINK,
+			0,
 			K_DI_CFG_T_FLG_DTS},
 
 	[EDI_CFG_END]  = {"cfg top end ", EDI_CFG_END, 0,
@@ -481,6 +487,9 @@ void di_cfg_top_dts(void)
 
 	if (cfgg(EN_PRE_LINK) && !IS_IC_SUPPORT(PRE_VPP_LINK))
 		PR_WARN("not support pre_vpp link?\n");
+
+	if (cfgg(EN_POST_LINK) && !IS_IC_SUPPORT(POST_VPP_LINK))
+		PR_WARN("not support post_vpp link?\n");
 
 	/* tb */
 	if (cfgg(TB) && !IS_IC_SUPPORT(TB)) {
@@ -1456,7 +1465,7 @@ void dim_sumx_set(struct di_ch_s *pch)
 	psumx->b_pst_ready	= ndrd_cnt(pch);//di_que_list_count(ch, QUE_POST_READY);
 	psumx->b_recyc		= list_count(ch, QUEUE_RECYCLE);
 	psumx->b_display	= ndis_cnt(pch, QBF_NDIS_Q_DISPLAY);
-	//list_count(ch, QUEUE_DISPLAY);
+	psumx->b_pst_link	= list_count(ch, QUEUE_DISPLAY);
 	psumx->b_nin		= nins_cnt(pch, QBF_NINS_Q_CHECK);
 	psumx->b_dct_in		= nins_cnt(pch, QBF_NINS_Q_DCT);
 	psumx->b_in_free	= di_que_list_count(ch, QUE_IN_FREE);
@@ -1491,6 +1500,7 @@ void dim_sumx_set(struct di_ch_s *pch)
 		return;
 	ATRACE_COUNTER("dim_sum_pst_free", psumx->b_pst_free);
 	ATRACE_COUNTER("dim_sum_display", psumx->b_display);
+	ATRACE_COUNTER("dim_sum_pst_link", psumx->b_pst_link);
 	ATRACE_COUNTER("dim_sum_nin", psumx->b_nin);
 	ATRACE_COUNTER("dim_sum_dctin", psumx->b_dct_in);
 }
@@ -1700,9 +1710,6 @@ void dip_chst_process_ch(void)
 			//move dim_sumx_set(ch);
 			//dbg_nins_check_id(pch);
 //			tst_release(pch);
-#ifdef SC2_NEW_FLOW
-			ins_in_vf(pch);
-#endif
 			break;
 		case EDI_TOP_STATE_BYPASS:
 			if (dip_itf_is_ins_exbuf(pch)) {
@@ -1725,12 +1732,22 @@ void dip_chst_process_ch(void)
 			}
 			break;
 		case EDI_TOP_STATE_PREVPP_LINK:
-			if (dpvpp_ops()		&&
-			    dpvpp_is_allowed()	&&
-				dpvpp_is_insert()) {
+			if (dpvpp_ops(pch->link_mode) &&
+			    dpvpp_is_allowed(pch->link_mode) &&
+				dpvpp_is_insert(pch->link_mode)) {
 				dip_itf_vf_op_polling(pch);
-				dpvpp_ops()->parser(NULL);
+				dpvpp_ops(pch->link_mode)->post(NULL);
 			}
+			break;
+		case EDI_TOP_STATE_PSTVPP_LINK:
+			if (dpvpp_ops(pch->link_mode) &&
+			    dpvpp_is_allowed(pch->link_mode) &&
+				dpvpp_is_insert(pch->link_mode)) {
+				dip_itf_vf_op_polling(pch);
+				dpvpp_ops(pch->link_mode)->post(NULL);
+			}
+			dip_itf_back_input(pch);
+			//dim_post_keep_back_recycle(pch);
 			break;
 		default:
 			break;
@@ -1750,6 +1767,7 @@ void dip_sum_post_ch(void)
 		chst = dip_chst_get(ch);
 		switch (chst) {
 		case EDI_TOP_STATE_READY:
+		case EDI_TOP_STATE_PSTVPP_LINK:
 			dim_sumx_set(pch);
 			bclr(&pch->self_trig_mask, 30);
 			break;
@@ -1934,6 +1952,7 @@ bool dim_process_reg(struct di_ch_s *pch)
 	case EDI_TOP_STATE_READY:
 	case EDI_TOP_STATE_BYPASS:
 	case EDI_TOP_STATE_PREVPP_LINK:
+	case EDI_TOP_STATE_PSTVPP_LINK:
 		PR_WARN("have reg\n");
 		ret = true;
 		break;
@@ -1991,6 +2010,14 @@ bool dim_process_unreg(struct di_ch_s *pch)
 	case EDI_TOP_STATE_BYPASS:
 		/*from bypass complet to unreg*/
 		//move di_vframe_unreg(ch);
+		if (pch->itf.p_vpp_link) {
+			PR_INF("ch[%d]:unreg1,bypass:for link mode:%d\n", ch, pch->link_mode);
+			if (pch->itf.p_itf)
+				dpvpp_destroy_internal(pch->itf.p_itf);
+			pch->itf.p_vpp_link = false;
+			pch->itf.p_itf = NULL;
+			pch->link_mode = EPVPP_API_MODE_NONE;
+		}
 		di_unreg_variable(ch);
 
 		set_reg_flag(ch, false);
@@ -2008,8 +2035,9 @@ bool dim_process_unreg(struct di_ch_s *pch)
 		break;
 	case EDI_TOP_STATE_PREVPP_LINK:
 		dpvpp_destroy_internal(pch->itf.p_itf);
-		pch->itf.pre_vpp_link = false;
+		pch->itf.p_vpp_link = false;
 		pch->itf.p_itf = NULL;
+		pch->link_mode = EPVPP_API_MODE_NONE;
 		set_reg_flag(ch, false);
 		set_reg_setting(ch, false);	//??
 		if ((!get_reg_flag_all()) &&
@@ -2023,11 +2051,33 @@ bool dim_process_unreg(struct di_ch_s *pch)
 		dip_chst_set(ch, EDI_TOP_STATE_IDLE);
 		ret = true;
 		break;
+	case EDI_TOP_STATE_PSTVPP_LINK:
+		/*trig unreg*/
+		dip_chst_set(ch, EDI_TOP_STATE_UNREG_STEP1);
+		//task_send_cmd(LCMD1(ECMD_UNREG, ch));
+		/*debug only di_dbg = di_dbg|DBG_M_TSK;*/
+
+		/*wait*/
+		ppre->unreg_req_flag_cnt = 0;
+		chst2 = dip_chst_get(ch);
+
+		/*debug only di_dbg = di_dbg & (~DBG_M_TSK);*/
+		dbg_reg("%s:ch[%d] post-link end\n", __func__, ch);
+		task_delay(100);
+		break;
 	case EDI_TOP_STATE_IDLE:
 		PR_WARN("have unreg\n");
 		ret = true;
 		break;
 	case EDI_TOP_STATE_REG_STEP2:
+		if (pch->itf.p_vpp_link) {
+			PR_INF("ch[%d]:unreg2,step2:for link mode:%d\n", ch, pch->link_mode);
+			if (pch->itf.p_itf)
+				dpvpp_destroy_internal(pch->itf.p_itf);
+			pch->itf.p_vpp_link = false;
+			pch->itf.p_itf = NULL;
+			pch->link_mode = EPVPP_API_MODE_NONE;
+		}
 		di_unreg_variable(ch);
 		set_reg_flag(ch, false);
 		set_reg_setting(ch, false);
@@ -2064,6 +2114,14 @@ bool dim_process_unreg(struct di_ch_s *pch)
 		}
 		break;
 	case EDI_TOP_STATE_UNREG_STEP2:
+		if (pch->itf.p_vpp_link) {
+			PR_INF("ch[%d]:unreg3,step2:for link mode:%d\n", ch, pch->link_mode);
+			if (pch->itf.p_itf)
+				dpvpp_destroy_internal(pch->itf.p_itf);
+			pch->itf.p_vpp_link = false;
+			pch->itf.p_itf = NULL;
+			pch->link_mode = EPVPP_API_MODE_NONE;
+		}
 		di_unreg_variable(ch);
 		if ((!get_reg_flag_all()) &&
 		    (!get_reg_setting_all())) {
@@ -2103,6 +2161,8 @@ static void dip_process_reg_after(struct di_ch_s *pch)
 	unsigned int ch = pch->ch_id;
 	struct di_pre_stru_s *ppre = get_pre_stru(ch);
 	bool reflesh = true;
+	enum EPVPP_API_MODE link_mode = EPVPP_API_MODE_NONE;
+	bool i_ret = false;
 //	struct di_mng_s *pbm = get_bufmng();
 //	ulong flags = 0;
 
@@ -2142,22 +2202,35 @@ static void dip_process_reg_after(struct di_ch_s *pch)
 			reflesh = true;
 			break;
 		}
-		/* check pre-vpp link or not */
-		if (dpvpp_try_reg(pch, vframe)) {
-			dip_chst_set(ch, EDI_TOP_STATE_PREVPP_LINK);
-			pch->itf.pre_vpp_link = true;
-			if (!get_reg_flag_all()) {
-				/*first channel reg*/
-				dpre_init();
-				dpost_init();
-				//get_dim_de_devp()->nrds_enable = 0;
-				//nrds cause pre-vpp link crash
-				di_reg_setting(ch, vframe);
-				get_datal()->pre_vpp_set = false;
+		/* check pre/post-vpp link or not */
+		if (pch->itf.flg_s4dw && pch->s4dw)
+			link_mode = EPVPP_API_MODE_NONE;
+		else if (IS_I_SRC(vframe->type))
+			link_mode = EPVPP_API_MODE_POST;
+		else
+			link_mode = EPVPP_API_MODE_PRE;
+		i_ret = dpvpp_try_reg(pch, vframe, link_mode);
+		if (i_ret) {
+			if (link_mode == EPVPP_API_MODE_PRE) {
+				dip_chst_set(ch, EDI_TOP_STATE_PREVPP_LINK);
+				pch->itf.p_vpp_link = true;
+				if (!get_reg_flag_all()) {
+					/*first channel reg*/
+					dpre_init();
+					dpost_init();
+					//get_dim_de_devp()->nrds_enable = 0;
+					//nrds cause pre-vpp link crash
+					di_reg_setting(ch, vframe);
+					get_datal()->pre_vpp_set = false;
+				}
+				set_reg_flag(ch, true);
+				//reflesh = true;
+				break;
 			}
-			set_reg_flag(ch, true);
-			//reflesh = true;
-			break;
+			if (link_mode == EPVPP_API_MODE_POST) {
+				pch->itf.p_vpp_link = true;
+				//set_reg_flag(ch, true);
+			}
 		}
 		if (pch->itf.flg_s4dw && pch->s4dw)
 			pch->s4dw->reg_variable(pch, vframe);
@@ -2198,15 +2271,13 @@ static void dip_process_reg_after(struct di_ch_s *pch)
 		reflesh = true;
 		break;
 	case EDI_TOP_STATE_REG_STEP2:/**/
-
 		pch = get_chdata(ch);
-#ifdef	SC2_NEW_FLOW
-		if (memn_get(pch)) {
-#else
-		//if (mem_cfg(pch)) {
 		mem_cfg_pre(pch);
 		mem_cfg_2local(pch);
-		mem_cfg_2pst(pch);
+		if (pch->link_mode == EPVPP_API_MODE_POST)
+			mem_cfg_2pstlink(pch);
+		else
+			mem_cfg_2pst(pch);
 		PR_INF("ch[%d]:reg:mem cfg[%d][%d][%d]\n",
 		       pch->ch_id,
 		       pch->sts_mem_pre_cfg,
@@ -2216,7 +2287,6 @@ static void dip_process_reg_after(struct di_ch_s *pch)
 		    di_i_dat_check(pch)	/*	&&*/
 		    /*mem_alloc_check(pch)*/) {
 			//mem_cfg(pch);
-#endif
 			//mem_cfg_realloc_wait(pch);
 			//sct_mng_working(pch);
 			//sct_alloc_in_poling(pch->ch_id);
@@ -2234,20 +2304,22 @@ static void dip_process_reg_after(struct di_ch_s *pch)
 				}
 			}
 			dbg_timer(ch, EDBG_TIMER_READY);
-			dip_chst_set(ch, EDI_TOP_STATE_READY);
+			if (pch->link_mode == EPVPP_API_MODE_POST)
+				dip_chst_set(ch, EDI_TOP_STATE_PSTVPP_LINK);
+			else
+				dip_chst_set(ch, EDI_TOP_STATE_READY);
 			set_reg_flag(ch, true);
 		} else {
 			dbg_tst("s2_wait\n");
 		}
-
 		break;
 	case EDI_TOP_STATE_READY:
-
 		break;
 	case EDI_TOP_STATE_BYPASS:
 	case EDI_TOP_STATE_UNREG_STEP1:
 	case EDI_TOP_STATE_UNREG_STEP2:
 	case EDI_TOP_STATE_PREVPP_LINK:
+	case EDI_TOP_STATE_PSTVPP_LINK:
 		/*do nothing;*/
 		break;
 	}
@@ -3304,15 +3376,28 @@ void dip_init_value_reg(unsigned int ch, struct vframe_s *vframe)
 		mm->cfg.fix_buf = 0;
 
 	pre_nub = cfgg(PRE_NUB);
-		if ((pre_nub) && pre_nub <= MAX_LOCAL_BUF_NUM)
-			mm->cfg.num_local = pre_nub;
+	if (dimp_get(edi_mp_post_wr_en) &&
+	    dimp_get(edi_mp_post_wr_support)) {
+		if (pre_nub > MAX_LOCAL_BUF_NUM)
+			pre_nub = MAX_LOCAL_BUF_NUM;
+	}
+	if (pre_nub && pre_nub <= MAX_LOCAL_BUF_NUM_REAL - 2)
+		mm->cfg.num_local = pre_nub;
+	else if (mm->cfg.num_local > MAX_LOCAL_BUF_NUM_REAL - 2)
+		mm->cfg.num_local = MAX_LOCAL_BUF_NUM_REAL - 2;
 
 	if (pch->ponly)
 		mm->cfg.num_local = 0;
 
-	post_nub = cfggch(pch, POST_NUB);
-	if ((post_nub) && post_nub <= POST_BUF_NUM)
-		mm->cfg.num_post = post_nub;
+	if (dimp_get(edi_mp_post_wr_en) &&
+	    dimp_get(edi_mp_post_wr_support)) {
+		post_nub = cfggch(pch, POST_NUB);
+		if (post_nub && post_nub <= POST_BUF_NUM)
+			mm->cfg.num_post = post_nub;
+	} else {
+		mm->cfg.num_post = 0;
+		post_nub = 0;
+	}
 
 	PR_INF("%s:ch[%d]:fix_buf:%d;ponly <%d,%d> post_nub=%d\n",
 	       "value reg",
@@ -6851,6 +6936,7 @@ bool dim_check_exit_process(void)
 		chst = dip_chst_get(ch);
 		switch (chst) {
 		case EDI_TOP_STATE_READY:
+		case EDI_TOP_STATE_PSTVPP_LINK:
 			ppre = get_pre_stru(ch);
 			ppost = get_post_stru(ch);
 			if (ppre->pre_de_process_flag ||
@@ -8073,7 +8159,7 @@ void dim_post_copy_update(struct di_ch_s *pch,
 	dbg_afbce_update_level1(di_buf->vframe, &di_pre_regset, EAFBC_ENC1);
 	pst->pst_tst_use	= 1;
 	pst->flg_int_done	= false;
-	opl1()->pst_set_flow(1, EDI_POST_FLOW_STEP4_CP_START);
+	opl1()->pst_set_flow(1, EDI_POST_FLOW_STEP4_CP_START, NULL);
 }
 
 void dbg_cp_4k(struct di_ch_s *pch, unsigned int mode)

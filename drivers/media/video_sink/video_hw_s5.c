@@ -6291,9 +6291,13 @@ static void vd1_set_dcu_s5(struct video_layer_s *layer,
 #ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
 	if (is_di_post_mode(vf) && is_di_post_on())
 		di_post = true;
-#ifdef ENABLE_PRE_LINK
-	if (is_pre_link_on(layer))
-		di_pre_link = true;
+#ifdef ENABLE_PLINK
+	if (is_plink_on(layer)) {
+		if (IS_DI_PSTLINK(vf->di_flag))
+			di_post = true;
+		else
+			di_pre_link = true;
+	}
 #endif
 #endif
 
@@ -6884,8 +6888,8 @@ static void vd1_set_slice_dcu_s5(struct video_layer_s *layer,
 #ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
 	if (is_di_post_mode(vf) && is_di_post_on())
 		di_post = true;
-#ifdef ENABLE_PRE_LINK
-	if (is_pre_link_on(layer))
+#ifdef ENABLE_PLINK
+	if (is_plink_on(layer))
 		di_pre_link = true;
 #endif
 #endif
@@ -12918,7 +12922,7 @@ int video_early_init_s5(struct amvideo_device_data_s *p_amvideo)
 		vd_layer[i].clip_setting.clip_max = 0x3fffffff;
 		vd_layer[i].clip_setting.clip_min = 0;
 		vd_layer[i].clip_setting.clip_done = true;
-		atomic_set(&vd_layer[i].disable_prelink_done, 0);
+		atomic_set(&vd_layer[i].disable_plink_done, 0);
 
 		vpp_disp_info_init(&glayer_info[i], i);
 		//memset(&gpic_info[i], 0, sizeof(struct vframe_pic_mode_s));

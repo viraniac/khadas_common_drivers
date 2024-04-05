@@ -592,12 +592,6 @@ enum DI_ERRORTYPE new_empty_input_buffer(int index, struct di_buffer *buffer)
 		return DI_ERR_INDEX_OVERFLOW;
 	}
 	pch = get_chdata(ch);
-#ifdef __HIS_CODE__
-	if (pch->itf.pre_vpp_link && dpvpp_vf_ops()) {
-		dpvpp_patch_first_buffer(pch->itf.p_itf);
-		return dpvpp_empty_input_buffer(pch->itf.p_itf, buffer);
-	}
-#endif
 	pintf = &pch->itf;
 	if (!pintf->reg) {
 		PR_WARN("%s:ch[%d] not reg\n", __func__, ch);
@@ -813,7 +807,7 @@ enum DI_ERRORTYPE new_fill_output_buffer(int index, struct di_buffer *buffer)
 		return DI_ERR_INDEX_OVERFLOW;
 	}
 	pch = get_chdata(ch);
-	if (pch->itf.pre_vpp_link/* && dpvpp_vf_ops()*/)
+	if (pch->itf.p_vpp_link)
 		return dpvpp_fill_output_buffer(pch->itf.p_itf, buffer);
 	pintf = &pch->itf;
 	dim_print("%s:ch[%d],ptf ch[%d]\n", __func__, ch, pintf->ch);
@@ -846,9 +840,8 @@ int new_release_keep_buf(struct di_buffer *buffer)
 		return -1;
 	}
 
-	if (buffer->mng.ch == DIM_PRE_VPP_NUB) {
+	if (buffer->mng.ch == DIM_PVPP_NUB)
 		return dpvpp_fill_output_buffer2(buffer);
-	}
 
 	if (!buffer->private_data) {
 		PR_INF("%s:no di data:0x%px\n", __func__, buffer);

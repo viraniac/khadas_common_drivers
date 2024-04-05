@@ -958,7 +958,8 @@ void dimh_int_ctr(unsigned int set_mod, unsigned char ma_en,
 		lst_ma = 1;
 		lst_det3d = 0;
 		lst_nrds = 1;
-		lst_pw = 1;
+		lst_pw = (dimp_get(edi_mp_post_wr_en) &&
+			dimp_get(edi_mp_post_wr_support)) ? 1 : 0;
 		lst_mc = 1;
 		dimh_interrupt_ctrl(lst_ma,
 				    lst_det3d,
@@ -2728,7 +2729,8 @@ void dimh_initial_di_post_2(int hsize_post, int vsize_post,
 {
 	if (DIM_IS_IC_EF(SC2))
 		opl1()->pst_set_flow(post_write_en,
-				     EDI_POST_FLOW_STEP1_STOP);/*dbg a*/
+			EDI_POST_FLOW_STEP1_STOP,
+			post_write_en ? &di_pre_regset : &di_pst_regset);
 	else
 		di_post_set_flow(post_write_en, EDI_POST_FLOW_STEP1_STOP);
 	DIM_VSYNC_WR_MPEG_REG(DI_POST_SIZE,
@@ -2893,6 +2895,7 @@ void dimh_post_switch_buffer(struct DI_MIF_S *di_buf0_mif,
 #ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
 	unsigned int bit_val[3] = {3, 3, 3};
 #endif
+	const struct reg_acc *op = &di_pst_regset;
 
 	ei_only = ei_en && !blend_en && (di_vpp_en || di_ddr_en);
 	buf1_en =  (!ei_only && (di_ddr_en || di_vpp_en));
@@ -2900,7 +2903,7 @@ void dimh_post_switch_buffer(struct DI_MIF_S *di_buf0_mif,
 	if (cpu_after_eq(MESON_CPU_MAJOR_ID_G12A)) {
 		if (DIM_IS_IC_EF(SC2)) {
 			opl1()->pst_mif_update_csv(di_buf0_mif,
-						   DI_MIF0_ID_IF0, NULL);
+						   DI_MIF0_ID_IF0, op);
 			if (di_ddr_en)
 				opl1()->wrmif_set(di_diwr_mif, NULL, EDI_MIFSM_WR);
 		}
@@ -2977,7 +2980,7 @@ void dimh_post_switch_buffer(struct DI_MIF_S *di_buf0_mif,
 				di_buf0_mif->burst_size_cb	= 1;
 				di_buf0_mif->burst_size_cr	= 1;
 				opl1()->pst_mif_set(di_buf0_mif,
-						    DI_MIF0_ID_IF0, NULL);
+						    DI_MIF0_ID_IF0, op);
 			} else {
 				set_di_if0_mif(di_buf0_mif, urgent,
 					       hold_line, vskip_cnt, di_ddr_en);
@@ -3003,11 +3006,11 @@ void dimh_post_switch_buffer(struct DI_MIF_S *di_buf0_mif,
 	if (!ei_only && (di_ddr_en || di_vpp_en)) {
 		if (DIM_IS_IC_EF(SC2)) {
 			opl1()->pst_mif_update_csv(di_buf1_mif,
-						   DI_MIF0_ID_IF1, NULL);
+						   DI_MIF0_ID_IF1, op);
 			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TXL))
 				opl1()->pst_mif_update_csv
 						(di_buf2_mif,
-						 DI_MIF0_ID_IF2, NULL);
+						 DI_MIF0_ID_IF2, op);
 		} else {
 			DIM_VSYNC_WR_MPEG_REG
 				(DI_IF1_CANVAS0,
@@ -3185,6 +3188,7 @@ void dimh_enable_di_post_2(struct DI_MIF_S		   *di_buf0_mif,
 {
 	int ei_only;
 	int buf1_en;
+	const struct reg_acc *op = &di_pst_regset;
 
 	ei_only = ei_en && !blend_en && (di_vpp_en || di_ddr_en);
 	buf1_en =  (!ei_only && (di_ddr_en || di_vpp_en));
@@ -3198,7 +3202,7 @@ void dimh_enable_di_post_2(struct DI_MIF_S		   *di_buf0_mif,
 			di_buf0_mif->burst_size_y	= 3;
 			di_buf0_mif->burst_size_cb	= 1;
 			di_buf0_mif->burst_size_cr	= 1;
-			opl1()->pst_mif_set(di_buf0_mif, DI_MIF0_ID_IF0, NULL);
+			opl1()->pst_mif_set(di_buf0_mif, DI_MIF0_ID_IF0, op);
 		} else {
 			if (cpu_after_eq(MESON_CPU_MAJOR_ID_G12A))
 				set_di_if0_mif_g12(di_buf0_mif, di_vpp_en,
@@ -3209,11 +3213,11 @@ void dimh_enable_di_post_2(struct DI_MIF_S		   *di_buf0_mif,
 					       hold_line, vskip_cnt, di_ddr_en);
 		}
 
-		if (cpu_after_eq(MESON_CPU_MAJOR_ID_G12A)) {
-			/* if di post vpp link disable vd1 for new if0 */
-			if (!di_ddr_en)
-				DIM_VSC_WR_MPG_BT(VD1_IF0_GEN_REG, 0, 0, 1);
-		}
+		//if (cpu_after_eq(MESON_CPU_MAJOR_ID_G12A)) {
+		//	/* if di post vpp link disable vd1 for new if0 */
+		//	if (!di_ddr_en)
+		//		DIM_VSC_WR_MPG_BT(VD1_IF0_GEN_REG, 0, 0, 1);
+		//}
 	}
 
 	if (DIM_IS_IC_EF(SC2)) {
@@ -3223,12 +3227,12 @@ void dimh_enable_di_post_2(struct DI_MIF_S		   *di_buf0_mif,
 		di_buf1_mif->burst_size_y	= 3;
 		di_buf1_mif->burst_size_cb	= 1;
 		di_buf1_mif->burst_size_cr	= 1;
-		opl1()->pst_mif_set(di_buf1_mif, DI_MIF0_ID_IF1, NULL);
+		opl1()->pst_mif_set(di_buf1_mif, DI_MIF0_ID_IF1, op);
 		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TXL)) {
 			di_buf2_mif->urgent	= di_vpp_en;
 			di_buf2_mif->hold_line	= hold_line;
 			di_buf2_mif->vskip_cnt	= vskip_cnt;
-			opl1()->pst_mif_set(di_buf2_mif, DI_MIF0_ID_IF2, NULL);
+			opl1()->pst_mif_set(di_buf2_mif, DI_MIF0_ID_IF2, op);
 		}
 
 	} else {
@@ -3244,7 +3248,7 @@ void dimh_enable_di_post_2(struct DI_MIF_S		   *di_buf0_mif,
 		set_post_mtnrd_mif_g12(di_mtnprd_mif);
 	else
 		set_post_mtnrd_mif(di_mtnprd_mif, urgent);
-	if (di_ddr_en) {
+	if (di_ddr_en || di_vpp_en) {
 		#ifdef DIM_OUT_NV21 /* NO_NV21 */
 		if (DIM_IS_IC_EF(SC2)) {
 			di_diwr_mif->urgent = urgent;
@@ -3479,7 +3483,7 @@ void dimh_pst_trig_resize(void)
 	pst->last_pst_size = 0;
 }
 
-void dimh_disable_post_deinterlace_2(void)
+void dimh_disable_post_deinterlace_2(bool link)
 {
 	DIM_VSYNC_WR_MPEG_REG(DI_POST_CTRL, 0x3 << 30);
 	DIM_VSYNC_WR_MPEG_REG(DI_POST_SIZE, (32 - 1) | ((128 - 1) << 16));
@@ -3507,9 +3511,11 @@ void dimh_disable_post_deinterlace_2(void)
 	if (cpu_after_eq(MESON_CPU_MAJOR_ID_G12A)) {
 		/*dbg a DIM_VSYNC_WR_MPEG_REG(DI_POST_GL_CTRL, 0);*/
 		if (DIM_IS_IC_EF(SC2))
-			opl1()->pst_set_flow(1, EDI_POST_FLOW_STEP1_STOP);
+			opl1()->pst_set_flow(link ? 0 : 1,
+				EDI_POST_FLOW_STEP1_STOP,
+				link ? &di_pst_regset : &di_pre_regset);
 		else
-			di_post_set_flow(1, EDI_POST_FLOW_STEP1_STOP);
+			di_post_set_flow(link ? 0 : 1, EDI_POST_FLOW_STEP1_STOP);
 		#ifdef DIM_HIS
 		dim_print("%s:VD1_AFBCD0_MISC_CTRL 0", __func__);
 		DIM_VSC_WR_MPG_BT(VD1_AFBCD0_MISC_CTRL, 0, 8, 2);
@@ -3811,7 +3817,7 @@ void dim_post_read_reverse_irq(bool reverse, unsigned char mc_pre_flag,
 				DIM_VSC_WR_MPG_BT(DI_MTNRD_CTRL, 0xf, 17, 4);
 			}
 			DIM_VSC_WR_MPG_BT(DI_IF1_GEN_REG2, 3, 2, 2);
-			DIM_VSC_WR_MPG_BT(VD2_IF0_GEN_REG2, 0xf, 2, 4);
+			//DIM_VSC_WR_MPG_BT(VD2_IF0_GEN_REG2, 0xf, 2, 4);
 			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TXL))
 				DIM_VSC_WR_MPG_BT(DI_IF2_GEN_REG2,  3, 2, 2);
 		}
@@ -3883,7 +3889,7 @@ void dim_post_read_reverse_irq(bool reverse, unsigned char mc_pre_flag,
 				DIM_VSC_WR_MPG_BT(DI_MTNRD_CTRL, 0, 17, 4);
 			}
 			DIM_VSC_WR_MPG_BT(DI_IF1_GEN_REG2,  0, 2, 2);
-			DIM_VSC_WR_MPG_BT(VD2_IF0_GEN_REG2, 0, 2, 4);
+			//DIM_VSC_WR_MPG_BT(VD2_IF0_GEN_REG2, 0, 2, 4);
 			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TXL))
 				DIM_VSC_WR_MPG_BT(DI_IF2_GEN_REG2, 0, 2, 2);
 		}
@@ -4460,8 +4466,10 @@ void post_mif_sw(bool on)
 		DIM_RDMA_WR_BITS(DI_IF1_GEN_REG, 1, 0, 1);
 		/*by feijun 2018-11-19*/
 		DIM_RDMA_WR_BITS(DI_IF2_GEN_REG, 1, 0, 1);
-
-		DIM_RDMA_WR_BITS(DI_POST_CTRL, 1, 7, 1);
+		if (dimp_get(edi_mp_post_wr_en) && dimp_get(edi_mp_post_wr_support))
+			DIM_RDMA_WR_BITS(DI_POST_CTRL, 1, 7, 1);
+		else
+			DIM_RDMA_WR_BITS(DI_POST_CTRL, 0, 7, 1);
 	} else {
 		DIM_RDMA_WR_BITS(DI_IF0_GEN_REG, 0, 0, 1);
 		/*by feijun 2018-11-19*/
@@ -4485,7 +4493,7 @@ void post_close_new(void)
 	/*intr_mode*/
 	DIM_DI_WR(DI_INTR_CTRL, (data32 & 0xffff0004) | (get_intr_mode() << 30));
 	if (DIM_IS_IC_EF(SC2))
-		opl1()->pst_set_flow(1, EDI_POST_FLOW_STEP1_STOP);
+		opl1()->pst_set_flow(1, EDI_POST_FLOW_STEP1_STOP, &di_pre_regset);
 	else
 		di_post_set_flow(1, EDI_POST_FLOW_STEP1_STOP);	/*dbg a*/
 }
@@ -4533,12 +4541,12 @@ void di_post_set_flow(unsigned int post_wr_en, enum EDI_POST_FLOW step)
 	case EDI_POST_FLOW_STEP1_STOP:
 		/*val = (0xc0200000 | line_num_post_frst);*/
 		val = (0xc0000000 | 1);
-		DIM_VSYNC_WR_MPEG_REG(DI_POST_GL_CTRL, val);
+		DIM_RDMA_WR(DI_POST_GL_CTRL, val);
 		break;
 	case EDI_POST_FLOW_STEP2_START:
 		/*val = (0x80200000 | line_num_post_frst);*/
 		val = (0x80200000 | 1);
-		DIM_VSYNC_WR_MPEG_REG(DI_POST_GL_CTRL, val);
+		DIM_RDMA_WR(DI_POST_GL_CTRL, val);
 		break;
 	case EDI_POST_FLOW_STEP3_IRQ:
 		WR(DI_POST_GL_CTRL, 0x1);
@@ -5276,11 +5284,13 @@ static void dimh_wrmif_set(struct DI_SIM_MIF_S *cfg_mif,
 	dim_print("0x%x=[0x%x]\n", reg[EDI_MIFS_CTRL], RD(reg[EDI_MIFS_CTRL]));
 }
 
+#define DIM_VSYNC_RD_MPEG_REG l_DI_POST_REG_RD
+
 const struct reg_acc di_pst_regset = {
 	.wr = DIM_VSYNC_WR_MPEG_REG,
-	.rd = NULL,
+	.rd = DIM_VSYNC_RD_MPEG_REG,
 	.bwr = DIM_VSC_WR_MPG_BT,
-	.brd = NULL,
+	.brd = DIM_VSC_RD_MPG_BT,
 };
 
 static void dimh_pst_mif_set(struct DI_SIM_MIF_S *cfg_mif,
@@ -5308,7 +5318,7 @@ static void dimh_pre_mif_set(struct DI_SIM_MIF_S *cfg_mif,
 	//cfg_mif->cbcr_swap = 0;
 	//cfg_mif->l_endian = 0;
 
-	dimh_wrmif_set(cfg_mif, &di_pst_regset, NULL, EDI_MIFSM_NR);
+	dimh_wrmif_set(cfg_mif, &di_pre_regset, NULL, EDI_MIFSM_NR);
 }
 
 void dimh_pst_mif_update(struct DI_SIM_MIF_S *cfg_mif,

@@ -239,7 +239,6 @@ static struct vpu_dev_s *vpu_prime_dolby_ram;
 			vpu_dev_mem_power_on(vd1_scale_vpu_dev); \
 		if (glayer_info[0].fgrain_support) \
 			vpu_dev_mem_power_on(vpu_fgrain0); \
-
 	} while (0)
 #else
 #define VD1_MEM_POWER_ON() \
@@ -1412,26 +1411,28 @@ bool is_di_post_mode(struct vframe_s *vf)
 	return ret;
 }
 
-bool is_pre_link_source(struct vframe_s *vf)
+bool is_plink_source(struct vframe_s *vf)
 {
-#ifdef ENABLE_PRE_LINK
-	if (vf && pvpp_check_vf(vf) > 0 && vf->vf_ext)
+#ifdef ENABLE_PLINK
+	if (vf && pvpp_check_vf(vf) > 0 &&
+	    (vf->vf_ext || IS_DI_PSTLINK(vf->di_flag)))
 		return true;
 #endif
 	return false;
 }
 
-bool is_pre_link_on(struct video_layer_s *layer)
+bool is_plink_on(struct video_layer_s *layer)
 {
 	if (!layer)
 		return false;
-	return layer->pre_link_en;
+	return layer->plink_en;
 }
 
-#ifdef ENABLE_PRE_LINK
-bool is_pre_link_available(struct vframe_s *vf)
+#ifdef ENABLE_PLINK
+bool is_plink_available(struct vframe_s *vf)
 {
-	if (pvpp_check_vf(vf) > 0 && pvpp_check_act() > 0)
+	if (pvpp_check_vf(vf) > 0 &&
+	    pvpp_check_act(IS_DI_PSTLINK(vf->di_flag) ? true : false) > 0)
 		return true;
 	return false;
 }
@@ -2152,14 +2153,15 @@ static void vd1_set_dcu(struct video_layer_s *layer,
 	}
 
 	type = vf->type;
-#ifdef ENABLE_PRE_LINK
+#ifdef ENABLE_PLINK
 	if ((video_is_meson_t5d_revb_cpu() || video_is_meson_txhd2_cpu()) &&
 	    !layer->vd1_vd2_mux &&
 	    !is_local_vf(vf) &&
-	    is_pre_link_on(layer) &&
-	    is_pre_link_source(vf)) {
+	    is_plink_on(layer) &&
+	    is_plink_source(vf)) {
 		struct vframe_s *dec_vf;
 
+		/* TODO: check postlink with afbc interlace case */
 		if (vf->uvm_vf)
 			dec_vf = vf->uvm_vf;
 		else
@@ -2189,9 +2191,13 @@ static void vd1_set_dcu(struct video_layer_s *layer,
 #ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
 	if (is_di_post_mode(vf) && is_di_post_on())
 		di_post = true;
-#ifdef ENABLE_PRE_LINK
-	if (is_pre_link_on(layer))
-		di_pre_link = true;
+#ifdef ENABLE_PLINK
+	if (is_plink_on(layer)) {
+		if (IS_DI_PSTLINK(vf->di_flag))
+			di_post = true;
+		else
+			di_pre_link = true;
+	}
 #endif
 #endif
 
@@ -9223,18 +9229,8 @@ static bool is_vframe_changed
 		new_flag = new_vf->flag & VFRAME_FLAG_DISP_ATTR_MASK;
 		if (old_flag != new_flag)
 			return true;
-	}
-
-	if (cur_vf && new_vf &&
-	    IS_DI_PRELINK(cur_vf->di_flag) &&
-	    IS_DI_PRELINK(new_vf->di_flag)) {
-		u32 cur_ratio, new_ratio;
-
-		cur_ratio = (cur_vf->di_flag & DI_FLAG_DCT_DS_RATIO_MASK);
-		cur_ratio >>= DI_FLAG_DCT_DS_RATIO_BIT;
-		new_ratio = (new_vf->di_flag & DI_FLAG_DCT_DS_RATIO_MASK);
-		new_ratio >>= DI_FLAG_DCT_DS_RATIO_BIT;
-		if (cur_ratio != new_ratio)
+		/* check di attr */
+		if (cur_vf->di_flag != new_vf->di_flag)
 			return true;
 	}
 	return false;
@@ -9881,11 +9877,13 @@ int set_layer_display_canvas(struct video_layer_s *layer,
 		    is_di_post_link_on())
 			update_mif = false;
 
-#ifdef ENABLE_PRE_LINK
-		if (is_pre_link_on(layer) &&
-		    !layer->need_disable_prelink &&
+#ifdef ENABLE_PLINK
+		if (is_plink_on(layer) &&
+		    !layer->need_disable_plink &&
 		    (IS_DI_POST(vf->type) || IS_DI_PRELINK(vf->di_flag)))
 			update_mif = false;
+		if (HAS_DI_LOCAL_BUF(vf->di_flag))
+			update_mif = true;
 #endif
 	}
 #endif
@@ -9955,7 +9953,7 @@ int set_layer_display_canvas(struct video_layer_s *layer,
 		struct canvas_s tmp;
 
 		canvas_read(cur_canvas_tbl[0], &tmp);
-		pr_info("%s %d: update_mif %d: vf(%p):%d, vsync =%d, omx_index=%d, y:%02x, adr:0x%lx (0x%lx), canvas0:%x, pnum:%d, type:%x, flag:%x, afbc:0x%lx-0x%lx, vf_ext:%px uvm_vf:%px di_flag:%x size:%d %d, vframe size:%d line:%d\n",
+		pr_info("%s %d: update_mif %d: vf(%px):%d, vsync =%d, omx_index=%d, y:%02x, adr:0x%lx (0x%lx), canvas0:%x, pnum:%d, type:%x, flag:%x, afbc:0x%lx-0x%lx, vf_ext:%px uvm_vf:%px di_flag:%x size:%d %d, vframe size:%d line:%d\n",
 			__func__, layer_id, update_mif ? 1 : 0,
 			vf, vf->index_disp, layer->display_cnt,
 			vf->omx_index, cur_canvas_tbl[0],
@@ -10072,9 +10070,9 @@ static int update_afd_param(u8 id,
 	return ret;
 }
 
-#ifdef ENABLE_PRE_LINK
+#ifdef ENABLE_PLINK
 /* return true to switch vf ext */
-static bool update_pre_link_state(struct video_layer_s *layer,
+static bool update_plink_state(struct video_layer_s *layer,
 		struct vframe_s *vf, const struct vinfo_s *vinfo)
 {
 	bool ret = false;
@@ -10082,6 +10080,7 @@ static bool update_pre_link_state(struct video_layer_s *layer,
 	struct pvpp_dis_para_in_s di_in_p;
 	u8 vpp_index = 0;
 	bool is_high_freq = false;
+	bool is_interlace = false;
 
 	if (!layer || !vf || layer->layer_id != 0)
 		return ret;
@@ -10093,53 +10092,53 @@ static bool update_pre_link_state(struct video_layer_s *layer,
 	}
 
 	vpp_index = layer->vpp_index;
-	if (!layer->need_disable_prelink &&
-	    is_pre_link_on(layer)) {
+	if (!layer->need_disable_plink &&
+	    is_plink_on(layer)) {
 		if (!layer->dispbuf ||
 		    layer->dispbuf->di_instance_id !=
 		    vf->di_instance_id ||
 		    vf->di_instance_id !=
 		    di_api_get_plink_instance_id()) {
-			layer->need_disable_prelink = true;
-			if (layer->global_debug & DEBUG_FLAG_PRELINK)
-				pr_info("pre-link: vf instance_id changed: %d->%d, cur:%d\n",
+			layer->need_disable_plink = true;
+			if (layer->global_debug & DEBUG_FLAG_PLINK)
+				pr_info("plink: vf instance_id changed: %d->%d, cur:%d\n",
 					layer->dispbuf ? layer->dispbuf->di_instance_id : -1,
 					vf->di_instance_id, di_api_get_plink_instance_id());
 		}
-		if (!IS_DI_POST(vf->type))
-			layer->need_disable_prelink = true;
-		if (layer->need_disable_prelink && (layer->global_debug & DEBUG_FLAG_PRELINK))
-			pr_info("warning: need trigger need_disable_prelink!!, disp:%px id:%d, vf:%px, id:%d type:0x%x\n",
+		if (!IS_DI_PSTLINK(vf->di_flag) && !IS_DI_PRELINK(vf->di_flag))
+			layer->need_disable_plink = true;
+		if (layer->need_disable_plink && (layer->global_debug & DEBUG_FLAG_PLINK))
+			pr_info("warning: need trigger need_disable_plink!!, disp:%px id:%d, vf:%px, id:%d type:0x%x\n",
 				layer->dispbuf,
 				layer->dispbuf ? layer->dispbuf->di_instance_id : -1,
 				vf, vf->di_instance_id, vf->type);
 	}
 	/* for new pipeline and front-end already unreg->reg */
-	if (layer->need_disable_prelink &&
-	    !is_pre_link_on(layer)) {
+	if (layer->need_disable_plink &&
+	    !is_plink_on(layer)) {
 		bool trig_flag = false;
 
 		if (!layer->dispbuf ||
 		    layer->dispbuf->di_instance_id !=
 		    vf->di_instance_id ||
 		    layer->last_di_instance != vf->di_instance_id) {
-			layer->need_disable_prelink = false;
+			layer->need_disable_plink = false;
 			layer->last_di_instance = -1;
 			trig_flag = true;
 		}
-		if (trig_flag && (layer->global_debug & DEBUG_FLAG_PRELINK))
-			pr_info("trigger need_disable_prelink to false\n");
+		if (trig_flag && (layer->global_debug & DEBUG_FLAG_PLINK))
+			pr_info("trigger need_disable_plink to false\n");
 	}
-	if (layer->need_disable_prelink) {
-		/* meet non pre-link vf and set need_disable_prelink as 0 */
+	if (layer->need_disable_plink) {
+		/* meet non plink vf and set need_disable_plink as 0 */
 		if (is_local_vf(vf) || !vf->vf_ext) {
-			layer->need_disable_prelink = false;
+			layer->need_disable_plink = false;
 			layer->last_di_instance = -1;
-		} else if (vf->vf_ext) {
-			/* is_pre_link_source maybe invalid here */
+		} else {
+			/* is_plink_source maybe invalid here */
 			/* check if vf is remained and same instance as before */
-			if (is_pre_link_on(layer) &&
-			    is_pre_link_source(vf) &&
+			if (is_plink_on(layer) &&
+			    is_plink_source(vf) &&
 			    layer->dispbuf &&
 			    vf->di_instance_id ==
 			    layer->dispbuf->di_instance_id) {
@@ -10147,97 +10146,114 @@ static bool update_pre_link_state(struct video_layer_s *layer,
 				di_in_p.dmode = EPVPP_DISPLAY_MODE_BYPASS;
 				di_in_p.unreg_bypass = 0; /* 1? */
 				di_in_p.follow_hold_line = vpp_hold_line[vpp_index];
+				di_in_p.link_mode = layer->cur_link_mode;
 				iret = pvpp_display(vf, &di_in_p, NULL);
-				if (layer->global_debug & DEBUG_FLAG_PRELINK)
-					pr_info("Disable/Bypass pre-link mode ret %d\n", iret);
+				if (layer->global_debug & DEBUG_FLAG_PLINK)
+					pr_info("Disable/Bypass plink mode ret %d\n", iret);
 			}
 
-			/* just bypass prelink and not switch */
-			/* TODO: if need change the condition to IS_DI_PROCESSED */
-			if (!IS_DI_POST(vf->type) && !is_pre_link_source(vf))
-				ret = false;
-			else
+			/* just bypass plink and not switch */
+			if (IS_DI_PRELINK(vf->di_flag))
 				ret = true;
-			if (layer->global_debug & DEBUG_FLAG_PRELINK_MORE) {
-				pr_info("warning: keeping need_disable_prelink: vf %px type:%x flag:%x di_instance_id:%d last_di_instance:%d\n",
+			else
+				ret = false;
+			if (layer->global_debug & DEBUG_FLAG_PLINK_MORE) {
+				pr_info("warning: keeping need_disable_plink: vf %px type:%x flag:%x di_instance_id:%d last_di_instance:%d\n",
 					vf, vf->type, vf->flag,
 					vf->di_instance_id, layer->last_di_instance);
-				if (!IS_DI_POST(vf->type))
-					pr_info("is not pre_link_source\n");
+				if (!IS_DI_PSTLINK(vf->di_flag) && !IS_DI_PRELINK(vf->di_flag))
+					pr_info("is not plink_source\n");
 				else
-					pr_info("is_pre_link_source:%d, is_pre_link_available:%d\n",
-						is_pre_link_source(vf) ? 1 : 0,
-						is_pre_link_available(vf) ? 1 : 0);
+					pr_info("is_plink_source:%d, is_plink_available:%d\n",
+						is_plink_source(vf) ? 1 : 0,
+						is_plink_available(vf) ? 1 : 0);
 			}
 		}
-		if (is_pre_link_on(layer)) {
+		if (is_plink_on(layer)) {
 			memset(&di_in_p, 0, sizeof(struct pvpp_dis_para_in_s));
 			di_in_p.dmode = EPVPP_DISPLAY_MODE_BYPASS;
 			di_in_p.unreg_bypass = 1;
+			di_in_p.link_mode = layer->cur_link_mode;
 			di_in_p.follow_hold_line = vpp_hold_line[vpp_index];
 			iret = pvpp_display(NULL, &di_in_p, NULL);
-			if (layer->global_debug & DEBUG_FLAG_PRELINK)
-				pr_info("%s: unreg_bypass pre-link mode ret %d\n",
+			if (layer->global_debug & DEBUG_FLAG_PLINK)
+				pr_info("%s: unreg_bypass plink mode ret %d\n",
 					__func__, iret);
-			iret = pvpp_sw(false);
-			layer->pre_link_en = false;
-			layer->prelink_bypass_check = false;
+			if (layer->cur_link_mode == EPVPP_API_MODE_POST)
+				is_interlace = true;
+			else
+				is_interlace = false;
+			iret = pvpp_sw(false, is_interlace);
+			layer->plink_en = false;
+			layer->plink_bypass_check = false;
 			layer->last_di_instance = vf->di_instance_id;
-			layer->prelink_skip_cnt = 0;
-			atomic_set(&vd_layer[0].disable_prelink_done, 1);
+			layer->plink_skip_cnt = 0;
+			layer->cur_link_mode = EPVPP_API_MODE_NONE;
+			atomic_set(&vd_layer[0].disable_plink_done, 1);
 		}
 		if (!layer->dispbuf ||
 		    layer->dispbuf->di_instance_id !=
 		    vf->di_instance_id ||
 		    layer->last_di_instance != vf->di_instance_id) {
-			layer->need_disable_prelink = false;
+			layer->need_disable_plink = false;
 			layer->last_di_instance = -1;
 		}
-		if (layer->global_debug & DEBUG_FLAG_PRELINK)
-			pr_info("Disable pre-link mode. need_disable_prelink:%d, iret:%d ret:%d\n",
-				layer->need_disable_prelink ? 1 : 0,
+		if (layer->global_debug & DEBUG_FLAG_PLINK)
+			pr_info("Disable plink mode. need_disable_plink:%d, iret:%d ret:%d\n",
+				layer->need_disable_plink ? 1 : 0,
 				iret, ret ? 1 : 0);
-		if (layer->global_debug & DEBUG_FLAG_PRELINK_MORE)
-			pr_info("Disable pre-link mode. dispbuf->di_instance_id:%d, vf->di_instance_id:%d last_di_instance:%d\n",
+		if (layer->global_debug & DEBUG_FLAG_PLINK_MORE)
+			pr_info("Disable plink mode. dispbuf->di_instance_id:%d, vf->di_instance_id:%d last_di_instance:%d\n",
 				layer->dispbuf ? layer->dispbuf->di_instance_id : -2,
 				vf->di_instance_id, layer->last_di_instance);
 	} else {
 		if (layer->next_frame_par->vscale_skip_count > 0 &&
-		    is_pre_link_on(layer) &&
+		    is_plink_on(layer) && IS_DI_PRELINK(vf->di_flag) &&
 		    !is_local_vf(vf) && !vf->vf_ext)
-			pr_info("Error, no vf_ext to switch for pre-link\n");
+			pr_info("Error, no vf_ext to switch for plink\n");
 
 		/* dynamic switch when di is in active */
-		if ((layer->next_frame_par->vscale_skip_count > 0 ||
-		     layer->prelink_bypass_check || is_high_freq) &&
-		    is_pre_link_on(layer) && vf->vf_ext) {
+		if (is_plink_on(layer) &&
+		    (layer->next_frame_par->vscale_skip_count > 0 ||
+		     layer->plink_bypass_check || is_high_freq) &&
+		    (IS_DI_PRELINK(vf->di_flag) || IS_DI_PSTLINK(vf->di_flag))) {
 			memset(&di_in_p, 0, sizeof(struct pvpp_dis_para_in_s));
 			di_in_p.dmode = EPVPP_DISPLAY_MODE_BYPASS;
 			di_in_p.unreg_bypass = 0;
 			di_in_p.follow_hold_line = vpp_hold_line[vpp_index];
+			di_in_p.link_mode = layer->cur_link_mode;
 			iret = pvpp_display(vf, &di_in_p, NULL);
 			if (iret >= 0) {
-				iret = pvpp_sw(false);
-				if (layer->global_debug & DEBUG_FLAG_PRELINK)
-					pr_info("Bypass pre-link mode ret %d\n", iret);
+				if (layer->cur_link_mode == EPVPP_API_MODE_POST)
+					is_interlace = true;
+				else
+					is_interlace = false;
+				iret = pvpp_sw(false, is_interlace);
+				if (layer->global_debug & DEBUG_FLAG_PLINK)
+					pr_info("Bypass plink mode ret %d\n", iret);
 				ret = true;
-				layer->pre_link_en = false;
-				layer->prelink_bypass_check = false;
+				layer->plink_en = false;
+				layer->plink_bypass_check = false;
 				layer->last_di_instance = vf->di_instance_id;
-				layer->prelink_skip_cnt = 0;
+				layer->plink_skip_cnt = 0;
+				layer->cur_link_mode = EPVPP_API_MODE_NONE;
 			} else {
-				pr_info("Bypass pre-link fail %d\n", iret);
+				pr_info("Bypass plink fail %d\n", iret);
 			}
-		} else if (!is_pre_link_on(layer) &&
+		} else if (!is_plink_on(layer) &&
 				!is_local_vf(vf) &&
-				is_pre_link_available(vf) &&
+				is_plink_available(vf) &&
 				!layer->next_frame_par->vscale_skip_count &&
-				!layer->prelink_bypass_check &&
+				!layer->plink_bypass_check &&
 				!is_high_freq) {
-			/* enable pre-link when it is available and di is in active */
-			/* TODO: need update vf->type to check pre-link again */
+			/* enable plink when it is available and di is in active */
+			/* TODO: need update vf->type to check plink again */
 			/* if only check the dec vf at first time */
-			iret = pvpp_sw(true);
+			if (IS_DI_PSTLINK(vf->di_flag))
+				is_interlace = true;
+			else
+				is_interlace = false;
+			iret = pvpp_sw(true, is_interlace);
 			if (iret >= 0) {
 				memset(&di_in_p, 0, sizeof(struct pvpp_dis_para_in_s));
 				di_in_p.win.x_st =
@@ -10254,67 +10270,76 @@ static bool update_pre_link_state(struct video_layer_s *layer,
 					di_in_p.win.y_end - di_in_p.win.y_st + 1;
 				di_in_p.plink_reverse = glayer_info[0].reverse;
 				di_in_p.plink_hv_mirror = glayer_info[0].mirror;
-				di_in_p.dmode = EPVPP_DISPLAY_MODE_NR;
+				if (IS_DI_PSTLINK(vf->di_flag)) {
+					di_in_p.dmode = EPVPP_DISPLAY_MODE_DI;
+					di_in_p.link_mode = EPVPP_API_MODE_POST;
+				} else {
+					di_in_p.dmode = EPVPP_DISPLAY_MODE_NR;
+					di_in_p.link_mode = EPVPP_API_MODE_PRE;
+				}
 				di_in_p.unreg_bypass = 0;
+				layer->cur_link_mode = di_in_p.link_mode;
 				di_in_p.follow_hold_line = vpp_hold_line[vpp_index];
 				iret = pvpp_display(vf, &di_in_p, NULL);
 				if (iret > 0) {
-					layer->pre_link_en = true;
-					layer->prelink_skip_cnt = 1;
-					atomic_set(&vd_layer[0].disable_prelink_done, 0);
+					layer->plink_en = true;
+					layer->plink_skip_cnt = 1;
+					atomic_set(&vd_layer[0].disable_plink_done, 0);
 				} else {
 					/* force config in next frame swap */
 					if (ret == 0)
 						layer->force_config_cnt++;
-					layer->prelink_skip_cnt = 0;
+					layer->plink_skip_cnt = 0;
 					ret = true;
 				}
-				if (layer->global_debug & DEBUG_FLAG_PRELINK)
-					pr_info("Enable pre-link ret %d\n", iret);
+				if (layer->global_debug & DEBUG_FLAG_PLINK)
+					pr_info("Enable plink ret %d\n", iret);
 			} else {
 				ret = true;
-				pr_info("Enable pre-link but pvpp_sw fail ret %d\n", iret);
+				pr_info("Enable plink but pvpp_sw fail ret %d\n", iret);
 			}
-		} else if (!is_pre_link_on(layer) &&
+		} else if (!is_plink_on(layer) &&
 				!is_local_vf(vf) &&
 				!layer->next_frame_par->vscale_skip_count &&
-				is_pre_link_source(vf)) {
+				is_plink_source(vf)) {
 			ret = true;
-			layer->prelink_bypass_check = false;
-			if (layer->global_debug & DEBUG_FLAG_PRELINK_MORE)
-				pr_info("Do not enable pre-link yet\n");
-		} else if (is_pre_link_on(layer) &&
-				vf->vf_ext &&
-				layer->need_disable_prelink) {
-			/* is_pre_link_source maybe invalid here */
+			layer->plink_bypass_check = false;
+			if (layer->global_debug & DEBUG_FLAG_PLINK_MORE)
+				pr_info("Do not enable plink yet\n");
+		} else if (is_plink_on(layer) &&
+				layer->need_disable_plink &&
+				(IS_DI_PRELINK(vf->di_flag) || IS_DI_PSTLINK(vf->di_flag))) {
+			/* is_plink_source maybe invalid here */
 			/* should be not run here */
-			if (layer->global_debug & DEBUG_FLAG_PRELINK)
-				pr_info("Warning: need disable pre-link and switch vf %px vf_ext:%px uvm_vf:%px\n",
-					vf, vf->vf_ext, vf->uvm_vf);
+			//if (layer->global_debug & DEBUG_FLAG_PLINK)
+			pr_info("Warning: need disable plink and switch vf %px vf_ext:%px uvm_vf:%px\n",
+				vf, vf->vf_ext, vf->uvm_vf);
 			ret = true;
-			layer->pre_link_en = false;
-			layer->prelink_bypass_check = false;
+			layer->plink_en = false;
+			layer->plink_bypass_check = false;
 			layer->last_di_instance = vf->di_instance_id;
-			layer->prelink_skip_cnt = 0;
-			/* atomic_set(&vd_layer[0].disable_prelink_done, 1); */
-		} else if (!is_pre_link_on(layer) &&
+			layer->plink_skip_cnt = 0;
+			layer->cur_link_mode = EPVPP_API_MODE_NONE;
+			/* atomic_set(&vd_layer[0].disable_plink_done, 1); */
+		} else if (!is_plink_on(layer) &&
 				vf->vf_ext &&
 				!IS_DI_POSTWRTIE(vf->type)) {
 			/* Just test the exception case */
-			layer->prelink_bypass_check = false;
-			if (IS_DI_POST(vf->type) &&
+			layer->plink_bypass_check = false;
+			if (IS_DI_PSTLINK(vf->di_flag) &&
+			    !HAS_DI_LOCAL_BUF(vf->di_flag) &&
 			    layer->next_frame_par->vscale_skip_count > 0) {
 				ret = true;
 			} else if (IS_DI_PRELINK(vf->di_flag)) {
 				ret = true;
-				if (layer->global_debug & DEBUG_FLAG_PRELINK)
-					pr_info("can't enable pre-link, force switch: vf %px vf_ext:%px uvm_vf:%px type:%x flag:%x di_flag:%x\n",
+				if (layer->global_debug & DEBUG_FLAG_PLINK)
+					pr_info("can't enable plink, force switch: vf %px vf_ext:%px uvm_vf:%px type:%x flag:%x di_flag:%x\n",
 						vf, vf->vf_ext, vf->uvm_vf,
 						vf->type, vf->flag, vf->di_flag);
-			} else if (layer->global_debug & DEBUG_FLAG_PRELINK) {
-				pr_info("pre-link warning: vf %px vf_ext:%px uvm_vf:%px type:%x flag:%x\n",
+			} else if (layer->global_debug & DEBUG_FLAG_PLINK) {
+				pr_info("plink warning: vf %px vf_ext:%px uvm_vf:%px type:0x%x flag:0x%x di_flag:0x%x\n",
 					vf, vf->vf_ext, vf->uvm_vf,
-					vf->type, vf->flag);
+					vf->type, vf->flag, vf->di_flag);
 			}
 		}
 	}
@@ -10368,6 +10393,10 @@ s32 layer_swap_frame(struct vframe_s *vf, struct video_layer_s *layer,
 			vf_ext = vf->uvm_vf;
 		else
 			vf_ext = (struct vframe_s *)vf->vf_ext;
+
+		/* If vf is from di local buffer, don't switch to decode buffer */
+		if (HAS_DI_LOCAL_BUF(vf->di_flag))
+			vf_ext = NULL;
 	}
 	layer_id = layer->layer_id;
 	layer_info = &glayer_info[layer_id];
@@ -10530,6 +10559,8 @@ s32 layer_swap_frame(struct vframe_s *vf, struct video_layer_s *layer,
 		else if (layer->force_switch_mode == 2)
 			op_flag |= OP_FORCE_NOT_SWITCH_VF;
 
+		if (HAS_DI_LOCAL_BUF(vf->di_flag) && layer->layer_id != 0)
+			op_flag |= OP_HAS_DI_LOCAL;
 		ret = vpp_set_filters
 			(&glayer_info[layer_id], vf,
 			layer->next_frame_par, vinfo,
@@ -10537,14 +10568,33 @@ s32 layer_swap_frame(struct vframe_s *vf, struct video_layer_s *layer,
 			is_amdv_stb_mode() &&
 			for_amdv_certification()),
 			op_flag);
-#ifdef ENABLE_PRE_LINK
+#ifdef ENABLE_PLINK
 		if (layer->layer_id == 0 &&
-		    update_pre_link_state(layer, vf, vinfo))
+		    update_plink_state(layer, vf, vinfo))
 			ret = vppfilter_success_and_switched;
 #endif
+		/* prelink/old postlink/new postlink on vd2 */
 		if (layer->layer_id != 0 &&
-		    (IS_DI_PRELINK(vf->di_flag) || IS_DI_POST(vf->type)))
+		    (IS_DI_PRELINK(vf->di_flag) ||
+		     (IS_DI_POST(vf->type) && !HAS_DI_LOCAL_BUF(vf->di_flag))))
 			ret = vppfilter_success_and_switched;
+
+		/* need flush setting but not switch vf */
+		if (HAS_DI_LOCAL_BUF(vf->di_flag) &&
+		    (!is_plink_on(layer) || layer->layer_id != 0)) {
+			ret = vpp_set_filters
+				(&glayer_info[layer_id], vf,
+				layer->next_frame_par, vinfo,
+				(is_amdv_on() &&
+				is_amdv_stb_mode() &&
+				for_amdv_certification()),
+				op_flag | OP_HAS_DI_LOCAL);
+			if (ret && (layer->global_debug & DEBUG_FLAG_BASIC_INFO))
+				pr_info
+				("layer%d: for di local buffer setting ret:%d\n",
+				 layer->layer_id, ret);
+			layer->new_vpp_setting = true;
+		}
 
 		memcpy(&gpic_info[layer_id], &vf->pic_mode,
 		       sizeof(struct vframe_pic_mode_s));
@@ -14048,7 +14098,7 @@ int video_early_init(struct amvideo_device_data_s *p_amvideo)
 		vd_layer[i].clip_setting.clip_max = 0x3fffffff;
 		vd_layer[i].clip_setting.clip_min = 0;
 		vd_layer[i].clip_setting.clip_done = true;
-		atomic_set(&vd_layer[i].disable_prelink_done, 0);
+		atomic_set(&vd_layer[i].disable_plink_done, 0);
 
 		vpp_disp_info_init(&glayer_info[i], i);
 		memset(&gpic_info[i], 0, sizeof(struct vframe_pic_mode_s));

@@ -1737,6 +1737,44 @@ bool mem_cfg_2local(struct di_ch_s *pch)
 	return true;
 }
 
+bool mem_cfg_2pstlink(struct di_ch_s *pch)
+{
+	struct di_buf_s *di_buf = NULL;
+	unsigned int ch;
+	unsigned int err_cnt = 0;
+	unsigned int cnt;
+	unsigned int length_pst;
+
+	ch = pch->ch_id;
+	length_pst = di_que_list_count(ch, QUE_PST_NO_BUF);
+	/* post-link */
+	cnt = 0;
+	while (length_pst) {
+		/* cfg mem */
+		di_buf = di_que_out_to_di_buf(ch, QUE_PST_NO_BUF);
+		if (!di_buf) {
+			PR_ERR("%s:no pst_no_buf[%d]\n", __func__, cnt);
+			err_cnt++;
+			break;
+		}
+		di_buf->blk_buf = NULL;
+		di_buf->adr_start = 0;
+		di_buf->buf_is_i = 0;
+		di_buf->flg_null = 0;
+		//dim_buf_set_addr(ch, di_buf);
+		di_buf->flg_nr = 0;
+		di_buf->flg_nv21 = 0;
+		di_buf->jiff = jiffies;
+		di_que_in(ch, QUE_POST_FREE, di_buf);
+		cnt++;
+		length_pst--;
+	}
+	pch->sts_mem_2_pst = 0;//cnt;
+	if (err_cnt)
+		return false;
+	return true;
+}
+
 bool mem_cfg_2pst(struct di_ch_s *pch)
 {
 	struct buf_que_s *pbf_mem;
@@ -1754,7 +1792,6 @@ bool mem_cfg_2pst(struct di_ch_s *pch)
 	pbf_mem = &pch->mem_qb;
 
 	length_pst = qbufp_count(pbf_mem, QBF_MEM_Q_GET_PST);
-
 	/* post */
 	cnt = 0;
 	while (length_pst) {
@@ -2026,46 +2063,52 @@ bool mem_cfg(struct di_ch_s *pch)
 
 	/* post */
 	cnt = 0;
-	while (length_pst) {
-		if (!qbufp_out(pbf_mem, QBF_MEM_Q_GET_PST, &q_buf)) {
-			PR_ERR("%s:pst:%d\n", __func__, cnt);
-			err_cnt++;
-			break;
-		}
+	if (dimp_get(edi_mp_post_wr_en) &&
+	    dimp_get(edi_mp_post_wr_support)) {
+		while (length_pst) {
+			if (!qbufp_out(pbf_mem, QBF_MEM_Q_GET_PST, &q_buf)) {
+				PR_ERR("%s:pst:%d\n", __func__, cnt);
+				err_cnt++;
+				break;
+			}
 
-		/* cfg mem */
-		di_buf = di_que_out_to_di_buf(ch, QUE_PST_NO_BUF);
-		if (!di_buf) {
-			qbufp_in(pbf_mem, QBF_MEM_Q_GET_PST, q_buf);
-			PR_ERR("%s:no pst_no_buf[%d]\n", __func__, cnt);
-			err_cnt++;
-			break;
-		}
-		blk_buf = (struct dim_mm_blk_s *)q_buf.qbc;
-		di_buf->blk_buf = blk_buf;
-		//di_buf->nr_adr = blk_buf->mem_start;
-		//di_buf->afbc_adr = blk_buf->mem_start;
-		//di_buf->afbct_adr = blk_buf->mem_start;
-		di_buf->adr_start = blk_buf->mem_start;
-		di_buf->buf_is_i = 0;
-		di_buf->flg_null = 0;
-		dim_buf_set_addr(ch, di_buf);
-		di_buf->flg_nr = 0;
-		di_buf->flg_nv21 = 0;
-		di_buf->jiff = jiffies;
-		dim_print("nv21 clear %s:%px:\n", __func__, di_buf);
+			/* cfg mem */
+			di_buf = di_que_out_to_di_buf(ch, QUE_PST_NO_BUF);
+			if (!di_buf) {
+				qbufp_in(pbf_mem, QBF_MEM_Q_GET_PST, q_buf);
+				PR_ERR("%s:no pst_no_buf[%d]\n", __func__, cnt);
+				err_cnt++;
+				break;
+			}
+			blk_buf = (struct dim_mm_blk_s *)q_buf.qbc;
+			di_buf->blk_buf = blk_buf;
+			//di_buf->nr_adr = blk_buf->mem_start;
+			//di_buf->afbc_adr = blk_buf->mem_start;
+			//di_buf->afbct_adr = blk_buf->mem_start;
+			di_buf->adr_start = blk_buf->mem_start;
+			di_buf->buf_is_i = 0;
+			di_buf->flg_null = 0;
+			dim_buf_set_addr(ch, di_buf);
+			di_buf->flg_nr = 0;
+			di_buf->flg_nv21 = 0;
+			di_buf->jiff = jiffies;
+			dim_print("nv21 clear %s:%px:\n", __func__, di_buf);
 
-		/*  to in used */
-		qbufp_in(pbf_mem, QBF_MEM_Q_IN_USED, q_buf);
-		//di_que_in(ch, QUE_POST_FREE, di_buf);
-		if (dim_blk_tvp_is_out(blk_buf)) /* new interface */
-			di_que_in(ch, QUE_PST_NO_BUF_WAIT, di_buf);
-		else if (dim_blk_tvp_is_sct(blk_buf))
-			di_que_in(ch, QUE_PST_NO_BUF_WAIT, di_buf);
-		else
-			di_que_in(ch, QUE_POST_FREE, di_buf);
-		cnt++;
-		length_pst--;
+			/*  to in used */
+			qbufp_in(pbf_mem, QBF_MEM_Q_IN_USED, q_buf);
+			//di_que_in(ch, QUE_POST_FREE, di_buf);
+			if (dim_blk_tvp_is_out(blk_buf)) /* new interface */
+				di_que_in(ch, QUE_PST_NO_BUF_WAIT, di_buf);
+			else if (dim_blk_tvp_is_sct(blk_buf))
+				di_que_in(ch, QUE_PST_NO_BUF_WAIT, di_buf);
+			else
+				di_que_in(ch, QUE_POST_FREE, di_buf);
+			cnt++;
+			length_pst--;
+		}
+	} else {
+		if (!mem_cfg_2pstlink(pch))
+			err_cnt++;
 	}
 	dbg_mem2("%s: pst[%d]\n", __func__, cnt);
 
@@ -2198,57 +2241,62 @@ bool mem_cfg_realloc(struct di_ch_s *pch) /*temp for re-alloc mem*/
 	/* post */
 	cnt = 0;
 	length = qbufp_count(pbf_mem, QBF_MEM_Q_GET_PST);
-	while (length) {
-		if (!qbufp_out(pbf_mem, QBF_MEM_Q_GET_PST, &q_buf)) {
-			PR_ERR("%s:local:%d\n", __func__, cnt);
-			break;
-		}
+	if (dimp_get(edi_mp_post_wr_en) &&
+	    dimp_get(edi_mp_post_wr_support)) {
+		while (length) {
+			if (!qbufp_out(pbf_mem, QBF_MEM_Q_GET_PST, &q_buf)) {
+				PR_ERR("%s:local:%d\n", __func__, cnt);
+				break;
+			}
 
-		/* cfg mem */
-		di_buf = di_que_out_to_di_buf(ch, QUE_PST_NO_BUF);
-		if (!di_buf) {
-			qbufp_in(pbf_mem, QBF_MEM_Q_GET_PST, q_buf);
-			PR_ERR("%s:local no pst_no_buf[%d]\n", __func__, cnt);
-			err_cnt++;
-			break;
+			/* cfg mem */
+			di_buf = di_que_out_to_di_buf(ch, QUE_PST_NO_BUF);
+			if (!di_buf) {
+				qbufp_in(pbf_mem, QBF_MEM_Q_GET_PST, q_buf);
+				PR_ERR("%s:local no pst_no_buf[%d]\n", __func__, cnt);
+				err_cnt++;
+				break;
+			}
+			blk_buf = (struct dim_mm_blk_s *)q_buf.qbc;
+			di_buf->blk_buf = blk_buf;
+			//di_buf->nr_adr = blk_buf->mem_start;
+			//di_buf->afbc_adr = blk_buf->mem_start;
+			//di_buf->afbct_adr = blk_buf->mem_start;
+			di_buf->adr_start	= blk_buf->mem_start;
+			di_buf->buf_is_i = 0;
+			di_buf->flg_null = 0;
+			//crash: msleep(200);
+			dbg_mem2("cfg:buf t[%d]ind[%d]:blk[%d][0x%lx]\n",
+				 di_buf->type,
+				 di_buf->index,
+				 blk_buf->header.index,
+				 blk_buf->mem_start);
+			dim_buf_set_addr(ch, di_buf);
+			di_buf->jiff = jiffies;
+#ifdef AFBC_DBG
+			if (sleep_cnt)
+				msleep(sleep_cnt);// a ok :
+#endif
+			di_buf->flg_nr = 0;
+			di_buf->flg_nv21 = 0;
+			dim_print("nv21 clear %s:%px:\n", __func__, di_buf);
+			//msleep(200);// a ok :
+			//PR_INF("sleep100ms");
+			/*	to in used */
+			qbufp_in(pbf_mem, QBF_MEM_Q_IN_USED, q_buf);
+			//di_que_in(ch, QUE_POST_FREE, di_buf);
+			if (blk_buf->flg.b.typ == EDIM_BLK_TYP_PSCT)
+				di_que_in(ch, QUE_PST_NO_BUF_WAIT, di_buf);
+			else
+				di_que_in(ch, QUE_POST_FREE, di_buf);
+			cnt++;
+			length--;
 		}
-		blk_buf = (struct dim_mm_blk_s *)q_buf.qbc;
-		di_buf->blk_buf = blk_buf;
-		//di_buf->nr_adr = blk_buf->mem_start;
-		//di_buf->afbc_adr = blk_buf->mem_start;
-		//di_buf->afbct_adr = blk_buf->mem_start;
-		di_buf->adr_start	= blk_buf->mem_start;
-		di_buf->buf_is_i = 0;
-		di_buf->flg_null = 0;
-		//crash: msleep(200);
-		dbg_mem2("cfg:buf t[%d]ind[%d]:blk[%d][0x%lx]\n",
-			 di_buf->type,
-			 di_buf->index,
-			 blk_buf->header.index,
-			 blk_buf->mem_start);
-		dim_buf_set_addr(ch, di_buf);
-		di_buf->jiff = jiffies;
-		#ifdef AFBC_DBG
-		if (sleep_cnt)
-			msleep(sleep_cnt);// a ok :
-		#endif
-		di_buf->flg_nr = 0;
-		di_buf->flg_nv21 = 0;
-		dim_print("nv21 clear %s:%px:\n", __func__, di_buf);
-		//msleep(200);// a ok :
-		//PR_INF("sleep100ms");
-		/*  to in used */
-		qbufp_in(pbf_mem, QBF_MEM_Q_IN_USED, q_buf);
-		//di_que_in(ch, QUE_POST_FREE, di_buf);
-		if (blk_buf->flg.b.typ == EDIM_BLK_TYP_PSCT)
-			di_que_in(ch, QUE_PST_NO_BUF_WAIT, di_buf);
-		else
-			di_que_in(ch, QUE_POST_FREE, di_buf);
-		cnt++;
-		length--;
+	} else {
+		if (!mem_cfg_2pstlink(pch))
+			err_cnt++;
 	}
 	dbg_mem2("%s: cfg ok [%d]\n", __func__, cnt);
-
 	if (err_cnt)
 		return false;
 	return true;
@@ -3782,7 +3830,8 @@ static const struct di_meson_data  data_t5d_va = {
 static const struct di_meson_data  data_t5d_vb = {
 	.name = "dim_t5d_vb", //note: this is vb
 	.ic_id	= DI_IC_ID_T5DB,
-	.support = IC_SUPPORT_PRE_VPP_LINK
+	.support = IC_SUPPORT_PRE_VPP_LINK |
+			IC_SUPPORT_POST_VPP_LINK
 };
 #endif
 
@@ -4043,6 +4092,10 @@ static int dim_probe(struct platform_device *pdev)
 		dimp_set(edi_mp_nr10bit_support, 0);/*nr10bit_support = 0;*/
 	else	/*nr10bit_support = di_devp->nr10bit_support;*/
 		dimp_set(edi_mp_nr10bit_support, di_devp->nr10bit_support);
+
+	if (!di_devp->post_wr_support)
+		cfgs(PRE_NUB, MAX_LOCAL_BUF_NUM_REAL - 2);
+	dbg_mem("%s: pre_nub:%d\n", __func__, cfgg(PRE_NUB));
 #ifdef DIM_EN_UD_USED
 	di_pdev->local_meta_size =
 			LOCAL_META_BUFF_SIZE * DI_CHANNEL_NUB *
@@ -4100,7 +4153,7 @@ static int dim_probe(struct platform_device *pdev)
 	ret = devm_request_irq(&pdev->dev, di_devp->pre_irq, &dim_irq,
 			       IRQF_SHARED,
 			       "pre_di", (void *)"pre_di");
-	if (di_devp->post_wr_support) {
+	if (di_devp->post_irq > 0) {
 		ret = devm_request_irq(&pdev->dev, di_devp->post_irq,
 				       &dim_post_irq,
 				       IRQF_SHARED, "post_di",

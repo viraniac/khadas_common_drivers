@@ -620,7 +620,7 @@ void di_mcmif_linear_rd_cfg(struct DI_MC_MIF_s *mif,
 			unsigned int BADDR)
 {
 	unsigned int stride;
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	dbg_ic("%s:\n", __func__);
 	//di_mif1_stride(mif, &stride);
@@ -3736,7 +3736,7 @@ static void set_di_post(struct DI_PST_S *ptcfg, const struct reg_acc *opin)
 	const struct reg_acc *op;
 
 	if (!opin)
-		op = &di_pre_regset;
+		op = &di_pst_regset;
 	else
 		op = opin;
 
@@ -5488,7 +5488,7 @@ static void di_pre_data_mif_ctrl_v3(bool enable, const struct reg_acc *op_in,
 /*below for post */
 static void post_mif_sw_v3(bool on, enum DI_MIF0_SEL sel)
 {
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	if (DIM_IS_IC_BF(SC2)) {
 		PR_ERR("%s:\n", __func__);
@@ -5503,8 +5503,13 @@ static void post_mif_sw_v3(bool on, enum DI_MIF0_SEL sel)
 		if (sel & DI_MIF0_SEL_IF2)
 			op->bwr(DI_SC2_IF2_GEN_REG, 1, 0, 1);
 
-		if ((sel & DI_MIF0_SEL_PST_ALL) == DI_MIF0_SEL_PST_ALL)
-			op->bwr(DI_POST_CTRL, 1, 4, 1); /*di_wr_bk_en*/
+		if ((sel & DI_MIF0_SEL_PST_ALL) == DI_MIF0_SEL_PST_ALL) {
+			if (dimp_get(edi_mp_post_wr_en) &&
+			    dimp_get(edi_mp_post_wr_support))
+				op->bwr(DI_POST_CTRL, 1, 4, 1); /*di_wr_bk_en*/
+			else
+				op->bwr(DI_POST_CTRL, 0, 4, 1);
+		}
 	} else {
 		if (sel & DI_MIF0_SEL_IF0)
 			op->bwr(DI_SC2_IF0_GEN_REG, 0, 0, 1);
@@ -5521,7 +5526,7 @@ static void post_mif_sw_v3(bool on, enum DI_MIF0_SEL sel)
 
 static void post_mif_rst_v3(enum DI_MIF0_SEL sel)
 {
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	if (DIM_IS_IC_BF(SC2)) {
 		PR_ERR("%s:\n", __func__);
@@ -5540,7 +5545,7 @@ static void post_mif_rst_v3(enum DI_MIF0_SEL sel)
 
 static void post_mif_rev_v3(bool rev, enum DI_MIF0_SEL sel)
 {
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	if (DIM_IS_IC_BF(SC2)) {
 		PR_ERR("%s:\n", __func__);
@@ -5584,7 +5589,7 @@ static void pst_mif_update_canvasid_v3(struct DI_MIF_S *mif,
 	const struct reg_acc *op;
 
 	if (!opin)
-		op = &di_pre_regset;
+		op = &di_pst_regset;
 	else
 		op = opin;
 
@@ -5634,7 +5639,7 @@ static void post_bit_mode_cfg_v3(unsigned char if0,
 				 unsigned char if2,
 				 unsigned char post_wr)
 {
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	if (DIM_IS_IC_BF(SC2)) {
 		PR_ERR("%s:\n", __func__);
@@ -5987,14 +5992,17 @@ void config_di_mif_v3(struct DI_MIF_S *di_mif,
 	}
 }
 
-static void post_dbg_contr_v3(void)
+static void post_dbg_contr_v3(const struct reg_acc *op_in)
 {
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	if (DIM_IS_IC_BF(SC2)) {
 		PR_ERR("%s:\n", __func__);
 		return;
 	}
+
+	if (op_in)
+		op = op_in;
 	/* bit [11:10]:cntl_dbg_mode*/
 	op->bwr(DI_SC2_IF0_GEN_REG3, 1, 11, 1);
 	op->bwr(DI_SC2_IF1_GEN_REG3, 1, 11, 1);
@@ -6002,10 +6010,10 @@ static void post_dbg_contr_v3(void)
 }
 
 static void di_post_set_flow_v3(unsigned int post_wr_en,
-				enum EDI_POST_FLOW step)
+		enum EDI_POST_FLOW step, const struct reg_acc *op_in)
 {
 	unsigned int val;
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	if (DIM_IS_IC_BF(SC2)) {
 		PR_ERR("%s:\n", __func__);
@@ -6014,6 +6022,9 @@ static void di_post_set_flow_v3(unsigned int post_wr_en,
 
 	if (!post_wr_en)
 		return;
+
+	if (op_in)
+		op = op_in;
 
 	switch (step) {
 	case EDI_POST_FLOW_STEP1_STOP:
@@ -6106,7 +6117,7 @@ static void hpre_gl_thd_v3(void)
 
 static void hpost_gl_thd_v3(unsigned int hold_line)
 {
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 
 	if (DIM_IS_IC_BF(SC2)) {
 		PR_ERR("%s:\n", __func__);
@@ -6336,10 +6347,14 @@ void dim_secure_sw_post(unsigned char ch)
 		dim_secure_pst_en(ch);
 }
 
-void dim_sc2_contr_pst(union hw_sc2_ctr_pst_s *cfg)
+void dim_sc2_contr_pst(union hw_sc2_ctr_pst_s *cfg,
+		const struct reg_acc *op_in)
 {
-	const struct reg_acc *op = &di_pre_regset;
+	const struct reg_acc *op = &di_pst_regset;
 	unsigned int val;
+
+	if (op_in)
+		op = op_in;
 
 	if (is_mask(SC2_REG_MSK_nr)) {
 		PR_INF("%s:\n", __func__);

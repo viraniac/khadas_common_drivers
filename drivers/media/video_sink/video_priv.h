@@ -25,7 +25,7 @@
 #include "video_reg_s5.h"
 
 #ifdef CONFIG_AMLOGIC_MEDIA_DEINTERLACE
-#define ENABLE_PRE_LINK
+#define ENABLE_PLINK
 #endif
 
 #define VIDEO_ENABLE_STATE_IDLE       0
@@ -46,8 +46,8 @@
 #define DEBUG_FLAG_NO_CLIP_SETTING     0x400
 #define DEBUG_FLAG_VPP_GET_BUFFER_TIME     0x800
 #define DEBUG_FLAG_PRINT_FRAME_DETAIL     0x1000
-#define DEBUG_FLAG_PRELINK			0x2000
-#define DEBUG_FLAG_PRELINK_MORE     0x4000
+#define DEBUG_FLAG_PLINK			0x2000
+#define DEBUG_FLAG_PLINK_MORE     0x4000
 #define DEBUG_FLAG_AFD_INFO	        0x8000
 #define DEBUG_FLAG_TOGGLE_SKIP_KEEP_CURRENT  0x10000
 #define DEBUG_FLAG_TOGGLE_FRAME_PER_VSYNC    0x20000
@@ -119,14 +119,17 @@
 #define DISPBUF_TO_PUT_MAX 6
 
 #define IS_DI_PROCESSED(vftype) ((vftype) & (VIDTYPE_PRE_INTERLACE | VIDTYPE_DI_PW))
-/* post link */
+/* old post link */
 #define IS_DI_POST(vftype) \
 	(((vftype) & (VIDTYPE_PRE_INTERLACE | VIDTYPE_DI_PW)) \
 	 == VIDTYPE_PRE_INTERLACE)
 #define IS_DI_POSTWRTIE(vftype) ((vftype) & VIDTYPE_DI_PW)
 /* pre link */
 #define IS_DI_PRELINK(di_flag) ((di_flag) & DI_FLAG_DI_PVPPLINK)
-#define IS_DI_PRELINK_BYPASS(di_flag) ((di_flag) & DI_FLAG_DI_PVPPLINK_BYPASS)
+#define IS_DI_PLINK_BYPASS(di_flag) ((di_flag) & DI_FLAG_DI_PVPPLINK_BYPASS)
+/* new post link */
+#define IS_DI_PSTLINK(di_flag) ((di_flag) & DI_FLAG_DI_PSTVPPLINK)
+#define HAS_DI_LOCAL_BUF(di_flag) ((di_flag) & DI_FLAG_DI_LOCAL_BUF)
 
 #define MAX_PIP_WINDOW    16
 #define VPP_FILER_COEFS_NUM   33
@@ -137,6 +140,7 @@
 #define OP_FORCE_SWITCH_VF 2
 #define OP_FORCE_NOT_SWITCH_VF 4
 #define OP_HAS_DV_EL 8
+#define OP_HAS_DI_LOCAL 0x10
 
 enum tvin_surface_type_e {
 	TVIN_SOURCE_TYPE_OTHERS = 0,
@@ -663,14 +667,15 @@ struct video_layer_s {
 	u32 alpha_win_en;
 	struct pip_alpha_scpxn_s alpha_win;
 
-	bool pre_link_en;
-	bool need_disable_prelink;
-	bool prelink_bypass_check;
-	atomic_t disable_prelink_done;
+	bool plink_en;
+	bool need_disable_plink;
+	bool plink_bypass_check;
+	u8 cur_link_mode;
+	atomic_t disable_plink_done;
 
 	bool mosaic_frame;
 	bool frc_n2m_1st_frame;
-	u8 prelink_skip_cnt;
+	u8 plink_skip_cnt;
 	s32 last_di_instance;
 	u32 slice_num;
 	u32 pi_enable;
@@ -1137,8 +1142,8 @@ void amvecm_process(struct path_id_s *path_id, struct video_recv_s *p_gvideo_rec
 #endif
 bool get_force_skip_cnt(u8 layer_id,
 	u32 *vskip_cnt, u32 *hskip_cnt);
-bool is_pre_link_source(struct vframe_s *vf);
-bool is_pre_link_on(struct video_layer_s *layer);
+bool is_plink_source(struct vframe_s *vf);
+bool is_plink_on(struct video_layer_s *layer);
 void vpp_trace_axis(int left, int top, int right, int bottom);
 void vpp_trace_timeinfo(unsigned long time1,
 	unsigned long time2, unsigned long time3,
@@ -1149,8 +1154,8 @@ void vpp_trace_field_state(const char *sub_name,
 	int cur_state, int new_state,
 	int over_field, int cnt1, int cnt2);
 void vpp_trace_vframe(const char *name, void *vf, int arg1, int arg2, int id, int cnt);
-#ifdef ENABLE_PRE_LINK
-bool is_pre_link_available(struct vframe_s *vf);
+#ifdef ENABLE_PLINK
+bool is_plink_available(struct vframe_s *vf);
 #endif
 
 #ifdef TV_REVERSE

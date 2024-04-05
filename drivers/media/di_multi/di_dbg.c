@@ -2022,7 +2022,7 @@ static int cfgtop_show(struct seq_file *s, void *what)
 		seq_printf(s, "op2:%s\n", opl2()->info.name);
 	seq_puts(s, "size\n");
 	seq_printf(s, "\t%s:0x%zx K\n",
-		   "dv_prevpp", (sizeof(struct dim_dvs_prevpp_s) >> 10));
+		   "dv_pvpp", (sizeof(struct dim_dvs_pvpp_s) >> 10));
 	seq_printf(s, "%s\n", splt);
 	/* h define */
 #ifndef DIM_HAVE_HDR
@@ -2517,7 +2517,7 @@ static ssize_t buf_cnt_store(struct file *file, const char __user *userbuf,
 /**********************/
 void dbg_f_post_disable(unsigned int para)
 {
-	dimh_disable_post_deinterlace_2();
+	dimh_disable_post_deinterlace_2(false);
 }
 
 void dbg_f_trig_task(unsigned int para)

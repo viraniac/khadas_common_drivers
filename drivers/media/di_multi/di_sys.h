@@ -122,6 +122,7 @@ bool mem_alloc_check(struct di_ch_s *pch);
 bool mem_cfg_pre(struct di_ch_s *pch);
 bool mem_cfg_2local(struct di_ch_s *pch);
 bool mem_cfg_2pst(struct di_ch_s *pch);
+bool mem_cfg_2pstlink(struct di_ch_s *pch);
 
 bool mem_cfg(struct di_ch_s *pch);
 void mem_release(struct di_ch_s *pch, struct dim_mm_blk_s **blks, unsigned int blk_nub);

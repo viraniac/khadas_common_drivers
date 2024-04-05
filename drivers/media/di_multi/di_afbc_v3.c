@@ -4281,7 +4281,7 @@ static void afbc_check_chg_level_dvfm(struct dvfm_s *vf,
 }
 
 /* copy from enable_afbc_input_local */
-static u32 enable_afbc_input_local_dvfm(struct dim_prevpp_ds_s *ds,
+static u32 enable_afbc_input_local_dvfm(struct dim_pvpp_ds_s *ds,
 				   struct dvfm_s *vf, enum EAFBC_DEC dec,
 				   struct AFBCD_CFG_S *cfg,
 				   struct di_win_s *win,
@@ -4908,7 +4908,7 @@ static u32 enable_afbc_input_dvfm(void *ds_in, void *nvfm_in,
 	struct dvfm_s *mem_vf2, *inp_vf2, *chan2_vf;
 	struct AFBCD_CFG_S cfg;
 	struct AFBCD_CFG_S *pcfg;
-	struct dim_prevpp_ds_s *ds;
+	struct dim_pvpp_ds_s *ds;
 	struct dimn_dvfm_s *ndvfm;
 	struct dvfm_s *nr_vf;
 	struct di_win_s *win_in, *win_mem;
@@ -4918,7 +4918,7 @@ static u32 enable_afbc_input_dvfm(void *ds_in, void *nvfm_in,
 		return false;
 	if (!ds_in || !nvfm_in || !op_in)
 		return false;
-	ds = (struct dim_prevpp_ds_s *)ds_in;
+	ds = (struct dim_pvpp_ds_s *)ds_in;
 	ndvfm = (struct dimn_dvfm_s *)nvfm_in;
 
 	//inp_vf2 = inp_vf;
@@ -5139,7 +5139,7 @@ static void afbc_pre_check_dvfm(void *ds_in, void *vfm) /* struct dimn_dvfm_s */
 	union afbc_blk_s	*en_cfg_pre;
 //	struct di_ch_s *pch;
 	struct dimn_dvfm_s *nvfm;
-	struct dim_prevpp_ds_s *ds;
+	struct dim_pvpp_ds_s *ds;
 
 	if (!ds_in	||
 	    !vfm	||
@@ -5148,7 +5148,7 @@ static void afbc_pre_check_dvfm(void *ds_in, void *vfm) /* struct dimn_dvfm_s */
 
 //	cfg = di_afdp->top_cfg_pre;
 	nvfm = (struct dimn_dvfm_s *)vfm;
-	ds	= (struct dim_prevpp_ds_s *)ds_in;
+	ds	= (struct dim_pvpp_ds_s *)ds_in;
 	pctr = di_get_afd_ctr();
 
 	pctr->en_sgn.d8 = nvfm->c.afbc_sgn_cfg.d8;

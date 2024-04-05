@@ -1432,6 +1432,7 @@ static unsigned int dct_sft_prepare(struct di_ch_s *pch,
 	struct dim_nins_s *nins = NULL;
 	struct vframe_s *vf, *vf_get;
 	struct di_win_s out;
+	enum EPVPP_API_MODE link_mode;
 
 	*pnin_out = NULL; //
 	/* get vfm_in*/
@@ -1443,6 +1444,7 @@ static unsigned int dct_sft_prepare(struct di_ch_s *pch,
 		return DCT_SFT_WAIT_BIT | 5;
 	vf = &nins->c.vfm_cp;
 
+	link_mode = pch->link_mode;
 	/*??*/
 	hdct->ds_ratio = 0;
 	hdct->src_fmt = 2;
@@ -1629,15 +1631,15 @@ static unsigned int dct_sft_prepare(struct di_ch_s *pch,
 		return DCT_SFT_BYPSS_BIT | (DDIM_DCT_BYPASS_BY_PRE_BASE + 4);
 	}
 
-	if (dpvpp_ops_api() &&
-	    dpvpp_is_allowed() &&
-	    dpvpp_is_insert() &&
-	    dpvpp_ops_api()->get_di_in_win &&
+	if (dpvpp_ops_api(link_mode) &&
+	    dpvpp_is_allowed(link_mode) &&
+	    dpvpp_is_insert(link_mode) &&
+	    dpvpp_ops_api(link_mode)->get_di_in_win &&
 	    !(vf->type & VIDTYPE_INTERLACE)) {
 		int iret;
 		bool crop_flag = false;
 
-		iret = dpvpp_ops_api()->get_di_in_win(pch,
+		iret = dpvpp_ops_api(link_mode)->get_di_in_win(pch,
 			vf_org_width, vf_org_height, &out);
 		if (!iret) {
 			dcntr_mem->x_start = out.x_st;
