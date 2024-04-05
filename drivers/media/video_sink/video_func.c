@@ -5423,6 +5423,11 @@ exit:
 	/* do blend,judge really update in update_vpp_input_info for vpp_index */
 	vpp_blend_update(vinfo, VPP0);
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+	if (cur_dev->vd1_vsr_safa_support)
+		vsr_debug_mode_update(vsr_debug_mode, &vd_layer[0].sc_setting.vsr);
+#endif
+
 	/* late process */
 	for (i = 0; i < cur_dev->max_vd_layers; i++)
 		if (vd_layer[i].vd_func.vd_late_process)
