@@ -615,5 +615,9 @@ int pkt_adv_chip(void);
 extern unsigned int ai_color_enable;
 
 void resume_recovery_process(int vpp_index);
+extern uint demo_pk_sr_final_pgains;
+extern uint demo_pk_sr_final_ngains;
+void amve_safa_demo_ctrl(unsigned int enable);
+
 #endif /* AMVECM_H */
 
