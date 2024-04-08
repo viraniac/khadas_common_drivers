@@ -1184,7 +1184,6 @@ void meson_hdmitx_update(struct drm_connector_state *new_state,
 {
 	int mute_op = OFF_AVMUTE;
 	struct hdmitx_common *tx_comm = am_hdmi_info.hdmitx_dev->hdmitx_common;
-	struct hdmitx_hw_common *hw_comm = am_hdmi_info.hdmitx_dev->hw_common;
 	struct am_hdmitx_connector_state *old_hdmitx_state =
 		to_am_hdmitx_connector_state(old_state);
 	struct am_hdmitx_connector_state *new_hdmitx_state =
@@ -1199,8 +1198,6 @@ void meson_hdmitx_update(struct drm_connector_state *new_state,
 		if (new_hdmitx_state->avmute) {
 			hdmitx_common_avmute_locked(tx_comm, mute_op, AVMUTE_PATH_DRM);
 		} else {
-			hdmitx_hw_set_phy(hw_comm, 0);
-			hdmitx_hw_set_phy(hw_comm, 1);
 			hdmitx_common_avmute_locked(tx_comm, mute_op, AVMUTE_PATH_DRM);
 		}
 	}
