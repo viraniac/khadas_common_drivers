@@ -3716,7 +3716,7 @@ static struct vframe_s *vsync_toggle_frame(struct vframe_s *vf, int line)
 static struct vframe_s *save_toggle_frame(struct vframe_s *vf)
 {
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
-	if (get_top1_onoff()) {
+	if (get_top1_onoff() == 3) {
 		if (video_save.save_vf_en && video_save.save_vf) {
 			/* need toggle */
 			video_save.toggle_vf = video_save.save_vf;
@@ -4007,7 +4007,7 @@ struct vframe_s *amvideo_toggle_frame(s32 *vd_path_id)
 				break; // not render err crc frame
 			}
 			/*top1 enable, need check one more frame*/
-			if (is_amdv_enable() && get_top1_onoff()) {/*todo*/
+			if (is_amdv_enable() && get_top1_onoff() == 3) {/*todo*/
 				vf_top1 = amvideo_vf_peek();
 				/*wait next new Fn+1 for top1, proc top2 Fn + top1 Fn+1*/
 				/*if no new frame, proc top2 Fn + repeat Top1 Fn cur vsync*/
@@ -4035,9 +4035,14 @@ struct vframe_s *amvideo_toggle_frame(s32 *vd_path_id)
 			if (vd_path_id[0] == VFM_PATH_AMVIDEO ||
 			    vd_path_id[0] == VFM_PATH_DEF ||
 				vd_path_id[0] == VFM_PATH_AUTO) {
-				if (!get_top1_onoff() || !vf_top1) {/*no top1*/
+				if (get_top1_onoff() == 0 || !vf_top1) {/*no top1*/
 					dv_new_vf = dv_toggle_frame(vf, VD1_PATH, true);
-				} else if (vf_top1) {/*top1 + top2*/
+				} else if (get_top1_onoff() == 1) {
+				/*top1 enabled but no need get frame in advance*/
+					vf_top1 = vf;
+					amdv_parse_metadata_hw5_top1(vf_top1);
+					dv_new_vf = dv_toggle_frame(vf, VD1_PATH, true);
+				} else if (get_top1_onoff() == 3) {/*top1 + top2*/
 					amdv_parse_metadata_hw5_top1(vf_top1);
 					dv_new_vf = dv_toggle_frame(vf, VD1_PATH, true);
 				}

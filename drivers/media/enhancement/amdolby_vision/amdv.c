@@ -1957,6 +1957,7 @@ void reset_dv_param(void)
 		py_rd_id = 0;
 		l1l4_distance = 0;
 		force_bypass_precision = false;
+		force_bypass_pd_level0 = false;
 		memset(&dv5_md_hist.hist[0], 0, sizeof(dv5_md_hist.hist));
 		memset(&dv5_md_hist.l1l4_md[0], 0, sizeof(dv5_md_hist.l1l4_md));
 		memset(dv5_md_hist.hist_vaddr[0], 0, dv5_md_hist.hist_size);
@@ -13568,7 +13569,7 @@ void amdv_update_backlight(void)
 		bl_wr_id = (bl_wr_id + 1) % MAX_BL_COUNT;
 
 		bl_rd_id = (bl_wr_id + MAX_BL_COUNT - final_backlight_delay_vsync) % MAX_BL_COUNT;
-		if (debug_dolby & 0x200) {
+		if (debug_dolby & 0x2000000) {
 			for (i = 0; i < MAX_BL_COUNT; i += 10)
 				pr_info("%03d %03d %03d %03d %03d %03d %03d %03d %03d %03d\n",
 						tv_backlight[i].value,
@@ -13583,7 +13584,7 @@ void amdv_update_backlight(void)
 						tv_backlight[i + 9].value);
 		}
 
-		if (debug_dolby & 1) {
+		if (debug_dolby & 0x2000000) {
 			if (bl_rd_id < MAX_BL_COUNT)
 				pr_dv_dbg("backlight info:wr %d,rd %d,flag %d,cur %d,last %d\n",
 				bl_wr_id, bl_rd_id,
@@ -14860,6 +14861,8 @@ static long amdolby_vision_ioctl(struct file *file,
 	unsigned char cfg_name[MAX_BYTES] = "";
 	int dark_detail = 0;
 	char *user_cfg_data = NULL;
+	int precision_detail_support = 0;
+	int bypass_pd = 0;
 
 	if (debug_dolby & 0x200)
 		pr_info("[DV]: %s: cmd_nr = 0x%x\n",
@@ -15171,6 +15174,25 @@ static long amdolby_vision_ioctl(struct file *file,
 				cfg_info[mode_id].light_sense = light_sensor.flag;
 				cfg_info[mode_id].t_front_lux = light_sensor.t_frontLux;
 			}
+		} else {
+			ret = -EFAULT;
+		}
+		break;
+	case DV_IOC_GET_DV_PRECISION_DETAIL_SUPPORT:
+		if (check_cfg_enabled_top1() & CFG_ENABLE_PRECISION)
+			precision_detail_support = 1;
+		put_user(precision_detail_support, (u32 __user *)argp);
+		break;
+	case DV_IOC_SET_DV_PRECISION_DETAIL_BYPASS:
+		mode_id = get_pic_mode();
+		if (copy_from_user(&bypass_pd, argp,
+			sizeof(s32)) == 0) {
+			if (debug_dolby & 0x200)
+				pr_info("[DV]: set mode %d bypass_pd %d\n",
+					mode_id, bypass_pd);
+			bypass_pd = bypass_pd > 0 ? 1 : 0;
+			if (bypass_pd != cfg_info[mode_id].bypass_pd_from_user)
+				cfg_info[mode_id].bypass_pd_from_user = bypass_pd;
 		} else {
 			ret = -EFAULT;
 		}
@@ -16725,10 +16747,10 @@ static ssize_t amdolby_vision_inst_status_show
 			dolby_vision_enable, dolby_vision_on);
 
 		if (tv_hw5_setting) {
-			cfg_enable_top1 = (check_cfg_enabled_top1() |
-				check_dynamic_cfg_enabled_top1());
+			cfg_enable_top1 = check_cfg_enabled_top1();
 			len += sprintf(buf + len, "cfg:precision %d,l1l4:%d\n",
-				cfg_enable_top1 & 1, cfg_enable_top1 & 2);
+				cfg_enable_top1 & CFG_ENABLE_PRECISION,
+				cfg_enable_top1 & CFG_ENABLE_L1L4);
 		}
 		if (tv_hw5_setting && tv_hw5_setting->pq_config)
 			len += sprintf(buf + len, "cur cp cfg:precision %d %d,l1l4:%d\n",

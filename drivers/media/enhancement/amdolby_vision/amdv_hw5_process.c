@@ -397,7 +397,7 @@ void update_top1_onoff(struct vframe_s *vf)
 			ori_w = vf->width;
 			ori_h = vf->height;
 		}
-		cfg_enable_top1 = (check_cfg_enabled_top1() | check_dynamic_cfg_enabled_top1());
+		cfg_enable_top1 = check_cfg_enabled_top1();
 		if (cfg_enable_top1) {
 			get_top1_vd_info(vf, &top1_vd_info);
 			if (check_top1_scale(w, h)) {
@@ -416,7 +416,7 @@ void update_top1_onoff(struct vframe_s *vf)
 		}
 
 		if (force_top1_enable == 1) {
-			if (cfg_enable_top1 == 0) {
+			if (cfg_enable_top1 == CFG_NONE) {
 				if (debug_dolby & 1)
 					pr_dv_dbg("warning: cfg not enable top1, not allow force enable!\n");
 			} else {
@@ -468,36 +468,44 @@ void update_top1_onoff(struct vframe_s *vf)
 				pr_dv_dbg("enable_top1 status changed %d=>%d\n",
 					last_enable_top1, enable_top1);
 			last_enable_top1 = enable_top1;
-			if (enable_top1 && vf->src_fmt.py_level != PY_NO_LEVEL)
-				update_cp_cfg_hw5(true, true, true);
+
 		}
+
 		if (cfg_enable_top1) {
 			if (!enable_top1 ||
 				(last_py_level != vf->src_fmt.py_level &&
 				vf->src_fmt.py_level == PY_NO_LEVEL)) {
 				if (debug_dolby & 0x80000)
-					pr_dv_dbg("top1 py_level changed %s->%s,disable cfg precision for cp\n",
+					pr_dv_dbg("top1 py_level changed off %s->%s\n",
 					level_str[last_py_level],
 					level_str[vf->src_fmt.py_level]);
-				update_cp_cfg_hw5(true, true, false);
 			} else if (enable_top1 && last_py_level != vf->src_fmt.py_level &&
 				last_py_level == PY_NO_LEVEL) {
 				if (debug_dolby & 0x80000)
-					pr_dv_dbg("top1 py_level changed %s->%s,enable cfg precision for cp\n",
+					pr_dv_dbg("top1 py_level changed on %s->%s\n",
 					level_str[last_py_level],
 					level_str[vf->src_fmt.py_level]);
-				update_cp_cfg_hw5(true, true, true);
 			}
 		}
 		last_py_level = vf->src_fmt.py_level;
 	}
 }
 
-//todo
-bool get_top1_onoff(void)
+/*val=0: top1 disabled*/
+/*val=1: top1 enabled but no need get one more frame in advance*/
+/*val=3: top1 enabled and need get one more frame in advance*/
+u32 get_top1_onoff(void)
 {
-	//return enable_top1;
-	return is_amdv_on() && is_aml_hw5() && enable_top1;
+	u32 val = 0;
+
+	/*todo for precision disabled but L1L4 enable*/
+
+	if (is_amdv_on() && is_aml_hw5() && enable_top1) {
+		val = 3;
+		if (cfg_info[cur_pic_mode].bypass_pd_from_user)
+			val = 1;/*remove bit1*/
+	}
+	return val;
 }
 
 static bool prepare_parser(int reset_flag, struct video_inst_s *v_inst_info)
@@ -1847,41 +1855,24 @@ int amdv_parse_metadata_hw5(struct vframe_s *vf,
 			h = vf->height;
 		}
 		if (enable_top1) {
-			if (vf->src_fmt.py_level != last_top2_level &&
-				last_top2_level == PY_NO_LEVEL) {
+			if (vf->src_fmt.py_level != last_top2_level) {
 				if (debug_dolby & 0x80000)
-					pr_dv_dbg("top2 py_level changed %s->%s,enable cfg precision for cp\n",
+					pr_dv_dbg("top2 py_level changed %s->%s\n",
 					level_str[last_top2_level],
 					level_str[vf->src_fmt.py_level]);
-				update_cp_cfg_hw5(true, false, true);
-			} else if (vf->src_fmt.py_level != last_top2_level &&
-				vf->src_fmt.py_level == PY_NO_LEVEL) {
-				if (debug_dolby & 0x80000)
-					pr_dv_dbg("top2 py_level changed %s->%s,disable cfg precision for cp\n",
-					level_str[last_top2_level],
-					level_str[vf->src_fmt.py_level]);
-				update_cp_cfg_hw5(true, false, false);
 			}
-			if (update_top2_cfg && vf->src_fmt.py_level == PY_NO_LEVEL) {
-				if (debug_dolby & 0x80000)
-					pr_dv_dbg("top2 cfg changed with level=0,bypass cfg precision for cp\n");
-				update_cp_cfg_hw5(true, false, false);
-			} else if (update_top2_cfg && vf->src_fmt.py_level != PY_NO_LEVEL) {
-				update_cp_cfg_hw5(true, false, true);
-				if (debug_dolby & 0x80000)
-					pr_dv_dbg("top2 cfg changed,enable cfg precision for cp\n");
-			}
-			update_top2_cfg = false;
-			last_top2_level = vf->src_fmt.py_level;
-		} else {
+			if (vf->src_fmt.py_level == PY_NO_LEVEL)
+				force_bypass_pd_level0 = true;
+			else
+				force_bypass_pd_level0 = false;
+
+			/*cfg pd off->on: top2 cfg update after enable_top1*/
 			if (update_top2_cfg) {
-				if (debug_dolby & 0x80000)
-					pr_dv_dbg("top2 cfg changed with enable_top1=0,bypass cfg precision for cp\n");
-				update_cp_cfg_hw5(true, false, false);
+				update_cp_cfg_hw5(false, false, false);
+				update_top2_cfg = false;
 			}
-			update_top2_cfg = false;
-			last_top2_level = PY_NO_LEVEL;
 		}
+		last_top2_level = vf->src_fmt.py_level;
 	}
 
 	if (is_aml_tvmode() && vf &&
@@ -3351,7 +3342,8 @@ int amdolby_vision_process_hw5(struct vframe_s *vf_top1,
 		if (!(dolby_vision_flags & FLAG_CERTIFICATION)) {
 			if (enable_top1) {
 				if ((amdv_reset & 1) && !top1_info.core_on &&
-					top1_info.core_on_cnt == 0)
+					top1_info.core_on_cnt == 0 &&
+					!top2_info.core_on)
 					reset_flag = true;
 			} else {
 				if ((amdv_reset & 1) && !top2_info.core_on &&
