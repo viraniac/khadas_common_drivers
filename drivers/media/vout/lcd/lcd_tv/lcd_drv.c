@@ -202,6 +202,11 @@ int lcd_tv_driver_change(struct aml_lcd_drv_s *pdrv)
 	int ret;
 	unsigned long long local_time[3];
 
+	if (!pdrv->probe_done) {
+		LCDPR("[%d]: config not loaded, bypass %s", pdrv->index, __func__);
+		return 0;
+	}
+
 	local_time[0] = sched_clock();
 
 	LCDPR("[%d]: tv driver change(ver %s): %s\n",
