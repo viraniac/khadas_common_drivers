@@ -439,13 +439,6 @@ static int tvafe_dec_open(struct tvin_frontend_s *fe, enum tvin_port_e port,
 		return 1;
 	}
 
-	if (vbi_alloc_memory()) {
-		tvafe_pr_err("%s(%d): %s vbi malloc fail\n", __func__,
-			devp->index, tvin_port_str(port));
-		mutex_unlock(&devp->afe_mutex);
-		return 1;
-	}
-
 	adc_ch = tvafe_port_to_channel(port, devp->pinmux);
 
 #ifdef CONFIG_AMLOGIC_MEDIA_TVIN_AVDETECT
@@ -739,8 +732,6 @@ static void tvafe_dec_close(struct tvin_frontend_s *fe, enum tvin_port_type_e po
 #endif
 	/* init variable */
 	memset(tvafe, 0, sizeof(struct tvafe_info_s));
-
-	vbi_release_memory();
 	tvafe_pr_info("%s close afe ok.\n", __func__);
 
 	mutex_unlock(&devp->afe_mutex);

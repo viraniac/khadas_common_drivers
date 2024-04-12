@@ -299,9 +299,6 @@ struct vbi_dev_s {
 	unsigned int isr_cnt;
 };
 
-int vbi_alloc_memory(void);
-int vbi_release_memory(void);
-
 /*1: tvafe clk enable;*/
 /*0: tvafe clk disable*/
 /*read write cvd acd reg will crash when clk disabled*/

@@ -1797,83 +1797,6 @@ static ssize_t vbi_read(struct file *file, char __user *buf, size_t count,
 	return ret;
 }
 
-int vbi_alloc_memory(void)
-{
-	int ret = 0;
-	struct resource *res;
-	struct vbi_dev_s *vbi_dev = vbi_dev_local;
-
-	int flags = CODEC_MM_FLAGS_CMA_FIRST | CODEC_MM_FLAGS_CMA_CLEAR |
-			CODEC_MM_FLAGS_DMA;
-
-	/* get device memory */
-	res = &vbi_memobj;
-	ret = of_reserved_mem_device_init(vbi_dev->dev);
-	if (ret == 0) {
-		vbi_mem_flag = VBI_MEM_RESERVED;
-		vbi_dev->mem_start = res->start;
-		vbi_dev->mem_size = res->end - res->start + 1;
-		if (vbi_dev->mem_size > DECODER_VBI_SIZE)
-			vbi_dev->mem_size = DECODER_VBI_SIZE;
-		/* remap the package vbi hardware address for our conversion */
-		vbi_dev->pac_addr_start = phys_to_virt(vbi_dev->mem_start);
-		/*ioremap_nocache(vbi_dev->mem_start, vbi_dev->mem_size); */
-		memset(vbi_dev->pac_addr_start, 0, vbi_dev->mem_size);
-		if (!vbi_dev->pac_addr_start) {
-			tvafe_pr_err(": ioremap error!!!\n");
-			return -1;
-		}
-		tvafe_pr_info("vbi: reserved memory phy start_addr is:0x%lx, size is:0x%x\n",
-				vbi_dev->mem_start, vbi_dev->mem_size);
-	} else {
-		/*vbi memory alloc for codec_mm*/
-		tvafe_pr_info("vbi: share with codec_mm\n");
-		vbi_dev->mem_size = DECODER_VBI_SIZE;
-		vbi_mem_flag = VBI_MEM_CODEC_MALLOC;
-		vbi_dev->mem_start =
-			codec_mm_alloc_for_dma("tvfe_vbi", vbi_dev->mem_size / PAGE_SIZE, 0, flags);
-		/* remap the package vbi hardware address for our conversion */
-		vbi_dev->pac_addr_start =
-			(unsigned char *)codec_mm_phys_to_virt(vbi_dev->mem_start);
-		if (!vbi_dev->pac_addr_start) {
-			tvafe_pr_err("vbi:codec_mm ioremap error!!!\n");
-			return -1;
-		}
-		/*ioremap_nocache(vbi_dev->mem_start, vbi_dev->mem_size);*/
-		memset(vbi_dev->pac_addr_start, 0, vbi_dev->mem_size);
-		codec_mm_dma_flush(vbi_dev->pac_addr_start, vbi_dev->mem_size, DMA_TO_DEVICE);
-		tvafe_pr_info("vbi: dma_alloc phy start_addr is:0x%lx, size is:0x%x\n",
-				vbi_dev->mem_start, vbi_dev->mem_size);
-	}
-
-	vbi_dev->mem_size = vbi_dev->mem_size / 2;
-	vbi_dev->mem_size >>= 4;
-	vbi_dev->mem_size <<= 4;
-	vbi_mem_start = vbi_dev->mem_start;
-	vbi_dev->pac_addr_end = vbi_dev->pac_addr_start + vbi_dev->mem_size - 1;
-	tvafe_pr_info(": vbi_dev->pac_addr_start=0x%p, end:0x%p, size:0x%x\n",
-		vbi_dev->pac_addr_start, vbi_dev->pac_addr_end,
-		vbi_dev->mem_size);
-	vbi_dev->pac_addr = vbi_dev->pac_addr_start;
-	/* temp buffer for vbi data parse */
-	vbi_dev->temp_addr_start = vbi_dev->pac_addr_start + VBI_BUFF3_EA;
-	vbi_dev->temp_addr_end = vbi_dev->temp_addr_start + VBI_BUFF3_SIZE - 1;
-
-	return 0;
-}
-
-int vbi_release_memory(void)
-{
-	struct vbi_dev_s *vbi_dev = vbi_dev_local;
-
-	if (vbi_mem_flag == VBI_MEM_MALLOC && vbi_dev->pac_addr_start)
-		kfree(vbi_dev->pac_addr_start);
-	else if (vbi_mem_flag == VBI_MEM_CODEC_MALLOC && vbi_dev->mem_start)
-		codec_mm_free_for_dma("tvafe_vbi", vbi_dev->mem_start);
-
-	return 0;
-}
-
 static int vbi_open(struct inode *inode, struct file *file)
 {
 	struct vbi_dev_s *vbi_dev;
@@ -2537,6 +2460,8 @@ static int vbi_probe(struct platform_device *pdev)
 	int ret = 0;
 	struct resource *res;
 	struct vbi_dev_s *vbi_dev;
+	int flags = CODEC_MM_FLAGS_CMA_FIRST | CODEC_MM_FLAGS_CMA_CLEAR |
+			CODEC_MM_FLAGS_DMA;
 
 	ret = alloc_chrdev_region(&vbi_id, 0, 1, VBI_NAME);
 	if (ret < 0) {
@@ -2590,6 +2515,72 @@ static int vbi_probe(struct platform_device *pdev)
 		tvafe_pr_err("vbi don't find flag_cma use kzalloc\n");
 		vbi_dev->cma_config_flag = 0;
 	}
+
+	/* get device memory */
+	res = &vbi_memobj;
+	ret = of_reserved_mem_device_init(&pdev->dev);
+	if (ret == 0) {
+		vbi_mem_flag = VBI_MEM_RESERVED;
+		vbi_dev->mem_start = res->start;
+		vbi_dev->mem_size = res->end - res->start + 1;
+		if (vbi_dev->mem_size > DECODER_VBI_SIZE)
+			vbi_dev->mem_size = DECODER_VBI_SIZE;
+		tvafe_pr_info("vbi: reserved memory phy start_addr is:0x%lx, size is:0x%x\n",
+				vbi_dev->mem_start, vbi_dev->mem_size);
+		/* remap the package vbi hardware address for our conversion */
+		vbi_dev->pac_addr_start = phys_to_virt(vbi_dev->mem_start);
+		/*ioremap_nocache(vbi_dev->mem_start, vbi_dev->mem_size);*/
+		memset(vbi_dev->pac_addr_start, 0, vbi_dev->mem_size);
+		if (!vbi_dev->pac_addr_start) {
+			tvafe_pr_err(": ioremap error!!!\n");
+			goto fail_alloc_mem;
+		}
+	} else if (vbi_dev->cma_config_flag == 0) {
+		/*vbi memory alloc*/
+		tvafe_pr_info("vbi: alloc memory resource\n");
+		vbi_dev->mem_size = DECODER_VBI_SIZE;
+		vbi_mem_flag = VBI_MEM_MALLOC;
+		vbi_dev->pac_addr_start = kzalloc(vbi_dev->mem_size,
+			GFP_KERNEL);
+		vbi_dev->mem_start = virt_to_phys(vbi_dev->pac_addr_start);
+		if (!vbi_dev->pac_addr_start) {
+			tvafe_pr_err(": vbi mem malloc failed!!!\n");
+			goto fail_alloc_mem;
+		}
+		tvafe_pr_info("vbi: dma_alloc phy start_addr is:0x%lx, size is:0x%x\n",
+			vbi_dev->mem_start, vbi_dev->mem_size);
+	} else {
+		tvafe_pr_info("vbi: share with codec_mm\n");
+		vbi_dev->mem_size = DECODER_VBI_SIZE;
+		vbi_mem_flag = VBI_MEM_CODEC_MALLOC;
+		vbi_dev->mem_start =
+			codec_mm_alloc_for_dma("tvfe_vbi", vbi_dev->mem_size / PAGE_SIZE, 0, flags);
+		/* remap the package vbi hardware address for our conversion */
+		vbi_dev->pac_addr_start =
+			(unsigned char *)codec_mm_phys_to_virt(vbi_dev->mem_start);
+		if (!vbi_dev->pac_addr_start) {
+			tvafe_pr_err("vbi:codec_mm ioremap error!!!\n");
+			goto fail_alloc_mem;
+		}
+		/*ioremap_nocache(vbi_dev->mem_start, vbi_dev->mem_size);*/
+		memset(vbi_dev->pac_addr_start, 0, vbi_dev->mem_size);
+		codec_mm_dma_flush(vbi_dev->pac_addr_start, vbi_dev->mem_size, DMA_TO_DEVICE);
+		tvafe_pr_info("vbi: dma_alloc phy start_addr is:0x%lx, size is:0x%x\n",
+				vbi_dev->mem_start, vbi_dev->mem_size);
+	}
+
+	vbi_dev->mem_size = vbi_dev->mem_size / 2;
+	vbi_dev->mem_size >>= 4;
+	vbi_dev->mem_size <<= 4;
+	vbi_mem_start = vbi_dev->mem_start;
+	vbi_dev->pac_addr_end = vbi_dev->pac_addr_start + vbi_dev->mem_size - 1;
+	tvafe_pr_info(": vbi_dev->pac_addr_start=0x%p, end:0x%p, size:0x%x\n",
+		vbi_dev->pac_addr_start, vbi_dev->pac_addr_end,
+		vbi_dev->mem_size);
+	vbi_dev->pac_addr = vbi_dev->pac_addr_start;
+	/* temp buffer for vbi data parse */
+	vbi_dev->temp_addr_start = vbi_dev->pac_addr_start + VBI_BUFF3_EA;
+	vbi_dev->temp_addr_end = vbi_dev->temp_addr_start + VBI_BUFF3_SIZE - 1;
 
 	mutex_init(&vbi_dev->mutex);
 	spin_lock_init(&vbi_dev->lock);
@@ -2668,6 +2659,10 @@ static int vbi_remove(struct platform_device *pdev)
 	if (vbi_dev->pac_addr_start) {
 		if (vbi_mem_flag == VBI_MEM_RESERVED)
 			iounmap(vbi_dev->pac_addr_start);
+		else if (vbi_mem_flag == VBI_MEM_MALLOC)
+			kfree(vbi_dev->pac_addr_start);
+		else if (vbi_mem_flag == VBI_MEM_CODEC_MALLOC)
+			codec_mm_free_for_dma("tvfe_vbi", vbi_dev->mem_start);
 	}
 	vfree(vbi_dev->slicer);
 	device_destroy(vbi_clsp, MKDEV(MAJOR(vbi_id), 0));
