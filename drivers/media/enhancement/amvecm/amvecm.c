@@ -11714,6 +11714,12 @@ static void lc_rd_reg(enum lc_reg_lut_e reg_sel, int data_type, char *buf)
 	int i, j, tmp, tmp1, tmp2, len = 12;
 	int lut_data[63] = {0};
 	char *stemp = NULL;
+	int slice_index = 0;
+
+	if (chip_type_id == chip_t3x) {
+		ve_lc_rd_reg(reg_sel, data_type, buf, slice_index);
+		return;
+	}
 
 	if (data_type == 1)
 		goto dump_as_string;
@@ -11970,93 +11976,121 @@ static void lc_wr_reg(int *p, enum lc_reg_lut_e reg_sel)
 {
 	int i, j, tmp, tmp1, tmp2;
 
-	switch (reg_sel) {
-	case SATUR_LUT:
-		for (i = 0; i < 31 ; i++) {
-			tmp1 = *(p + 2 * i);
-			tmp2 = *(p + 2 * i + 1);
-			tmp = ((tmp1 & 0xfff) << 16) | (tmp2 & 0xfff);
-			WRITE_VPP_REG(SRSHARP1_LC_SAT_LUT_0_1 + i, tmp);
-		}
-		tmp = (*(p + 62)) & 0xfff;
-		WRITE_VPP_REG(SRSHARP1_LC_SAT_LUT_62, tmp);
-		break;
-	case YMINVAL_LMT:
-		for (i = 0; i < 6 ; i++) {
-			tmp1 = *(p + 2 * i);
-			tmp2 = *(p + 2 * i + 1);
-			tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
-			WRITE_VPP_REG(LC_CURVE_YMINVAL_LMT_0_1 + i, tmp);
-		}
-		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
-			for (j = 0; j < 2 ; j++) {
+	if (chip_type_id != chip_t3x) {
+		switch (reg_sel) {
+		case SATUR_LUT:
+			for (i = 0; i < 31; i++) {
 				tmp1 = *(p + 2 * i);
 				tmp2 = *(p + 2 * i + 1);
-				tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
-				WRITE_VPP_REG(LC_CURVE_YMINVAL_LMT_12_13 + j,
-					      tmp);
-				i++;
+				tmp = ((tmp1 & 0xfff) << 16) | (tmp2 & 0xfff);
+				WRITE_VPP_REG(SRSHARP1_LC_SAT_LUT_0_1 + i, tmp);
 			}
-		}
-		break;
-	case YPKBV_YMAXVAL_LMT:
-		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2))
+			tmp = (*(p + 62)) & 0xfff;
+			WRITE_VPP_REG(SRSHARP1_LC_SAT_LUT_62, tmp);
 			break;
+		case YMINVAL_LMT:
+			for (i = 0; i < 6; i++) {
+				tmp1 = *(p + 2 * i);
+				tmp2 = *(p + 2 * i + 1);
+				tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
+				WRITE_VPP_REG(LC_CURVE_YMINVAL_LMT_0_1 + i, tmp);
+			}
+			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
+				for (j = 0; j < 2; j++) {
+					tmp1 = *(p + 2 * i);
+					tmp2 = *(p + 2 * i + 1);
+					tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
+					WRITE_VPP_REG(LC_CURVE_YMINVAL_LMT_12_13 + j,
+						tmp);
+					i++;
+				}
+			}
+			break;
+		case YPKBV_YMAXVAL_LMT:
+			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2))
+				break;
 
-		for (i = 0; i < 6 ; i++) {
-			tmp1 = *(p + 2 * i);
-			tmp2 = *(p + 2 * i + 1);
-			tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
-			WRITE_VPP_REG(LC_CURVE_YPKBV_YMAXVAL_LMT_0_1 + i, tmp);
-		}
-		break;
-	case YMAXVAL_LMT:
-		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
-			for (i = 0; i < 6 ; i++) {
+			for (i = 0; i < 6; i++) {
 				tmp1 = *(p + 2 * i);
 				tmp2 = *(p + 2 * i + 1);
 				tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
-				WRITE_VPP_REG(LC_CURVE_YMAXVAL_LMT_0_1 + i,
-					      tmp);
+				WRITE_VPP_REG(LC_CURVE_YPKBV_YMAXVAL_LMT_0_1 + i, tmp);
 			}
+			break;
+		case YMAXVAL_LMT:
+			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
+				for (i = 0; i < 6; i++) {
+					tmp1 = *(p + 2 * i);
+					tmp2 = *(p + 2 * i + 1);
+					tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
+					WRITE_VPP_REG(LC_CURVE_YMAXVAL_LMT_0_1 + i,
+						tmp);
+				}
 
-			for (j = 0; j < 2 ; j++) {
-				tmp1 = *(p + 2 * i);
-				tmp2 = *(p + 2 * i + 1);
-				tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
-				WRITE_VPP_REG(LC_CURVE_YMAXVAL_LMT_12_13 + j,
-					      tmp);
-				i++;
+				for (j = 0; j < 2; j++) {
+					tmp1 = *(p + 2 * i);
+					tmp2 = *(p + 2 * i + 1);
+					tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
+					WRITE_VPP_REG(LC_CURVE_YMAXVAL_LMT_12_13 + j,
+						tmp);
+					i++;
+				}
 			}
-		}
-		break;
-	case YPKBV_LMT:
-		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
-			for (i = 0; i < 8 ; i++) {
-				tmp1 = *(p + 2 * i);
-				tmp2 = *(p + 2 * i + 1);
-				tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
-				WRITE_VPP_REG(LC_CURVE_YPKBV_LMT_0_1 + i,
-					      tmp);
+			break;
+		case YPKBV_LMT:
+			if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
+				for (i = 0; i < 8; i++) {
+					tmp1 = *(p + 2 * i);
+					tmp2 = *(p + 2 * i + 1);
+					tmp = ((tmp1 & 0x3ff) << 16) | (tmp2 & 0x3ff);
+					WRITE_VPP_REG(LC_CURVE_YPKBV_LMT_0_1 + i,
+						tmp);
+				}
 			}
+			break;
+		case YPKBV_RAT:
+			tmp = (*p & 0xff) << 24 | (*(p + 1) & 0xff) << 16 |
+				(*(p + 2) & 0xff) << 8 | (*(p + 3) & 0xff);
+			WRITE_VPP_REG(LC_CURVE_YPKBV_RAT, tmp);
+			break;
+		case YPKBV_SLP_LMT:
+			tmp = (*p & 0xff) << 8 | (*(p + 1) & 0xff);
+			WRITE_VPP_REG(LC_CURVE_YPKBV_SLP_LMT, tmp);
+			break;
+		case CNTST_LMT:
+			tmp = (*p & 0xff) << 24 | (*(p + 1) & 0xff) << 16 |
+				(*(p + 2) & 0xff) << 8 | (*(p + 3) & 0xff);
+			WRITE_VPP_REG(LC_CURVE_CONTRAST__LMT_LH, tmp);
+			break;
+		default:
+			break;
 		}
-		break;
-	case YPKBV_RAT:
-		tmp = (*p & 0xff) << 24 | (*(p + 1) & 0xff) << 16 |
-			(*(p + 2) & 0xff) << 8 | (*(p + 3) & 0xff);
-		WRITE_VPP_REG(LC_CURVE_YPKBV_RAT, tmp);
-		break;
-	case YPKBV_SLP_LMT:
-		tmp = (*p & 0xff) << 8 | (*(p + 1) & 0xff);
-		WRITE_VPP_REG(LC_CURVE_YPKBV_SLP_LMT, tmp);
-		break;
-	case CNTST_LMT:
-		tmp = (*p & 0xff) << 24 | (*(p + 1) & 0xff) << 16 |
-			(*(p + 2) & 0xff) << 8 | (*(p + 3) & 0xff);
-		WRITE_VPP_REG(LC_CURVE_CONTRAST__LMT_LH, tmp);
-		break;
-	default:
-		break;
+	} else {
+		switch (reg_sel) {
+		case SATUR_LUT:
+			ve_lc_sat_lut_set(p);
+			break;
+		case YMINVAL_LMT:
+			ve_lc_ymin_lmt_set(p);
+			break;
+		case YMAXVAL_LMT:
+			ve_lc_ymax_lmt_set(p);
+			break;
+		case YPKBV_LMT:
+			ve_lc_ypkbv_lmt_set(p);
+			break;
+		case YPKBV_RAT:
+			ve_lc_ypkbv_rat_set(p);
+			break;
+		case YPKBV_SLP_LMT:
+			ve_lc_ypkbv_slp_lmt_set(p);
+			break;
+		case CNTST_LMT:
+			ve_lc_contrast_lmt_set(p);
+			break;
+		default:
+			break;
+		}
 	}
 }
 
@@ -12413,9 +12447,13 @@ static ssize_t amvecm_lc_store(struct class *cls,
 		amlc_iir_debug_en = val;
 		pr_info("setting value: %d\n", amlc_iir_debug_en);
 	} else if (!strcmp(parm[0], "get_blk_region")) {
-		val = READ_VPP_REG(LC_CURVE_HV_NUM);
-		h = (val >> 8) & 0x1f;
-		v = (val) & 0x1f;
+		if (chip_type_id == chip_t3x) {
+			ve_lc_blk_num_get(&h, &v, 0);
+		} else {
+			val = READ_VPP_REG(LC_CURVE_HV_NUM);
+			h = (val >> 8) & 0x1f;
+			v = (val) & 0x1f;
+		}
 		if (!strcmp(parm[1], "htotal")) {
 			lc_temp = h;
 			lc_dbg_flag |= LC_PARAM_RD_UPDATE;

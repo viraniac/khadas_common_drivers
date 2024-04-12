@@ -3977,6 +3977,324 @@ void clean_lc_stts_overflow(void)
 	pr_info("[0x%04x]=0x%08x\n", reg_ro, tmp);
 }
 
+static void dump_convert_str(int num,
+	int num_num, char cur_s[],
+	int char_bit, int bit_chose)
+{
+	char buf[9] = {0};
+	int i, count;
+
+	if (bit_chose == 10)
+		snprintf(buf, sizeof(buf), "%d", num);
+	else if (bit_chose == 16)
+		snprintf(buf, sizeof(buf), "%x", num);
+
+	count = strlen(buf);
+	if (count > 4)
+		count = 4;
+
+	for (i = 0; i < count; i++)
+		buf[i + char_bit] = buf[i];
+
+	for (i = 0; i < char_bit; i++)
+		buf[i] = '0';
+
+	count = strlen(buf);
+	for (i = 0; i < char_bit; i++)
+		buf[i] = buf[count - char_bit + i];
+
+	if (num_num > 0) {
+		for (i = 0; i < char_bit; i++)
+			cur_s[i + num_num * char_bit] = buf[i];
+	} else {
+		for (i = 0; i < char_bit; i++)
+			cur_s[i] = buf[i];
+	}
+}
+
+void ve_lc_rd_reg(int reg_sel, int data_type,
+	char *buf, int slice_index)
+{
+	int i, j, tmp, tmp1, tmp2, len = 12;
+	int lut_data[63] = {0};
+	char *stemp = NULL;
+	unsigned int reg;
+
+	if (data_type == 1)
+		goto dump_as_string;
+
+	switch (reg_sel) {
+	case SATUR_LUT:
+		reg = VPP_SRSHARP1_LC_SAT_LUT_0_1 +
+			sr_sharp_reg_ofst[slice_index];
+		for (i = 0; i < 31; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0xfff;
+			tmp2 = tmp & 0xfff;
+			pr_info("reg_lc_satur_lut[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_lc_satur_lut[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+		}
+
+		reg = VPP_SRSHARP1_LC_SAT_LUT_62 +
+			sr_sharp_reg_ofst[slice_index];
+		tmp = READ_VPP_REG(reg);
+		pr_info("reg_lc_satur_lut[62] =%4d.\n",
+			tmp & 0xfff);
+		break;
+	case YMINVAL_LMT:
+		reg = VPP_LC1_CURVE_YMINVAL_LMT_0_1 + lc_reg_ofst[slice_index];
+		for (i = 0; i < 6; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			pr_info("reg_yminVal_lmt[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_yminVal_lmt[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+		}
+
+		reg = VPP_LC1_CURVE_YMINVAL_LMT_12_13 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			pr_info("reg_yminVal_lmt[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_yminVal_lmt[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+			i++;
+		}
+
+		reg = VPP_LC1_CURVE_YMINVAL_LMT_14_15 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2 ; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			pr_info("reg_yminVal_lmt[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_yminVal_lmt[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+			i++;
+		}
+		break;
+	case YMAXVAL_LMT:
+		reg = VPP_LC1_CURVE_YMAXVAL_LMT_0_1 + lc_reg_ofst[slice_index];
+		for (i = 0; i < 6; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			pr_info("reg_lc_ymaxVal_lmt[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_lc_ymaxVal_lmt[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+		}
+
+		reg = VPP_LC1_CURVE_YMAXVAL_LMT_12_13 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			pr_info("reg_lc_ymaxVal_lmt[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_lc_ymaxVal_lmt[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+			i++;
+		}
+
+		reg = VPP_LC1_CURVE_YMAXVAL_LMT_14_15 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			pr_info("reg_lc_ymaxVal_lmt[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_lc_ymaxVal_lmt[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+			i++;
+		}
+		break;
+	case YPKBV_LMT:
+		reg = VPP_LC1_CURVE_YPKBV_LMT_0_1 + lc_reg_ofst[slice_index];
+		for (i = 0; i < 8; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			pr_info("reg_lc_ypkBV_lmt[%d] =%4d.\n",
+				2 * i, tmp1);
+			pr_info("reg_lc_ypkBV_lmt[%d] =%4d.\n",
+				2 * i + 1, tmp2);
+		}
+		break;
+	case YPKBV_RAT:
+		reg = VPP_LC1_CURVE_YPKBV_RAT + lc_reg_ofst[slice_index];
+		tmp = READ_VPP_REG(reg);
+		pr_info("reg_lc_ypkBV_ratio[0] =%4d.\n",
+			(tmp >> 24) & 0xff);
+		pr_info("reg_lc_ypkBV_ratio[1] =%4d.\n",
+			(tmp >> 16) & 0xff);
+		pr_info("reg_lc_ypkBV_ratio[2] =%4d.\n",
+			(tmp >> 8) & 0xff);
+		pr_info("reg_lc_ypkBV_ratio[3] =%4d.\n",
+			tmp & 0xff);
+		break;
+	case YPKBV_SLP_LMT:
+		reg = VPP_LC1_CURVE_YPKBV_SLP_LMT + lc_reg_ofst[slice_index];
+		tmp = READ_VPP_REG(reg);
+		pr_info("reg_lc_ypkBV_slope_lmt[0] =%4d.\n",
+			(tmp >> 8) & 0xff);
+		pr_info("reg_lc_ypkBV_slope_lmt[1] =%4d.\n",
+			tmp & 0xff);
+		break;
+	case CNTST_LMT:
+		reg = VPP_LC1_CURVE_CONTRAST_LMT_LH + lc_reg_ofst[slice_index];
+		tmp = READ_VPP_REG(reg);
+		pr_info("reg_lc_cntstlmt_low[0] =%4d.\n",
+			(tmp >> 24) & 0xff);
+		pr_info("reg_lc_cntstlmt_high[0] =%4d.\n",
+			(tmp >> 16) & 0xff);
+		pr_info("reg_lc_cntstlmt_low[1] =%4d.\n",
+			(tmp >> 8) & 0xff);
+		pr_info("reg_lc_cntstlmt_high[1] =%4d.\n",
+			tmp & 0xff);
+		break;
+	default:
+		break;
+	}
+	return;
+
+dump_as_string:
+	stemp = kzalloc(300, GFP_KERNEL);
+	if (!stemp)
+		return;
+
+	memset(stemp, 0, 300);
+
+	switch (reg_sel) {
+	case SATUR_LUT:
+		reg = VPP_SRSHARP1_LC_SAT_LUT_0_1 +
+			sr_sharp_reg_ofst[slice_index];
+		for (i = 0; i < 31; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0xfff;
+			tmp2 = tmp & 0xfff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+		}
+
+		reg = VPP_SRSHARP1_LC_SAT_LUT_62 +
+			sr_sharp_reg_ofst[slice_index];
+		tmp = READ_VPP_REG(reg);
+		lut_data[62] = tmp & 0xfff;
+
+		for (i = 0; i < 63; i++)
+			dump_convert_str(lut_data[i], i, stemp, 4, 10);
+		memcpy(buf, stemp, 300);
+		break;
+	case YMINVAL_LMT:
+		reg = VPP_LC1_CURVE_YMINVAL_LMT_0_1 + lc_reg_ofst[slice_index];
+		for (i = 0; i < 6; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+		}
+
+		reg = VPP_LC1_CURVE_YMINVAL_LMT_12_13 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+			i++;
+		}
+
+		reg = VPP_LC1_CURVE_YMINVAL_LMT_14_15 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+			i++;
+		}
+
+		len = 16;
+		for (i = 0; i < len; i++)
+			dump_convert_str(lut_data[i], i, stemp, 4, 10);
+		memcpy(buf, stemp, 300);
+		break;
+	case YMAXVAL_LMT:
+		reg = VPP_LC1_CURVE_YMAXVAL_LMT_0_1 + lc_reg_ofst[slice_index];
+		for (i = 0; i < 6; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+		}
+
+		reg = VPP_LC1_CURVE_YMAXVAL_LMT_12_13 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+			i++;
+		}
+
+		reg = VPP_LC1_CURVE_YMAXVAL_LMT_14_15 + lc_reg_ofst[slice_index];
+		for (j = 0; j < 2; j++) {
+			tmp = READ_VPP_REG(reg + j);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+			i++;
+		}
+
+		len = 16;
+		for (i = 0; i < len; i++)
+			dump_convert_str(lut_data[i], i, stemp, 4, 10);
+		memcpy(buf, stemp, 300);
+		break;
+	case YPKBV_LMT:
+		reg = VPP_LC1_CURVE_YPKBV_LMT_0_1 + lc_reg_ofst[slice_index];
+		for (i = 0; i < 8; i++) {
+			tmp = READ_VPP_REG(reg + i);
+			tmp1 = (tmp >> 16) & 0x3ff;
+			tmp2 = tmp & 0x3ff;
+			lut_data[2 * i] = tmp1;
+			lut_data[2 * i + 1] = tmp2;
+		}
+
+		for (i = 0; i < 16; i++)
+			dump_convert_str(lut_data[i], i, stemp, 4, 10);
+		memcpy(buf, stemp, 300);
+		break;
+	case YPKBV_RAT:
+		reg = VPP_LC1_CURVE_YPKBV_RAT + lc_reg_ofst[slice_index];
+		tmp = READ_VPP_REG(reg);
+		lut_data[0] = (tmp >> 24) & 0xff;
+		lut_data[1] = (tmp >> 16) & 0xff;
+		lut_data[2] = (tmp >> 8) & 0xff;
+		lut_data[3] = tmp & 0xff;
+
+		for (i = 0; i < 4; i++)
+			dump_convert_str(lut_data[i], i, stemp, 4, 10);
+		memcpy(buf, stemp, 300);
+		break;
+	default:
+		break;
+	}
+
+	kfree(stemp);
+}
+
 void dump_dnlp_reg(void)
 {
 	unsigned int tmp;

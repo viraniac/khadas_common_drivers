@@ -123,6 +123,8 @@ void dump_lc_mapping_reg(void);
 void dump_lc_reg(void);
 void monitor_lc_stts_overflow(void);
 void clean_lc_stts_overflow(void);
+void ve_lc_rd_reg(int reg_sel, int data_type,
+	char *buf, int slice_index);
 void dump_dnlp_reg(void);
 
 void post_lut3d_ctl(enum wr_md_e mode, int en, int vpp_index);
