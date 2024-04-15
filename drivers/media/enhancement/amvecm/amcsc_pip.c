@@ -3545,7 +3545,8 @@ void video_post_process(struct vframe_s *vf,
 					0, 1, 1, vpp_index);
 				VSYNC_WRITE_VPP_REG_BITS_VPP_SEL(VPP_VADJ2_MISC,
 					0, 1, 1, vpp_index);
-				if (csc_type == VPP_MATRIX_YUV709F_RGB)
+				if (csc_type == VPP_MATRIX_YUV709F_RGB &&
+					source_type[vd_path] != HDRTYPE_DOVI)
 					mtx_csc = MATRIX_YUV709F_RGB;
 				else
 					mtx_csc = MATRIX_YUV709_RGB;

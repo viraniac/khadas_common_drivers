@@ -8137,7 +8137,7 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 		new_dovi_setting.video_height = 0;
 		new_dovi_setting.mode_changed = 0;
 		if (amdv_target_mode == AMDV_OUTPUT_MODE_BYPASS)
-			amdv_wait_on = false;
+			clear_dolby_vision_wait();
 		if (debug_dolby & 8)
 			pr_dv_dbg("now bypass mode, target %d, wait %d\n",
 				  amdv_target_mode,
@@ -9946,7 +9946,7 @@ int amdv_parse_metadata_v2_stb(struct vframe_s *vf,
 		}
 		new_m_dovi_setting.mode_changed = 0;
 		if (amdv_target_mode == AMDV_OUTPUT_MODE_BYPASS)
-			amdv_wait_on = false;
+			clear_dolby_vision_wait();
 		if (debug_dolby & 8)
 			pr_dv_dbg("now bypass mode, target %d, wait %d\n",
 				     amdv_target_mode,
