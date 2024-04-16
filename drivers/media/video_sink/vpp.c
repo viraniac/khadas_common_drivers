@@ -2766,7 +2766,8 @@ RESTART:
 			       != VIDTYPE_PROGRESSIVE),
 			      vf->combing_cur_lev);
 	/*for gxl cvbs out index*/
-	if (vinfo->mode == VMODE_CVBS &&
+	if (is_meson_gxl_cpu() &&
+	    vinfo->mode == VMODE_CVBS &&
 	    (filter->vpp_hf_start_phase_step == (1 << 24))) {
 		if (hscaler_8tap_enable[input->layer_id])
 			filter->vpp_horz_filter =
