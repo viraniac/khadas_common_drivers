@@ -33,6 +33,7 @@
 
 #define WIDTH_8K 7680
 #define HEIGHT_8K 7680
+#define IS_DI_PSTLINK(di_flag) ((di_flag) & DI_FLAG_DI_PSTVPPLINK)
 
 #ifdef CONFIG_AMLOGIC_ENABLE_VIDEO_PIPELINE_DUMP_DATA
 static int dump_src_count;
@@ -598,6 +599,7 @@ int config_ge2d_data(struct vframe_s *src_vf, unsigned long addr, int buf_w, int
 	struct src_data_para *data)
 {
 	struct vframe_s *vf = NULL;
+	int vf_height;
 
 	if (IS_ERR_OR_NULL(data)) {
 		pr_info("%s: invalid param.\n", __func__);
@@ -615,6 +617,12 @@ int config_ge2d_data(struct vframe_s *src_vf, unsigned long addr, int buf_w, int
 		} else {
 			vf = src_vf;
 		}
+
+		if (vf && vf->di_flag && IS_DI_PSTLINK(vf->di_flag))
+			vf_height = vf->height >> 1;
+		else
+			vf_height = vf->height;
+
 		data->canvas0Addr = vf->canvas0Addr;
 		data->canvas1Addr = vf->canvas1Addr;
 		data->canvas0_config[0] = vf->canvas0_config[0];
@@ -632,23 +640,27 @@ int config_ge2d_data(struct vframe_s *src_vf, unsigned long addr, int buf_w, int
 			if ((crop_w > WIDTH_8K  || crop_w < 0) ||
 				(crop_h > HEIGHT_8K || crop_h < 0)) {
 				data->width = vf->width;
-				data->height = vf->height;
+				data->height = vf_height;
 			} else {
 				data->position_x = crop_x * vf->width / vf->compWidth;
-				data->position_y = crop_y * vf->height / vf->compHeight;
+				data->position_y = crop_y * vf_height / vf->compHeight;
 				data->width = crop_w * vf->width / vf->compWidth;
-				data->height = crop_h * vf->height / vf->compHeight;
+				data->height = crop_h * vf_height / vf->compHeight;
 			}
 		} else {
 			if ((crop_w > WIDTH_8K  || crop_w < 0) ||
 				(crop_h > HEIGHT_8K || crop_h < 0)) {
 				data->width = vf->width;
-				data->height = vf->height;
+				data->height = vf_height;
 			} else {
 				data->position_x = crop_x;
 				data->position_y = crop_y;
 				data->width = crop_w;
 				data->height = crop_h;
+				if (vf && vf->di_flag && IS_DI_PSTLINK(vf->di_flag)) {
+					data->position_y >>= 1;
+					data->height >>= 1;
+				}
 			}
 		}
 

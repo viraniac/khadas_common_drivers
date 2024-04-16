@@ -1744,6 +1744,15 @@ bool vf_is_pre_link(struct vframe_s *vf)
 	return false;
 }
 
+//#define IS_DI_PSTLINK(di_flag) ((di_flag) & DI_FLAG_DI_PSTVPPLINK)
+
+bool vf_is_post_link(struct vframe_s *vf)
+{
+	if (vf && vf->di_flag && IS_DI_PSTLINK(vf->di_flag))
+		return true;
+	return false;
+}
+
 static struct vframe_s *get_vf_from_file(struct composer_dev *dev,
 					 struct file *file_vf, bool need_dw)
 {
@@ -3651,7 +3660,8 @@ static void video_composer_task(struct composer_dev *dev)
 #endif
 		if (enable_prelink &&
 			!IS_DI_PRELINK(vf->di_flag) &&
-			!IS_DI_PRELINK_BYPASS(vf->di_flag) &&
+			!IS_DI_PSTLINK(vf->di_flag) &&
+			!IS_DI_PLINK_BYPASS(vf->di_flag) &&
 			!(vf->type & VIDTYPE_INTERLACE)) {
 			vc_print(dev->index, PRINT_OTHER, "need set ds_ratio.\n");
 			ds_ratio = get_vf_ds_ratio(dev, vf);

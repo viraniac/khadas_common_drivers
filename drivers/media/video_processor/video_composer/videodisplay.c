@@ -922,7 +922,7 @@ static struct vframe_s *vc_vf_get(void *op_arg)
 			 vf->duration);
 
 		vc_print(dev->index, PRINT_OTHER,
-			"%s: prelink_en=%d, vf=%px(%px), omx_index=%d, vf_type=0x%x, vf_flag=0x%x, vf->timestamp: %lld.\n",
+			"%s: prelink_en=%d, vf=%px(%px), omx_index=%d, vf_type=0x%x, vf_flag=0x%x, vf->timestamp: %lld.di_flag=%x\n",
 			__func__,
 			enable_prelink,
 			vf,
@@ -930,7 +930,8 @@ static struct vframe_s *vc_vf_get(void *op_arg)
 			vf->omx_index,
 			vf->type,
 			vf->flag,
-			div_u64(vf->timestamp, 1000000000));
+			div_u64(vf->timestamp, 1000000000),
+			vf->di_flag);
 
 		vc_print(dev->index, PRINT_OTHER,
 			"%s: fbc:headaddr=0x%lx, bodyaddr=0x%lx, width=%d, height=%d.\n",

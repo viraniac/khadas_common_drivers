@@ -56,6 +56,7 @@ static u32 cur_streamline_val[DI_INSTANCE_COUNT];
 static u32 q_dropped = 1;
 static u32 di_pre_buf_count = 4;
 static u32 di_post_buf_count = 4;
+static u32 di_pre_buf_count_postlink = 7;
 
 static DEFINE_MUTEX(di_process_mutex);
 
@@ -1275,6 +1276,11 @@ static int di_process_set_frame(struct di_process_dev *dev, struct frame_info_t 
 		}
 	}
 
+	if (vf->type & VIDTYPE_INTERLACE)
+		dev->cur_is_i = true;
+	else
+		dev->cur_is_i = false;
+
 	omx_index = vf->omx_index;
 
 	dp_print(dev->index, PRINT_OTHER,
@@ -1317,6 +1323,12 @@ static int di_process_set_frame(struct di_process_dev *dev, struct frame_info_t 
 			dp_put_file(dev, file_vf);
 			return 0;
 		}
+		if (vf->type & VIDTYPE_INTERLACE && dim_get_post_link()) {
+			dp_print(dev->index, PRINT_OTHER, "reset di buf count %d, %d\n",
+				di_pre_buf_count_postlink, di_post_buf_count);
+			if (di_set_buffer_num(di_post_buf_count, di_pre_buf_count_postlink) < 0)
+				dp_print(dev->index, PRINT_ERROR, "set DI buf count failed\n");
+		}
 		dp_print(dev->index, PRINT_OTHER, "q dummy vf to DI\n");
 		i = get_received_frame_free_index(dev);
 
@@ -1341,14 +1353,20 @@ static int di_process_set_frame(struct di_process_dev *dev, struct frame_info_t 
 			i = get_received_frame_free_index(dev);
 
 			memcpy(&dev->dummy_vf1, vf, sizeof(struct vframe_s));
-			dev->dummy_vf1.type &= ~VIDTYPE_TYPEMASK;
 			dev->dummy_vf1.hdr10p_data_size = 0;
 			dev->dummy_vf1.hdr10p_data_buf = NULL;
 			dev->dummy_vf1.meta_data_size = 0;
 			dev->dummy_vf1.meta_data_buf = NULL;
 			dev->dummy_vf1.vf_ud_param.magic_code = 0;
 			dev->dummy_vf1.src_fmt.sei_magic_code = 0;
-			dev->dummy_vf1.height >>= 1;
+
+			if (dim_get_post_link()) {
+				dev->dummy_vf1.type &= ~0x2;
+			} else {
+				dev->dummy_vf1.type &= ~VIDTYPE_TYPEMASK;
+				dev->dummy_vf1.height >>= 1;
+			}
+
 			dev->dummy_vf1.compHeight >>= 1;
 			dev->received_frame[i].file_vf = NULL;
 			dev->received_frame[i].vf = &dev->dummy_vf1;
@@ -1372,8 +1390,6 @@ static int di_process_set_frame(struct di_process_dev *dev, struct frame_info_t 
 		dp_put_file(dev, file_vf);
 		return 0;
 	}
-
-	dp_print(dev->index, PRINT_OTHER, "first out.\n");
 
 	if (dev->last_file == file_vf) {
 		if (dev->last_frame_bypass) {
@@ -1853,6 +1869,7 @@ static ssize_t di_post_buf_count_show(struct class *class,
 }
 
 static ssize_t di_post_buf_count_store(struct class *cla,
+
 				struct class_attribute *attr,
 				const char *buf, size_t count)
 {
@@ -1865,6 +1882,29 @@ static ssize_t di_post_buf_count_store(struct class *cla,
 		return ret;
 	}
 	di_post_buf_count = tmp;
+	return count;
+}
+
+static ssize_t di_pre_buf_count_postlink_show(struct class *class,
+				      struct class_attribute *attr,
+				      char *buf)
+{
+	return sprintf(buf, "%d\n", di_pre_buf_count_postlink);
+}
+
+static ssize_t di_pre_buf_count_postlink_store(struct class *cla,
+				struct class_attribute *attr,
+				const char *buf, size_t count)
+{
+	long tmp;
+	int ret;
+
+	ret = kstrtol(buf, 0, &tmp);
+	if (ret != 0) {
+		pr_info("ERROR converting %s to long int!\n", buf);
+		return ret;
+	}
+	di_pre_buf_count_postlink = tmp;
 	return count;
 }
 
@@ -1882,6 +1922,7 @@ static CLASS_ATTR_RW(di_proc_enable);
 static CLASS_ATTR_RW(q_dropped);
 static CLASS_ATTR_RW(di_pre_buf_count);
 static CLASS_ATTR_RW(di_post_buf_count);
+static CLASS_ATTR_RW(di_pre_buf_count_postlink);
 
 static struct attribute *di_process_class_attrs[] = {
 	&class_attr_print_flag.attr,
@@ -1898,6 +1939,7 @@ static struct attribute *di_process_class_attrs[] = {
 	&class_attr_q_dropped.attr,
 	&class_attr_di_pre_buf_count.attr,
 	&class_attr_di_post_buf_count.attr,
+	&class_attr_di_pre_buf_count_postlink.attr,
 	NULL
 };
 

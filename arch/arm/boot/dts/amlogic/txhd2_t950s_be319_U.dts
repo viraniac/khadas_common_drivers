@@ -709,6 +709,11 @@
 		codec_mm_alloc = <1>;
 	};
 
+	multi-di {
+		post-wr-support = <0>;
+		postlink_en = <1>;
+	};
+
 	/* for external keypad */
 	adc_keypad {
 		compatible = "amlogic, adc_keypad";
