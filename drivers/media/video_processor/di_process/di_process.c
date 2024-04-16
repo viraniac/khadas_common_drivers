@@ -1249,17 +1249,27 @@ static int di_process_set_frame(struct di_process_dev *dev, struct frame_info_t 
 
 	/*support I and P to switch while open vpp pre link*/
 	if (dim_get_pre_link()) {
-		dp_print(dev->index, PRINT_OTHER, "chek I/P switch.1\n");
-		if ((vf->type & VIDTYPE_INTERLACE) && !dev->cur_is_i) {
-			dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to I");
-			dev->cur_is_i = true;
-			dp_put_file(dev, file_vf);
-			return 2;
-		} else if (!(vf->type & VIDTYPE_INTERLACE) && dev->cur_is_i) {
-			dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to P");
-			dev->cur_is_i = false;
-			dp_put_file(dev, file_vf);
-			return 2;
+		if (dev->last_vf.type == 0) {
+			if ((vf->type & VIDTYPE_INTERLACE) && !dev->cur_is_i) {
+				dp_print(dev->index, PRINT_ERROR, "receive I frame.\n");
+				dev->cur_is_i = true;
+			} else if (!(vf->type & VIDTYPE_INTERLACE) && dev->cur_is_i) {
+				dp_print(dev->index, PRINT_ERROR, "receive P frame.\n");
+				dev->cur_is_i = false;
+			}
+		} else {
+			dp_print(dev->index, PRINT_OTHER, "chek I/P switch.\n");
+			if ((vf->type & VIDTYPE_INTERLACE) && !dev->cur_is_i) {
+				dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to I");
+				dev->cur_is_i = true;
+				dp_put_file(dev, file_vf);
+				return 2;
+			} else if (!(vf->type & VIDTYPE_INTERLACE) && dev->cur_is_i) {
+				dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to P");
+				dev->cur_is_i = false;
+				dp_put_file(dev, file_vf);
+				return 2;
+			}
 		}
 	}
 
@@ -1324,12 +1334,18 @@ static int di_process_set_frame(struct di_process_dev *dev, struct frame_info_t 
 		wake_up_interruptible(&dev->wq);
 
 		if (vf->type & VIDTYPE_INTERLACE) {
-			dp_print(dev->index, PRINT_OTHER, "q dummy seconf vf to DI\n");
+			dp_print(dev->index, PRINT_OTHER, "q dummy second vf to DI\n");
 
 			i = get_received_frame_free_index(dev);
 
-			memcpy(&dev->dummy_vf1, &dev->dummy_vf, sizeof(struct vframe_s));
+			memcpy(&dev->dummy_vf1, vf, sizeof(struct vframe_s));
 			dev->dummy_vf1.type &= ~VIDTYPE_TYPEMASK;
+			dev->dummy_vf1.hdr10p_data_size = 0;
+			dev->dummy_vf1.hdr10p_data_buf = NULL;
+			dev->dummy_vf1.meta_data_size = 0;
+			dev->dummy_vf1.meta_data_buf = NULL;
+			dev->dummy_vf1.vf_ud_param.magic_code = 0;
+			dev->dummy_vf1.src_fmt.sei_magic_code = 0;
 			dev->dummy_vf1.height >>= 1;
 			dev->dummy_vf1.compHeight >>= 1;
 			dev->received_frame[i].file_vf = NULL;
