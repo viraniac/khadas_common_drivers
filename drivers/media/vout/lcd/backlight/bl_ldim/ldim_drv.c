@@ -184,11 +184,21 @@ static int ldim_on_init(void)
 
 static int ldim_power_on(void)
 {
+	struct ldim_fw_s *fw = aml_ldim_get_fw();
+
 	if (ldim_driver.init_on_flag) {
 		LDIMPR("%s: already power on, exit\n", __func__);
 		return 0;
 	}
 	LDIMPR("%s\n", __func__);
+
+	if (fw || ldim_driver.dev_drv) {
+		fw->fw_ctrl |= 0x0800; // FW_CTRL_RESUME
+		if (ldim_driver.dev_drv->spi_sync == SPI_DMA_TRIG)
+			ldim_wr_vcbus(VPP_INT_LINE_NUM, ldim_driver.dev_drv->spi_line_n);
+
+		LDIMPR("%s: fw_resume\n", __func__);
+	}
 
 	ldim_driver.init_on_flag = 1;
 
@@ -1097,7 +1107,6 @@ ldim_malloc_t7_err0:
 
 static struct ldim_drv_data_s ldim_data_t7 = {
 	.ldc_chip_type = LDC_T7,
-	.spi_cont = SPI_T3,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
 	.v_zone_max = 32,
@@ -1111,7 +1120,6 @@ static struct ldim_drv_data_s ldim_data_t7 = {
 
 static struct ldim_drv_data_s ldim_data_t3 = {
 	.ldc_chip_type = LDC_T3,
-	.spi_cont = SPI_T3,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
 	.v_zone_max = 32,
@@ -1125,7 +1133,6 @@ static struct ldim_drv_data_s ldim_data_t3 = {
 
 static struct ldim_drv_data_s ldim_data_t5m = {
 	.ldc_chip_type = LDC_T3,
-	.spi_cont = SPI_T5M,
 	.rsv_mem_size = 0x100000,
 	.h_zone_max = 48,
 	.v_zone_max = 32,
@@ -1139,7 +1146,6 @@ static struct ldim_drv_data_s ldim_data_t5m = {
 
 static struct ldim_drv_data_s ldim_data_t3x = {
 	.ldc_chip_type = LDC_T3X,
-	.spi_cont = SPI_T3X,
 	.rsv_mem_size = 0x400000,
 	.h_zone_max = 96,
 	.v_zone_max = 64,

@@ -37,13 +37,6 @@ enum spi_sync_type_e {
 	SPI_SYNC_MAX,
 };
 
-enum spi_controller_type_e {
-	SPI_T3		= 0x00,
-	SPI_T5M		= 0x01,
-	SPI_T3X		= 0x02,
-	SPI_CONT_MAX,
-};
-
 enum spiout_type_e {
 	SPIOUT_PWM_VS		= 0x00,
 	SPIOUT_VSYNC		= 0x01,

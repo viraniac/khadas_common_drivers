@@ -544,7 +544,7 @@ static void ldim_dev_config_print(struct aml_ldim_driver_s *ldim_drv)
 			"fault_check           = %d\n"
 			"write_check           = %d\n"
 			"spi_sync	       = %d\n"
-			"spi_cont	       = %d\n"
+			"spi_mode_bit      = 0x%x\n"
 			"spi_tx_dma	       = 0x%lx\n"
 			"spi_rx_dma	       = 0x%lx\n"
 			"spi_xlen	       = %d\n"
@@ -562,7 +562,7 @@ static void ldim_dev_config_print(struct aml_ldim_driver_s *ldim_drv)
 			ldim_drv->dev_drv->fault_check,
 			ldim_drv->dev_drv->write_check,
 			ldim_drv->dev_drv->spi_sync,
-			ldim_drv->dev_drv->spi_cont,
+			ldim_drv->dev_drv->spi_dev->controller->mode_bits,
 			(ulong)ldim_drv->dev_drv->spi_tx_dma,
 			(ulong)ldim_drv->dev_drv->spi_rx_dma,
 			ldim_drv->dev_drv->spi_xlen,
@@ -2062,19 +2062,6 @@ static ssize_t ldim_dev_spi_store(struct class *class, struct class_attribute *a
 		} else {
 			LDIMERR("invalid parameters\n");
 		}
-	} else if (buf[0] == 'c') {/*spi_cont*/
-		ret = sscanf(buf, "c %d", &val);
-		if (ret == 1) {
-			if (val < SPI_CONT_MAX) {
-				ldim_dev_drv.spi_cont = val;
-				if (ldim_debug_print)
-					LDIMPR("set spi_cont = %d\n", ldim_dev_drv.spi_cont);
-			} else {
-				LDIMPR("set spi_cont = %d exceed SPI_CONT_MAX\n", val);
-			}
-		} else {
-			LDIMERR("invalid parameters\n");
-		}
 	} else if (buf[0] == 'l') {/*line_n*/
 		ret = sscanf(buf, "l %d", &val);
 		if (ret == 1) {
@@ -2082,15 +2069,6 @@ static ssize_t ldim_dev_spi_store(struct class *class, struct class_attribute *a
 			ldim_wr_vcbus(VPP_INT_LINE_NUM, val);
 			if (ldim_debug_print)
 				LDIMPR("set spi_line_n = %d\n", ldim_dev_drv.spi_line_n);
-		} else {
-			LDIMERR("invalid parameters\n");
-		}
-	} else if (buf[0] == 'x') {
-		ret = sscanf(buf, "x %d", &val);
-		if (ret == 1) {
-			ldim_dev_drv.spi_cont = val;
-			if (ldim_debug_print)
-				LDIMPR("set spi_xlen = %d\n", ldim_dev_drv.spi_xlen);
 		} else {
 			LDIMERR("invalid parameters\n");
 		}
@@ -2246,7 +2224,6 @@ static void ldim_dev_probe_func(struct work_struct *work)
 	ldim_drv->dev_drv = &ldim_dev_drv;
 	ldim_dev_drv.bl_row = ldim_drv->conf->seg_row;
 	ldim_dev_drv.bl_col = ldim_drv->conf->seg_col;
-	ldim_dev_drv.spi_cont = ldim_drv->data->spi_cont;
 	ldim_dev_drv.ldim_pwm_config.pwm_duty_max = 4095;
 	ldim_dev_drv.analog_pwm_config.pwm_duty_max = 4095;
 	val = ldim_dev_drv.bl_row * ldim_dev_drv.bl_col;
@@ -2270,6 +2247,7 @@ static void ldim_dev_probe_func(struct work_struct *work)
 	if (ret)
 		goto ldim_dev_probe_func_fail1;
 	ldim_pwm_pinmux_ctrl(&ldim_dev_drv, 1);
+	ldim_set_duty_pwm(&ldim_dev_drv.ldim_pwm_config);
 
 	if (ldim_dev_drv.spi_sync == SPI_DMA_TRIG)
 		ldim_wr_vcbus(VPP_INT_LINE_NUM, ldim_dev_drv.spi_line_n);

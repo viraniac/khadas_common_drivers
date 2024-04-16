@@ -131,16 +131,16 @@ int ldim_spi_write_async(struct spi_device *spi, unsigned char *tbuf,
 
 	xlen = tlen;
 	if (dev_drv->dma_support) {
-		if (dev_drv->spi_cont == SPI_T3 || dev_drv->spi_cont == SPI_T5M) {
+		if (spi->controller->dma_alignment) {
 			xlen = ldim_spi_dma_cycle_align_byte(tlen);
 			if (xlen > max_len) {
 				LDIMERR("%s: dma xlen %d out of max_len %d\n",
 					__func__, xlen, max_len);
 				return -1;
 			}
-			if (dev_drv->spi_cont == SPI_T3)
-				ldim_spi_buf_byte_swap_64bit(tbuf, tlen, xlen);
 		}
+		if ((spi->controller->mode_bits & SPI_LSB_FIRST) == 0)
+			ldim_spi_buf_byte_swap_64bit(tbuf, tlen, xlen);
 		spi->bits_per_word = 64;
 	} else {
 		spi->bits_per_word = 8;
@@ -237,21 +237,23 @@ int ldim_spi_write_dma_trig(struct spi_device *spi, unsigned char *tbuf,
 	struct spicc_controller_data *cdata = spi->controller_data;
 	int xlen, ret;
 
-	if (!dev_drv || !cdata || !cdata->dirspi_dma_trig)
+	if (!dev_drv || !cdata || !cdata->dirspi_dma_trig) {
+		LDIMERR("---- %s: dev_drv or cdata is null\n", __func__);
 		return -EIO;
+	}
 
 	xlen = tlen;
 	if (dev_drv->dma_support) {
-		if (dev_drv->spi_cont == SPI_T3 || dev_drv->spi_cont == SPI_T5M) {
+		if (spi->controller->dma_alignment) {
 			xlen = ldim_spi_dma_cycle_align_byte(tlen);
 			if (xlen > max_len) {
 				LDIMERR("%s: dma xlen %d out of max_len %d\n",
 					__func__, xlen, max_len);
 				return -1;
 			}
-			if (dev_drv->spi_cont == SPI_T3)
-				ldim_spi_buf_byte_swap_64bit(tbuf, tlen, xlen);
 		}
+		if ((spi->controller->mode_bits & SPI_LSB_FIRST) == 0)
+			ldim_spi_buf_byte_swap_64bit(tbuf, tlen, xlen);
 	} else {
 		if (ldim_debug_print & LDIM_DBG_PR_SPI)
 			LDIMERR("%s: dma_support should set 1\n", __func__);
@@ -412,7 +414,8 @@ static int ldim_spi_dev_probe(struct spi_device *spi)
 
 	dev_set_drvdata(&spi->dev, dev_drv);
 	spi->bits_per_word = 64;
-	spi->mode |= SPI_LSB_FIRST;
+	if (spi->controller->mode_bits & SPI_LSB_FIRST)
+		spi->mode |= SPI_LSB_FIRST;
 
 	ret = spi_setup(spi);
 	if (ret)

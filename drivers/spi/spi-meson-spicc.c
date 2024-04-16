@@ -1555,6 +1555,7 @@ static int meson_spicc_probe(struct platform_device *pdev)
 
 	ctlr->num_chipselect = 4;
 	ctlr->dev.of_node = pdev->dev.of_node;
+	ctlr->dma_alignment = 8;
 	ctlr->mode_bits = SPI_CPHA | SPI_CPOL | SPI_CS_HIGH | SPI_LOOP;
 	if (spicc->data->has_endian_ctrl)
 		ctlr->mode_bits |= SPI_LSB_FIRST;
