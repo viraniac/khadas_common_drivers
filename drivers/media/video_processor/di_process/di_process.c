@@ -54,6 +54,8 @@ static u32 total_empty_done_count;
 static void *timeline[DI_INSTANCE_COUNT];
 static u32 cur_streamline_val[DI_INSTANCE_COUNT];
 static u32 q_dropped = 1;
+static u32 di_pre_buf_count = 4;
+static u32 di_post_buf_count = 4;
 
 static DEFINE_MUTEX(di_process_mutex);
 
@@ -1022,7 +1024,7 @@ static int di_process_init(struct di_process_dev *dev)
 	dp_print(dev->index, PRINT_OTHER,
 		  "%s: di_index = %d\n", __func__, dev->di_index);
 
-	if (di_set_buffer_num(4, 4) < 0)
+	if (di_set_buffer_num(di_post_buf_count, di_pre_buf_count) < 0)
 		dp_print(dev->index, PRINT_ERROR, "%s: set DI buf num failed.\n", __func__);
 
 	dev->inited = true;
@@ -1820,6 +1822,52 @@ static ssize_t q_dropped_store(struct class *cla,
 	return count;
 }
 
+static ssize_t di_pre_buf_count_show(struct class *class,
+				      struct class_attribute *attr,
+				      char *buf)
+{
+	return sprintf(buf, "%d\n", di_pre_buf_count);
+}
+
+static ssize_t di_pre_buf_count_store(struct class *cla,
+				struct class_attribute *attr,
+				const char *buf, size_t count)
+{
+	long tmp;
+	int ret;
+
+	ret = kstrtol(buf, 0, &tmp);
+	if (ret != 0) {
+		pr_info("ERROR converting %s to long int!\n", buf);
+		return ret;
+	}
+	di_pre_buf_count = tmp;
+	return count;
+}
+
+static ssize_t di_post_buf_count_show(struct class *class,
+				      struct class_attribute *attr,
+				      char *buf)
+{
+	return sprintf(buf, "%d\n", di_post_buf_count);
+}
+
+static ssize_t di_post_buf_count_store(struct class *cla,
+				struct class_attribute *attr,
+				const char *buf, size_t count)
+{
+	long tmp;
+	int ret;
+
+	ret = kstrtol(buf, 0, &tmp);
+	if (ret != 0) {
+		pr_info("ERROR converting %s to long int!\n", buf);
+		return ret;
+	}
+	di_post_buf_count = tmp;
+	return count;
+}
+
 static CLASS_ATTR_RW(print_flag);
 static CLASS_ATTR_RO(total_get_count);
 static CLASS_ATTR_RO(total_put_count);
@@ -1832,6 +1880,8 @@ static CLASS_ATTR_RO(total_empty_done_count);
 static CLASS_ATTR_RW(buf_mgr_print_flag);
 static CLASS_ATTR_RW(di_proc_enable);
 static CLASS_ATTR_RW(q_dropped);
+static CLASS_ATTR_RW(di_pre_buf_count);
+static CLASS_ATTR_RW(di_post_buf_count);
 
 static struct attribute *di_process_class_attrs[] = {
 	&class_attr_print_flag.attr,
@@ -1846,6 +1896,8 @@ static struct attribute *di_process_class_attrs[] = {
 	&class_attr_buf_mgr_print_flag.attr,
 	&class_attr_di_proc_enable.attr,
 	&class_attr_q_dropped.attr,
+	&class_attr_di_pre_buf_count.attr,
+	&class_attr_di_post_buf_count.attr,
 	NULL
 };
 
