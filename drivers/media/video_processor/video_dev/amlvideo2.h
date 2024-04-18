@@ -32,6 +32,13 @@ enum port_vpp_e {
 };
 #endif
 
+enum aml_plane {
+	AML_PLANE_A  = 0,
+	AML_PLANE_B = 1,
+	AML_PLANE_C = 2,
+	AML_PLANE_MAX
+};
+
 /* void vf_inqueue(struct vframe_s *vf, const char *receiver); */
 void get_vdx_axis(u32 index, int *buf);
 void get_vdx_real_axis(u32 index, int *buf);
