@@ -22,3 +22,15 @@
 
 # amlogic-crypto-dma.ko
   sg_nents_for_len
+
+# amlogic-gpio.ko
+  desc_to_gpio
+  device_create_with_groups
+  gpiochip_line_is_valid
+  gpiochip_lock_as_irq
+  gpiochip_unlock_as_irq
+  gpiod_get_direction
+  kernfs_find_and_get_ns
+  kernfs_notify
+  kernfs_put
+  request_any_context_irq
