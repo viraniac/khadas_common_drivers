@@ -6005,7 +6005,7 @@ static const struct match_data_s vdin_dt_t5m = {
 	.name = "vdin-t5m",
 	.hw_ver = VDIN_HW_T5M,
 	.vdin0_en = 1,                  .vdin1_en = 1,
-	.de_tunnel_tunnel = 0, /*0,1*/  .ipt444_to_422_12bit = 0, /*0,1*/
+	.de_tunnel_tunnel = 1, /*0,1*/  .ipt444_to_422_12bit = 0, /*0,1*/
 	.vdin0_line_buff_size = 0x1000,  .vdin1_line_buff_size = 0x780,
 					.vdin1_set_hdr = false,
 };
