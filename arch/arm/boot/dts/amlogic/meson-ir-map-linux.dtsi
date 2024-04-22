@@ -6,11 +6,12 @@
 / {
 
 	custom_maps_linux: custom_maps_linux {
-		map_num = <4>;
+		map_num = <5>;
 		map0 = <&map_linux_0>;
 		map1 = <&map_linux_1>;
 		map2 = <&map_linux_2>;
 		map3 = <&map_linux_3>;
+		map4 = <&map_linux_4>;
 		map_linux_0: map_linux_0{
 			mapname = "amlogic-remote-1";
 			customcode = <0xfb04>;
@@ -198,6 +199,51 @@
 				REMOTE_KEY(0x4A, KEY_GREEN)
 				REMOTE_KEY(0x49, KEY_YELLOW)
 				REMOTE_KEY(0x4C, KEY_BLUE)>;
+		};
+		map_linux_4: map_linux_4{
+			mapname = "sei-64a";
+			customcode = <0xfe03>;
+			release_delay = <80>;
+			size  = <39>;   /*keymap size*/
+			keymap = <REMOTE_KEY(0x13, KEY_1)
+				REMOTE_KEY(0x12, KEY_2)
+				REMOTE_KEY(0x10, KEY_3)
+				REMOTE_KEY(0x17, KEY_4)
+				REMOTE_KEY(0x16, KEY_5)
+				REMOTE_KEY(0x14, KEY_6)
+				REMOTE_KEY(0x1b, KEY_7)
+				REMOTE_KEY(0x1a, KEY_8)
+				REMOTE_KEY(0x18, KEY_9)
+				REMOTE_KEY(0x1E, KEY_0)
+				REMOTE_KEY(0x45, KEY_TEXT)
+				REMOTE_KEY(0x1C, KEY_SUBTITLE)
+				REMOTE_KEY(0x5c, KEY_MENU)
+				REMOTE_KEY(0x49, KEY_INFO)
+				REMOTE_KEY(0x1F, KEY_RECORD)
+				REMOTE_KEY(0x07, KEY_PLAYPAUSE)
+				REMOTE_KEY(0x0F, KEY_STOP)
+				REMOTE_KEY(0x59, KEY_UP)
+				REMOTE_KEY(0x51, KEY_DOWN)
+				REMOTE_KEY(0x54, KEY_LEFT)
+				REMOTE_KEY(0x15, KEY_RIGHT)
+				REMOTE_KEY(0x55, KEY_ENTER)
+				REMOTE_KEY(0x19, KEY_BACK)
+				REMOTE_KEY(0x00, KEY_POWER)
+				REMOTE_KEY(0x58, KEY_EPG)
+				REMOTE_KEY(0x41, KEY_MUTE)
+				REMOTE_KEY(0x09, KEY_FAVORITES)
+				REMOTE_KEY(0x04, KEY_PREVIOUSSONG)
+				REMOTE_KEY(0x06, KEY_NEXTSONG)
+				REMOTE_KEY(0x48, KEY_REWIND)
+				REMOTE_KEY(0x0b, KEY_FASTFORWARD)
+				REMOTE_KEY(0x0a, KEY_RADIO)
+				REMOTE_KEY(0x4D, KEY_MEDIA)
+				REMOTE_KEY(0x0E, KEY_AUDIO)
+				REMOTE_KEY(0x0C, KEY_SLEEP)
+				REMOTE_KEY(0x0A, KEY_RED)
+				REMOTE_KEY(0x4D, KEY_GREEN)
+				REMOTE_KEY(0x0E, KEY_YELLOW)
+				REMOTE_KEY(0x0C, KEY_BLUE)>;
 		};
 	};
 };
