@@ -114,5 +114,8 @@ void tvin_update_vdin_prop(u8 port_type);
 void viuin_select_loopback_path(void);
 void viuin_clear_loopback_path(void);
 void dsc_dec_en(bool on_off, struct dsc_pps_data_s *pps_data);
+void __weak dsc_dec_en(bool on_off, struct dsc_pps_data_s *pps_data)
+{
+}
 
 #endif
