@@ -296,8 +296,8 @@ static u32 vsync_count;
 
 static u32 vpp_data_422T0444_backup;
 
-static bool is_osd_off;
-static bool osd_onoff_changed;
+bool force_core2c_on = true;
+static bool is_osd_off[OSD_MAX_INDEX];
 static int core1_switch;
 static int core3_switch;
 bool force_set_lut;
@@ -506,7 +506,7 @@ bool dolby_vision_on;
 bool amdv_core1_on;
 u32 amdv_core1_on_cnt;
 uint amdv_on_count; /*for run mode*/
-u32 amdv_core2_on_cnt;
+u32 amdv_core2_on_cnt[2];
 
 bool dv_core1_on[NUM_IPCORE1];
 u32 dv_core1_on_cnt[NUM_IPCORE1];
@@ -659,6 +659,8 @@ static bool local_allm;
 
 struct apo_value_s apo_value;
 static bool amdv_apo_flag;
+static bool force_toggle_once;
+static bool force_toggle_each_vsync;
 
 bool is_aml_gxm(void)
 {
@@ -1549,28 +1551,63 @@ static int is_graphic_changed(void)
 {
 	int ret = 0;
 	int i = 0;
+	bool osd_enable[2];
+	bool osd_off2on[2] = {false, false};
 
-	if (is_graphics_output_off()) {
-		if (!is_osd_off) {
-			pr_dv_dbg("osd off\n");
-			is_osd_off = true;
-			osd_onoff_changed = true;
-			ret |= 1;
+	osd_enable[0] = get_core2_enable_info(OSD1_INDEX);
+	osd_enable[1] = get_core2_enable_info(OSD3_INDEX);
+
+	if (is_aml_s5()) {
+		if (!osd_enable[0]) {
+			if (!is_osd_off[0]) {
+				pr_dv_dbg("osd1 off\n");
+				is_osd_off[0] = true;
+				ret |= 1;
+			}
+		} else if (is_osd_off[0]) {
+			set_force_reset_core2(true, OSD1_INDEX);
+			force_set_lut = true;
+			pr_dv_dbg("osd1 off->on\n");
+			is_osd_off[0] = false;
+			osd_off2on[0] = true;
+			ret |= 2;
 		}
-	} else if (is_osd_off) {
-		/* force reset core2 when osd off->on */
-		set_force_reset_core2(true);
-		force_set_lut = true;
-		pr_dv_dbg("osd on\n");
-		is_osd_off = false;
-		osd_onoff_changed = true;
-		ret |= 2;
+		if (!osd_enable[1]) {
+			if (!is_osd_off[2]) {
+				pr_dv_dbg("osd3 off\n");
+				is_osd_off[2] = true;
+				ret |= 1;
+			}
+		} else if (is_osd_off[2]) {
+			/*set_force_reset_core2(true, OSD3_INDEX);*/
+			force_set_lut = true;
+			pr_dv_dbg("osd3 off->on\n");
+			is_osd_off[2] = false;
+			osd_off2on[1] = true;
+			ret |= 2;
+		}
+	}  else {
+		if (is_graphics_output_off()) {
+			if (!is_osd_off[0]) {
+				pr_dv_dbg("osd off\n");
+				is_osd_off[0] = true;
+				ret |= 1;
+			}
+		} else if (is_osd_off[0]) {
+			/* force reset core2 when osd off->on */
+			set_force_reset_core2(true, OSD1_INDEX);
+			force_set_lut = true;
+			pr_dv_dbg("osd on\n");
+			is_osd_off[0] = false;
+			ret |= 2;
+		}
 	}
+
 	for (i = 0; i < OSD_MAX_INDEX; i++) {
 		if (i == 0 || is_aml_s5()) {
 			if (osd_graphic_width[i] != new_osd_graphic_width[i] ||
 			    osd_graphic_height[i] != new_osd_graphic_height[i]) {
-				set_force_reset_core2(true);
+				//set_force_reset_core2(true);
 				if (debug_dolby & 0x2)
 					pr_dv_dbg("osd changed %d %d-%d %d\n",
 						     osd_graphic_width[i],
@@ -1579,7 +1616,8 @@ static int is_graphic_changed(void)
 						     new_osd_graphic_height[i]);
 				/* TODO: g12/tm2/sc2/t7 osd pps is after dolby core2, but */
 				/* sometimes osd do crop,should monitor osd size change*/
-				if (!is_osd_off /*&&!is_aml_tm2()&&!is_aml_sc2()&&!is_aml_t7()*/) {
+				if (!is_osd_off[i]
+					/*&&!is_aml_tm2()&&!is_aml_sc2()&&!is_aml_t7()*/) {
 					osd_graphic_width[i] = new_osd_graphic_width[i];
 					osd_graphic_height[i] = new_osd_graphic_height[i];
 					ret |= 2;
@@ -1594,7 +1632,7 @@ static int is_graphic_changed(void)
 			pr_dv_dbg("graphic max changed %d-%d\n",
 				     old_amdv_graphic_max,
 				     amdv_graphic_max);
-		if (!is_osd_off) {
+		if (!is_osd_off[0]) {
 			old_amdv_graphic_max =
 				amdv_graphic_max;
 			ret |= 2;
@@ -1936,7 +1974,8 @@ void reset_dv_param(void)
 			dv_core1[i].core1_disp_hsize = 0;
 			dv_core1[i].core1_disp_vsize = 0;
 		}
-		amdv_core2_on_cnt = 0;
+		amdv_core2_on_cnt[0] = 0;
+		amdv_core2_on_cnt[1] = 0;
 	} else if (is_aml_hw5()) {
 		top1_info.core_on = false;
 		top1_info.amdv_setting_video_flag = false;
@@ -1996,7 +2035,7 @@ void reset_dv_param(void)
 		amdv_on_count = 0;
 		amdv_core1_on = false;
 		amdv_core1_on_cnt = 0;
-		amdv_core2_on_cnt = 0;
+		amdv_core2_on_cnt[0] = 0;
 	}
 }
 
@@ -8600,7 +8639,7 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 		}
 	}
 
-	if (is_osd_off) {
+	if (is_osd_off[0]) {
 		graphic_min = 0;
 		graphic_max = 0;
 	}
@@ -8728,7 +8767,7 @@ int amdv_parse_metadata_v1(struct vframe_s *vf,
 			pri_mode = V_PRIORITY;
 	} else {
 		/* audo mode:check video/graphics priority on the fly */
-		if (get_video_enabled(0) && is_graphics_output_off())
+		if (get_video_enabled(0))
 			pri_mode = V_PRIORITY;
 		else
 			pri_mode = G_PRIORITY;
@@ -10088,7 +10127,7 @@ int amdv_parse_metadata_v2_stb(struct vframe_s *vf,
 		}
 	}
 
-	if (is_osd_off && !multi_dv_mode) {
+	if (is_osd_off[0] && !multi_dv_mode) {
 		graphic_min = 0;
 		graphic_max = 0;
 	}
@@ -10223,7 +10262,7 @@ int amdv_parse_metadata_v2_stb(struct vframe_s *vf,
 			pri_mode = V_PRIORITY;
 	} else {
 		/*auto mode: check video/graphics priority on the fly */
-		if (get_video_enabled(0) && is_graphics_output_off())
+		if (get_video_enabled(0))
 			pri_mode = V_PRIORITY;
 		else
 			pri_mode = G_PRIORITY;
@@ -11871,7 +11910,7 @@ int amdolby_vision_process_v1(struct vframe_s *vf,
 	policy_changed = is_policy_changed();
 
 	if (policy_changed || format_changed ||
-	    (graphic_status & 2) || osd_update) {
+	    (graphic_status & 2) || osd_update || force_toggle_once) {
 		amdv_set_toggle_flag(1);
 		if (osd_update)
 			osd_update = false;
@@ -11905,7 +11944,8 @@ int amdolby_vision_process_v1(struct vframe_s *vf,
 	    (video_status == 1 && !(dolby_vision_flags & FLAG_CERTIFICATION)) ||
 	    (graphic_status & 2) ||
 	    (dolby_vision_flags & FLAG_FORCE_HDMI_PKT) ||
-	    need_update_cfg || reverse_changed) {
+	    need_update_cfg || reverse_changed ||
+	    force_toggle_once) {
 		if (debug_dolby & 1)
 			pr_dv_dbg("sink %s,cap 0x%x,video %s,osd %s,vf %p,toggle %d\n",
 				     current_sink_available ? "on" : "off",
@@ -12103,8 +12143,8 @@ int amdolby_vision_process_v1(struct vframe_s *vf,
 		}
 	}
 	if (dolby_vision_on && !amdv_core1_on &&
-	    amdv_core2_on_cnt &&
-	    amdv_core2_on_cnt < DV_CORE2_RECONFIG_CNT &&
+	    amdv_core2_on_cnt[0] &&
+	    amdv_core2_on_cnt[0] < DV_CORE2_RECONFIG_CNT &&
 	    !(dolby_vision_flags & FLAG_TOGGLE_FRAME) &&
 	    !is_aml_tvmode() &&
 	    !(dolby_vision_flags & FLAG_CERTIFICATION)) {
@@ -12112,7 +12152,7 @@ int amdolby_vision_process_v1(struct vframe_s *vf,
 		amdv_set_toggle_flag(1);
 		if (debug_dolby & 2)
 			pr_dv_dbg("Need update core2 first %d times\n",
-			     amdv_core2_on_cnt);
+			     amdv_core2_on_cnt[0]);
 	}
 
 	if (dolby_vision_flags & FLAG_TOGGLE_FRAME) {
@@ -12702,7 +12742,8 @@ static int amdolby_vision_process_v2_stb
 	policy_changed = is_policy_changed();
 
 	if (policy_changed || format_changed ||
-	    (graphic_status & 2) || osd_update) {
+	    (graphic_status & 3) || osd_update || force_toggle_once ||
+	    force_toggle_each_vsync) {
 		amdv_set_toggle_flag(1);
 		if (osd_update)
 			osd_update = false;
@@ -12724,7 +12765,8 @@ static int amdolby_vision_process_v2_stb
 
 	if (sink_changed || policy_changed || format_changed ||
 	    video_status[0] == 1 || video_status[1] == 1 ||
-	    (graphic_status & 2) || pri_change ||
+	    (graphic_status & 3) || pri_change ||
+	    force_toggle_once || force_toggle_each_vsync ||
 	    (dolby_vision_flags & FLAG_FORCE_HDMI_PKT)) {
 		if (debug_dolby & 1)
 			pr_dv_dbg("sink %s,cap 0x%x,vd1 %s,vd2 %s,osd %s,vf %p %p,toggle %d %d\n",
@@ -12777,6 +12819,7 @@ static int amdolby_vision_process_v2_stb
 			}
 		}
 		force_set_lut = true;
+		force_toggle_once = false;
 	}
 	if (inst_debug[0]) {
 		dv_core1[0].core1_disp_hsize = inst_res_debug[0];
@@ -13031,9 +13074,10 @@ static int amdolby_vision_process_v2_stb
 	}
 
 	if (debug_dolby & 8)
-		pr_dv_dbg("dolby_vision_on %d,flag %x,amdv_core2_on_cnt %d,%d\n",
+		pr_dv_dbg("dolby_vision_on %d,flag %x,core2_on_cnt %d,%d,core1 %d\n",
 			dolby_vision_on, dolby_vision_flags,
-			amdv_core2_on_cnt, dv_core1[0].core1_on_cnt);
+			amdv_core2_on_cnt[0], amdv_core2_on_cnt[1],
+			dv_core1[0].core1_on_cnt);
 
 	if (!(dolby_vision_flags & FLAG_CERTIFICATION)) {
 		for (i = 0; i < NUM_IPCORE1; i++) {
@@ -13050,16 +13094,18 @@ static int amdolby_vision_process_v2_stb
 	}
 	if (dolby_vision_on && !dv_core1[0].core1_on &&
 	    !dv_core1[1].core1_on &&
-	    amdv_core2_on_cnt &&
-	    amdv_core2_on_cnt < DV_CORE2_RECONFIG_CNT &&
+	    ((amdv_core2_on_cnt[0] &&
+	    amdv_core2_on_cnt[0] < DV_CORE2_RECONFIG_CNT) ||
+		(amdv_core2_on_cnt[1] &&
+		amdv_core2_on_cnt[1] < DV_CORE2_RECONFIG_CNT)) &&
 	    !(dolby_vision_flags & FLAG_TOGGLE_FRAME) &&
 	    !is_aml_tvmode() &&
 	    !(dolby_vision_flags & FLAG_CERTIFICATION)) {
 		force_set_lut = true;
 		amdv_set_toggle_flag(1);
 		if (debug_dolby & 2)
-			pr_dv_dbg("Need update core2 first %d times\n",
-				     amdv_core2_on_cnt);
+			pr_dv_dbg("Need update core2 first %d %dtimes\n",
+				     amdv_core2_on_cnt[0], amdv_core2_on_cnt[1]);
 	}
 
 	if (dolby_vision_flags & FLAG_TOGGLE_FRAME) {
@@ -13312,8 +13358,8 @@ EXPORT_SYMBOL(amdolby_vision_process);
  */
 bool is_amdv_on(void)
 {
-	//if (debug_dolby & 0x400000)
-		//pr_dv_dbg("is_amdv_on %d %d\n", amdv_wait_on, dolby_vision_on);
+	if (debug_dolby & 0x400000)
+		pr_dv_dbg("is_amdv_on %d %d\n", amdv_wait_on, dolby_vision_on);
 	return dolby_vision_on ||
 		amdv_wait_on ||
 		amdv_on_in_uboot;
@@ -15273,6 +15319,7 @@ static const char *amdolby_vision_debug_usage_str = {
 	"echo force_top1_vskip value > /sys/class/amdolby_vision/debug;\n"
 	"echo enable_top1_scale value > /sys/class/amdolby_vision/debug;\n"
 	"echo debug_force_mode value > /sys/class/amdolby_vision/debug;\n"
+	"echo force_core2c_on 0/1 > /sys/class/amdolby_vision/debug;\n"
 };
 
 static ssize_t  amdolby_vision_debug_show
@@ -15566,6 +15613,19 @@ static ssize_t amdolby_vision_debug_store
 		else
 			debug_force_mode = true;
 		pr_info("set debug_force_mode %d\n", debug_force_mode);
+	} else if (!strcmp(parm[0], "force_core2c_on")) {
+		if (kstrtoul(parm[1], 10, &val) < 0)
+			return -EINVAL;
+		force_core2c_on = val;
+		pr_info("force_core2c_on %d\n", force_core2c_on);
+	} else if (!strcmp(parm[0], "force_toggle_once")) {
+		force_toggle_once = true;
+		pr_info("set force_toggle_once\n");
+	} else if (!strcmp(parm[0], "force_toggle_each_vsync")) {
+		if (kstrtoul(parm[1], 10, &val) < 0)
+			return -EINVAL;
+		force_toggle_each_vsync = val;
+		pr_info("force_toggle_each_vsync %d\n", force_toggle_each_vsync);
 	} else {
 		pr_info("unsupport cmd\n");
 	}

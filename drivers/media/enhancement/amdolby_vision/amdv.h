@@ -801,7 +801,7 @@ extern uint amdv_mask;
 extern bool dolby_vision_on;
 extern bool amdv_core1_on;
 extern u32 amdv_core1_on_cnt;
-extern u32 amdv_core2_on_cnt;
+extern u32 amdv_core2_on_cnt[2];
 extern uint amdv_on_count;
 extern struct dv_core1_inst_s dv_core1[NUM_IPCORE1];
 extern uint amdv_run_mode;
@@ -962,6 +962,7 @@ extern u32 last_top1_ro2;
 extern u32 last_top1_ro1;
 extern u32 last_top1_ro0;
 extern u32 enable_ro_check;
+extern bool force_core2c_on;
 /************/
 
 #define pr_dv_dbg(fmt, args...)\
@@ -1239,7 +1240,7 @@ void set_bypass_all_vpp_pq(int flag);
 void update_dma_buf(void);
 void set_dovi_setting_update_flag(bool flag);
 void set_vsync_count(int val);
-void set_force_reset_core2(bool flag);
+void set_force_reset_core2(bool flag, enum OSD_INDEX index);
 void set_amdv_wait_on(void);
 void clear_dolby_vision_wait(void);
 void set_frame_count(int val);
@@ -1248,6 +1249,7 @@ void reset_dv_param(void);
 void update_stb_core_setting_flag(int flag);
 u32 get_graphic_width(u32 index);
 u32 get_graphic_height(u32 index);
+bool get_core2_enable_info(enum OSD_INDEX index);
 bool need_send_emp_meta(const struct vinfo_s *vinfo);
 void convert_hdmi_metadata(uint32_t *md);
 bool get_core1a_core1b_switch(void);
