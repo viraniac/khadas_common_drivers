@@ -239,6 +239,7 @@ struct meson_vpu_osd {
 	int mif_acc_mode;
 	int viu2_hold_line;
 	u32 mali_src_en_switch;
+	bool has_gfcd;
 };
 
 struct osd_zorder_s {
