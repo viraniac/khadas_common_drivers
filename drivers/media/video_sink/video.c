@@ -561,6 +561,8 @@ u32 force_blackout;
 u32 pip_frame_count[MAX_VD_LAYERS];
 u32 pip_loop;
 u32 pip2_loop;
+u32 status_save_reg[20];
+u32 status_save_val[20];
 struct vframe_s *cur_dispbuf[MAX_VD_LAYERS];
 struct vframe_s *cur_dispbuf2;
 //static struct vframe_s *cur_dispbuf3;
@@ -15623,11 +15625,47 @@ static int amvideom_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int amvideo_freeze(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(status_save_reg); i++) {
+		if (!status_save_reg[i])
+			break;
+		status_save_val[i] = READ_VCBUS_REG(status_save_reg[i]);
+	}
+	return 0;
+}
+
+static int amvideo_thaw(struct device *dev)
+{
+	return 0;
+}
+
+static int amvideo_restore(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(status_save_reg); i++) {
+		if (!status_save_reg[i])
+			break;
+		WRITE_VCBUS_REG(status_save_reg[i], status_save_val[i]);
+	}
+	return 0;
+}
+
+static const struct dev_pm_ops amvideo_pm_ops = {
+	.freeze = amvideo_freeze,
+	.thaw = amvideo_thaw,
+	.restore = amvideo_restore,
+};
+
 static struct platform_driver amvideom_driver = {
 	.probe = amvideom_probe,
 	.remove = amvideom_remove,
 	.driver = {
 		.name = "amvideom",
+		.pm = &amvideo_pm_ops,
 		.of_match_table = amlogic_amvideom_dt_match,
 	},
 };

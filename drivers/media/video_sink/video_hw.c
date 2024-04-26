@@ -13619,6 +13619,29 @@ int set_vpu_super_urgent_t3(u32 module_id, u32 low_level, u32 high_level)
 }
 #endif
 
+static void status_save_reg_array_init(void)
+{
+	int i = 0;
+
+	if (cur_dev->display_module == T7_DISPLAY_MODULE) {
+		status_save_reg[i++] = VPP_VD1_DSC_CTRL;
+		status_save_reg[i++] = VPP_VD2_DSC_CTRL;
+		status_save_reg[i++] = VPP_VD3_DSC_CTRL;
+
+		status_save_reg[i++] = MALI_AFBCD_TOP_CTRL;
+		status_save_reg[i++] = MALI_AFBCD1_TOP_CTRL;
+		status_save_reg[i++] = MALI_AFBCD1_TOP_CTRL;
+
+		status_save_reg[i++] = VPP1_BLD_CTRL;
+		status_save_reg[i++] = VPP2_BLD_CTRL;
+
+		status_save_reg[i++] = VPP1_BLEND_BLEND_DUMMY_DATA;
+		status_save_reg[i++] = VPP1_BLEND_DUMMY_ALPHA;
+		status_save_reg[i++] = VPP2_BLEND_BLEND_DUMMY_DATA;
+		status_save_reg[i] = VPP2_BLEND_DUMMY_ALPHA;
+	}
+}
+
 static void video_hw_init_c3(void)
 {
 	vd1_matrix = YUV2RGB;
@@ -14339,7 +14362,7 @@ int video_early_init(struct amvideo_device_data_s *p_amvideo)
 				sizeof(struct vpu_venc_regs_s) * VPP_NUM);
 		}
 	}
-
+	status_save_reg_array_init();
 	vd_layer[0].layer_alpha = 0x100;
 
 	/* g12a has no alpha overflow check in hardware */

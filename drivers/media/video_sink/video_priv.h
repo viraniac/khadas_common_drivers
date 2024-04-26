@@ -809,6 +809,8 @@ extern struct disp_info_s glayer_info[MAX_VD_LAYER];
 extern struct video_dev_s *cur_dev;
 extern bool legacy_vpp;
 extern bool hscaler_8tap_enable[MAX_VD_LAYER];
+extern u32 status_save_reg[20];
+extern u32 status_save_val[20];
 extern struct pre_scaler_info pre_scaler[MAX_VD_LAYER];
 extern bool vd1_vd2_mux;
 extern bool aisr_en;
