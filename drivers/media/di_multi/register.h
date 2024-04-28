@@ -1743,6 +1743,8 @@ unsigned int DIM_VSC_RD_MPG_BT(unsigned int addr,
 
 #endif	/*ary move to di_reg_v2.h end*/
 
+#define DI_PD_GRAD_CTRL                  0x17e0
+
 /* dnr  Base Addr: 0xd0100000 */
 #define DNR_CTRL                         ((0x2d00))
 /* Bit 31:17,        reserved */
