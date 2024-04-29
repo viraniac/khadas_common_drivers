@@ -83,9 +83,11 @@ static int str_add_reg_sets(struct aml_lcd_drv_s *pdrv, char *buf, int offset,
 			    unsigned char reg_bus, unsigned int reg_offset,
 			    struct reg_name_set_s *reg_sets, unsigned char set_cnt)
 {
-	unsigned char idx, str_pos = 0, reg_temp;
-	int n;
-	unsigned int reg_val, len = 0;
+	unsigned char idx, str_pos = 0;
+#ifdef CONFIG_AMLOGIC_LCD_TABLET
+	unsigned char reg_temp;
+#endif
+	unsigned int reg_val, len = 0, n;
 
 	for (idx = 0; idx < set_cnt; idx++) {
 		if (strlen(reg_sets[idx].name) > str_pos)
