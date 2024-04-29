@@ -73,7 +73,7 @@ module_param(use_low_latency, uint, 0664);
 static u32 video_composer_instance_num;
 static unsigned int force_composer;
 static unsigned int force_composer_pip;
-static unsigned int transform;
+static int transform = -1;
 static unsigned int vidc_debug;
 static unsigned int vidc_pattern_debug;
 static int last_index[MAX_VD_LAYERS][MXA_LAYER_COUNT];
@@ -4309,7 +4309,7 @@ static void set_frames_info(struct composer_dev *dev,
 			fput(fence_file);
 	}
 
-	if (transform) {
+	if (transform != -1) {
 		for (j = 0; j < frames_info->frame_count; j++)
 			frames_info->frame_info[j].transform = transform;
 	}
