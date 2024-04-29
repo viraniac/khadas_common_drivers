@@ -266,6 +266,8 @@
 		 * post_nub: default is 9
 		 ***************************************************/
 		//post_nub = <9>;
+		post-wr-support = <0>;
+		postlink_en = <1>;
 	};
 
 	aml_dtv_demod {
