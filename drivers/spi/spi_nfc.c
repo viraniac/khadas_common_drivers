@@ -285,8 +285,10 @@ static void spi_nfc_mtd_info_prepare(struct spi_nfc *spi_nfc)
 	if (!page_info_get_block_size() || !GET_BCH_MODE(page_info->host_cfg.n2m_cmd)) {
 		page_info->host_cfg.n2m_cmd =
 			(DEFAULT_ECC_MODE & (~0x3F)) | mtd->writesize >> 9;
-		mtd_set_ooblayout(mtd, &spi_nfc_ecc_ooblayout);
-		mtd->oobavail = mtd_ooblayout_count_freebytes(mtd);
+		if (!spi_nfc_need_infopage_force_hostecc()) {
+			mtd_set_ooblayout(mtd, &spi_nfc_ecc_ooblayout);
+			mtd->oobavail = mtd_ooblayout_count_freebytes(mtd);
+		}
 	}
 
 	SPI_NFC_DEBUG("page_size = 0x%x\n", page_info->dev_cfg0.page_size);
