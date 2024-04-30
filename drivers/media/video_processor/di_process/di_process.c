@@ -1252,27 +1252,17 @@ static int di_process_set_frame(struct di_process_dev *dev, struct frame_info_t 
 
 	/*support I and P to switch while open vpp pre link*/
 	if (dim_get_pre_link()) {
-		if (dev->last_vf.type == 0) {
-			if ((vf->type & VIDTYPE_INTERLACE) && !dev->cur_is_i) {
-				dp_print(dev->index, PRINT_ERROR, "receive I frame.\n");
-				dev->cur_is_i = true;
-			} else if (!(vf->type & VIDTYPE_INTERLACE) && dev->cur_is_i) {
-				dp_print(dev->index, PRINT_ERROR, "receive P frame.\n");
-				dev->cur_is_i = false;
-			}
-		} else {
-			dp_print(dev->index, PRINT_OTHER, "chek I/P switch.\n");
-			if ((vf->type & VIDTYPE_INTERLACE) && !dev->cur_is_i) {
-				dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to I");
-				dev->cur_is_i = true;
-				dp_put_file(dev, file_vf);
-				return 2;
-			} else if (!(vf->type & VIDTYPE_INTERLACE) && dev->cur_is_i) {
-				dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to P");
-				dev->cur_is_i = false;
-				dp_put_file(dev, file_vf);
-				return 2;
-			}
+		dp_print(dev->index, PRINT_OTHER, "chek I/P switch.\n");
+		if ((vf->type & VIDTYPE_INTERLACE) && !dev->cur_is_i) {
+			dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to I");
+			dev->cur_is_i = true;
+			dp_put_file(dev, file_vf);
+			return 2;
+		} else if (!(vf->type & VIDTYPE_INTERLACE) && dev->cur_is_i) {
+			dp_print(dev->index, PRINT_ERROR, "need uplayer reinit to P");
+			dev->cur_is_i = false;
+			dp_put_file(dev, file_vf);
+			return 2;
 		}
 	}
 
