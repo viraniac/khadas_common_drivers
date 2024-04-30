@@ -62,8 +62,7 @@ static int lcd_vmode_is_supported(enum vmode_e mode, void *data)
 	return false;
 }
 
-static enum vmode_e lcd_validate_vmode(char *mode, unsigned int frac,
-				       void *data)
+static enum vmode_e lcd_validate_vmode(char *mode, unsigned int frac, void *data)
 {
 	struct aml_lcd_drv_s *pdrv = (struct aml_lcd_drv_s *)data;
 
@@ -96,6 +95,9 @@ static int lcd_set_current_vmode(enum vmode_e mode, void *data)
 	}
 
 	mutex_lock(&lcd_power_mutex);
+	/* clear fr*/
+	pdrv->fr_duration = 0;
+	pdrv->fr_mode = 0;
 
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
 		LCDPR("[%d]: %s: drv_mode=%s\n",
@@ -130,7 +132,7 @@ static int lcd_vout_disable(enum vmode_e cur_vmod, void *data)
 
 	pdrv->status &= ~(LCD_STATUS_VMODE_ACTIVE | LCD_STATUS_PREPARE | LCD_STATUS_POWER);
 	aml_lcd_notifier_call_chain(LCD_EVENT_DISABLE, (void *)pdrv);
-	LCDPR("%s finished\n", __func__);
+	LCDPR("[%d]: %s finished\n", pdrv->index, __func__);
 	mutex_unlock(&lcd_power_mutex);
 
 	return 0;
@@ -143,8 +145,10 @@ static int lcd_vout_set_state(int index, void *data)
 	if (!pdrv)
 		return -1;
 
+	mutex_lock(&lcd_vout_mutex);
 	pdrv->vout_state |= (1 << index);
 	pdrv->viu_sel = index;
+	mutex_unlock(&lcd_vout_mutex);
 
 	return 0;
 }
@@ -156,9 +160,11 @@ static int lcd_vout_clr_state(int index, void *data)
 	if (!pdrv)
 		return -1;
 
+	mutex_lock(&lcd_vout_mutex);
 	pdrv->vout_state &= ~(1 << index);
 	if (pdrv->viu_sel == index)
 		pdrv->viu_sel = LCD_VIU_SEL_NONE;
+	mutex_unlock(&lcd_vout_mutex);
 
 	return 0;
 }
@@ -246,6 +252,7 @@ static int lcd_set_vframe_rate_hint(int duration, void *data)
 		return -1;
 	}
 
+	mutex_lock(&lcd_vout_mutex);
 	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
 		LCDPR("[%d]: fr_auto_flag = 0x%x\n", pdrv->index, pdrv->config.fr_auto_flag);
 
@@ -262,6 +269,7 @@ static int lcd_set_vframe_rate_hint(int duration, void *data)
 	default:
 		LCDPR("[%d]: %s: fr_auto_flag = 0x%x, disabled\n",
 		      pdrv->index, __func__, pdrv->config.fr_auto_flag);
+		mutex_unlock(&lcd_vout_mutex);
 		return 0;
 	}
 
@@ -273,6 +281,7 @@ static int lcd_set_vframe_rate_hint(int duration, void *data)
 		pdrv->fr_duration = 0;
 		if (pdrv->fr_mode == 0) {
 			LCDPR("[%d]: %s: fr_mode is invalid, exit\n", pdrv->index, __func__);
+			mutex_unlock(&lcd_vout_mutex);
 			return 0;
 		}
 
@@ -299,6 +308,7 @@ static int lcd_set_vframe_rate_hint(int duration, void *data)
 		if (find == 0) {
 			LCDERR("[%d]: %s: can't support duration %d\n, exit\n",
 			       pdrv->index, __func__, duration);
+			mutex_unlock(&lcd_vout_mutex);
 			return -1;
 		}
 
@@ -312,6 +322,7 @@ static int lcd_set_vframe_rate_hint(int duration, void *data)
 		    duration_den == pdrv->config.timing.act_timing.sync_duration_den) {
 			LCDPR("[%d]: %s: sync_duration is the same, exit\n",
 			      pdrv->index, __func__);
+			mutex_unlock(&lcd_vout_mutex);
 			return 0;
 		}
 
@@ -324,6 +335,7 @@ static int lcd_set_vframe_rate_hint(int duration, void *data)
 	}
 
 	lcd_framerate_automation_set_mode(pdrv);
+	mutex_unlock(&lcd_vout_mutex);
 
 	return 0;
 }
