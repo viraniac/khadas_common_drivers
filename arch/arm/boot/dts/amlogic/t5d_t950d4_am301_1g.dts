@@ -87,7 +87,7 @@
 			size = <0x0>;
 			/*alignment = <0x100000>;*/
 			//no-map;
-			alloc-ranges = <0x0 0x30000000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 
 		ion_cma_reserved:linux,ion-dev {
@@ -95,14 +95,14 @@
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x30000000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 		ion_fb_reserved:linux,ion-fb {
 			compatible = "shared-dma-pool";
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x30000000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 		/* secure ion for gpu, advice size is 80M */
 		ion_secure_reserved:linux,ion-secure {
@@ -125,6 +125,7 @@
 			/* 720p TV size 16M */
 			size = <0x1000000>;
 			alignment = <0x400000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 
 		/*  vdin0 CMA pool */
@@ -143,7 +144,7 @@
 			/* 1920x1080x2x4  =16 M */
 			size = <0x1400000>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x30000000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 
 		/* demod_reserved:linux,demod {
