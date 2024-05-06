@@ -16,7 +16,7 @@
 #include <linux/compat.h>
 
 #include "dvb_ringbuffer.h"
-#include "aml_ci_bus.h"
+#include "../aml_ci_bus.h"
 
 #include "dvb_ca_en50221_cimcu.h"
 
