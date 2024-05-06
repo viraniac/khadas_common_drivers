@@ -721,7 +721,8 @@ void aml_tdm_hw_setting_free(struct aml_tdm *p_tdm, int stream)
 	/* disable clock and gate */
 	if (!p_tdm->contns_clk && !IS_ERR(p_tdm->mclk)) {
 		pr_err("%s(), disable mclk for tdm-%d", __func__, p_tdm->id);
-		clk_disable_unprepare(p_tdm->mclk);
+		if (__clk_is_enabled(p_tdm->mclk))
+			clk_disable_unprepare(p_tdm->mclk);
 	}
 }
 
