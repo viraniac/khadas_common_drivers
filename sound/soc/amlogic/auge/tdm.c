@@ -2353,13 +2353,13 @@ static struct snd_soc_dai_driver aml_tdm_dai[] = {
 		.probe = aml_dai_tdm_probe,
 		.playback = {
 		      .channels_min = 1,
-		      .channels_max = 32,
+		      .channels_max = 8,
 		      .rates = AML_DAI_TDM_RATES,
 		      .formats = AML_DAI_TDM_FORMATS,
 		},
 		.capture = {
 		     .channels_min = 1,
-		     .channels_max = 32,
+		     .channels_max = 8,
 		     .rates = AML_DAI_TDM_RATES,
 		     .formats = AML_DAI_TDM_FORMATS,
 		},
