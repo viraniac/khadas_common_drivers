@@ -345,7 +345,7 @@ static int meson_panel_encoder_atomic_check(struct drm_encoder *encoder,
 	struct am_meson_crtc_state *meson_crtc_state =
 		to_am_meson_crtc_state(crtc_state);
 
-	if (crtc_state->vrr_enabled)
+	if (crtc_state->vrr_enabled || meson_crtc_state->uboot_mode_init)
 		meson_panel_cal_brr(am_lcd, meson_crtc_state, adj_mode);
 	DRM_DEBUG("[%s]-[%d] called\n", __func__, __LINE__);
 	return 0;
