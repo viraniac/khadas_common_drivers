@@ -211,11 +211,6 @@ static void lcd_venc_gamma_init(struct aml_lcd_drv_s *pdrv)
 	lcd_venc_gamma_check_en(pdrv);
 }
 
-static void lcd_venc_set_tcon(struct aml_lcd_drv_s *pdrv)
-{
-	//TODO
-}
-
 static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 {
 	struct lcd_config_s *pconf = &pdrv->config;
@@ -264,11 +259,6 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 	vs_ve_addr = pconf->timing.vs_ve_addr;
 	vso_ln_bgn = vs_vs_addr;
 	vso_ln_end = vs_ve_addr;
-
-	lcd_vcbus_write(ENCL_VIDEO_MODE_T3X + offset, 0x18040);//bit[15];shadow_en
-	lcd_vcbus_setb(ENCL_VIDEO_VSRC_CTRL + offset, 1, 4, 1);//reg_vfifo_en
-	/*vfifo_upmode, 0:1ppc,1:2ppc,2, 4ppc */
-	lcd_vcbus_setb(ENCL_VIDEO_VSRC_CTRL + offset, 0, 0, 3);
 
 	lcd_vcbus_setb(ENCL_VIDEO_MAX_CNT + offset, h_period / ppc - 1, 16, 16);
 	lcd_vcbus_setb(ENCL_VIDEO_MAX_CNT + offset, v_period - 1, 0, 16);
@@ -335,16 +325,9 @@ static void lcd_venc_set_timing(struct aml_lcd_drv_s *pdrv)
 			lcd_vcbus_setb(LCD_LCD_IF_CTRL + offset, 1, 29, 1);
 	}
 
-	switch (pdrv->data->chip_type) {
-	case LCD_CHIP_T3X:
-		lcd_vcbus_write(ENCL_INBUF_CNTL1 + offset,
-			(4 << 13) | (pconf->timing.act_timing.h_active - 1));
-		lcd_vcbus_write(ENCL_INBUF_CNTL0_T3X + offset, 0x200);
-		break;
-	default:
-		break;
-	}
-	lcd_venc_set_tcon(pdrv);
+	lcd_vcbus_write(ENCL_INBUF_CNTL1 + offset,
+		(4 << 13) | (pconf->timing.act_timing.h_active - 1));
+	lcd_vcbus_write(ENCL_INBUF_CNTL0_T3X + offset, 0x200);
 }
 
 static void lcd_venc_set(struct aml_lcd_drv_s *pdrv)
@@ -360,6 +343,11 @@ static void lcd_venc_set(struct aml_lcd_drv_s *pdrv)
 	//ppc = pdrv->config.timing.ppc;
 
 	lcd_vcbus_write(ENCL_VIDEO_EN_T3X + offset, 0);
+
+	lcd_vcbus_write(ENCL_VIDEO_MODE_T3X + offset, 0x18040);//bit[15];shadow_en
+	lcd_vcbus_setb(ENCL_VIDEO_VSRC_CTRL + offset, 1, 4, 1);//reg_vfifo_en
+	/*vfifo_upmode, 0:1ppc,1:2ppc,2, 4ppc */
+	lcd_vcbus_setb(ENCL_VIDEO_VSRC_CTRL + offset, 0, 0, 3);
 
 	lcd_venc_set_timing(pdrv);
 	aml_lcd_notifier_call_chain(LCD_EVENT_BACKLIGHT_UPDATE, (void *)pdrv);
