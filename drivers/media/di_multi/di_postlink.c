@@ -28,6 +28,10 @@
 #include "register.h"
 #include "register_nr4.h"
 
+#ifdef CONFIG_AMLOGIC_MEDIA_VIDEO
+#include <linux/amlogic/media/video_sink/video.h>
+#endif
+
 /**********************************************
  * bit [0:1] for debug level
  **********************************************/
@@ -205,6 +209,55 @@ static void dpvpp_post_queue_to_display(struct dimn_itf_s *itf,
 	queue_in(itf->bind_ch, di_buf, QUEUE_DISPLAY);
 }
 
+static bool update_vframe_meta(struct vframe_s *vfm, u8 from)
+{
+	struct dimn_dvfm_s *ndvfm = NULL;
+	struct di_buf_s *di_buf = NULL;
+
+	if (!vfm)
+		return false;
+
+	ndvfm = (struct dimn_dvfm_s *)vfm->private_data;
+	if (ndvfm)
+		di_buf = (struct di_buf_s *)ndvfm->c.di_buf;
+#ifdef CONFIG_AMLOGIC_MEDIA_VIDEO
+	clear_vframe_src_fmt(vfm);
+	if (di_buf && di_buf->local_meta &&
+	    di_buf->local_meta_used_size)
+		update_vframe_src_fmt(vfm,
+			di_buf->local_meta,
+			di_buf->local_meta_used_size,
+			false, NULL, NULL);
+#endif
+#ifdef DIM_EN_UD_USED
+	/* reset ud_param ptr */
+	if (di_buf && di_buf->local_ud &&
+	    di_buf->local_ud_used_size &&
+	    is_ud_param_valid(vfm->vf_ud_param)) {
+		vfm->vf_ud_param.ud_param.pbuf_addr = (void *)di_buf->local_ud;
+		vfm->vf_ud_param.ud_param.buf_len = di_buf->local_ud_used_size;
+	} else {
+		vfm->vf_ud_param.ud_param.pbuf_addr = NULL;
+		vfm->vf_ud_param.ud_param.buf_len = 0;
+	}
+#else
+	vfm->vf_ud_param.ud_param.pbuf_addr = NULL;
+	vfm->vf_ud_param.ud_param.buf_len = 0;
+#endif
+
+	if (di_buf)
+		dbg_plink2("%s:#%d: vfm:%px di_buf:%px meta:<%px %d> ud:<%px %d - %px %d>\n",
+			__func__, from, vfm, di_buf,
+			di_buf->local_meta, di_buf->local_meta_used_size,
+			di_buf->local_ud, di_buf->local_ud_used_size,
+			vfm->vf_ud_param.ud_param.pbuf_addr,
+			vfm->vf_ud_param.ud_param.buf_len);
+	else
+		dbg_plink2("%s:#%d: vfm:%px no di_buf\n",
+			__func__, from, vfm);
+	return true;
+}
+
 static bool post_vtype_fill_d(struct dimn_itf_s *itf,
 		struct vframe_s *vfmt,
 		struct vframe_s *vfmf,
@@ -271,6 +324,7 @@ static bool post_vtype_fill_d(struct dimn_itf_s *itf,
 			vfmt->height = vfmt->compHeight;
 		}
 		vfmt->di_flag &= ~DI_FLAG_DCT_DS_RATIO_MASK;
+		update_vframe_meta(vfmt, 1);
 	} else {
 		PR_ERR("%s:not postlink vfm %px\n", __func__, by_dvfm);
 	}
@@ -303,6 +357,7 @@ static bool post_vtype_fill_local_bypass(struct vframe_s *vfmt,
 		__func__, vfmf, index, vfmt,
 		vfmt->canvas0_config[0].phy_addr,
 		vfmt->plane_num, vfmt->private_data);
+	update_vframe_meta(vfmt, 0);
 	return true;
 }
 
