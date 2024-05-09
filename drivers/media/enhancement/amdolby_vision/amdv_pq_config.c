@@ -1276,7 +1276,7 @@ u32 check_cfg_enabled_top1(void)
 
 		if (tdc && tdc->pr_config.supports_precision_rendering)
 			ret |= CFG_ENABLE_PRECISION;
-		else if (tdc && tdc->ana_config.enalbe_l1l4_gen)
+		if (tdc && tdc->ana_config.enalbe_l1l4_gen)
 			ret |= CFG_ENABLE_L1L4;
 	}
 	/*todo, check dynamic_cfg_enabled_top1*/
