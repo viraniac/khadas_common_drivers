@@ -2749,7 +2749,8 @@ static void _edid_parse_base_structure(struct rx_cap *prxcap, unsigned char *EDI
 			prxcap->ieeeoui = HDMI_IEEE_OUI;
 		if (zero_numbers > 120)
 			prxcap->ieeeoui = HDMI_IEEE_OUI;
-		hdmitx_edid_set_default_vic(prxcap);
+		if (prxcap->ieeeoui == HDMI_IEEE_OUI)
+			hdmitx_edid_set_default_vic(prxcap);
 	}
 }
 
@@ -2963,7 +2964,7 @@ int hdmitx_edid_parse(struct rx_cap *prxcap, u8 *edid_buf)
 	}
 
 	/* if edid are all zeroes, or no VIC, set default vic */
-	if (edid_zero_data(edid_buf) || prxcap->VIC_count == 0)
+	if (edid_zero_data(edid_buf) || (prxcap->VIC_count == 0 && prxcap->ieeeoui == HDMI_IEEE_OUI))
 		hdmitx_edid_set_default_vic(prxcap);
 	if (prxcap->ieeeoui == HDMI_IEEE_OUI) {
 		// hdmitx_current_status(HDMITX_EDID_HDMI_DEVICE);
