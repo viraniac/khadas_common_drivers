@@ -1872,12 +1872,12 @@ static int lcd_tcon_data_multi_add(struct aml_lcd_drv_s *pdrv,
 	data_list = kzalloc(sizeof(*data_list), GFP_KERNEL);
 	if (!data_list)
 		return -1;
-	spin_lock_irqsave(&tcon_local_cfg.multi_list_lock, flags);
 	data_list->block_vaddr = mm_table->data_mem_vaddr[index];
 	data_list->block_paddr = mm_table->data_mem_paddr[index];
 	data_list->next = NULL;
 	data_list->id = index;
 	data_list->block_name = block_header->name;
+	lcd_tcon_data_multi_list_init(pdrv, data_list);
 
 	for (i = 0; i < mm_table->data_multi_cnt; i++) {
 		if (mm_table->data_multi[i].block_type == block_header->block_type) {
@@ -1886,6 +1886,7 @@ static int lcd_tcon_data_multi_add(struct aml_lcd_drv_s *pdrv,
 		}
 	}
 
+	spin_lock_irqsave(&tcon_local_cfg.multi_list_lock, flags);
 	if (!data_multi) { /* create new list */
 		data_multi = &mm_table->data_multi[mm_table->data_multi_cnt];
 		mm_table->data_multi_cnt++;
@@ -1902,7 +1903,6 @@ static int lcd_tcon_data_multi_add(struct aml_lcd_drv_s *pdrv,
 		}
 	}
 	lcd_tcon_data_list_add(data_multi, data_list);
-	lcd_tcon_data_multi_list_init(pdrv, data_list);
 
 	frame_rate = pdrv->config.timing.act_timing.frame_rate;
 	ret = lcd_tcon_data_multi_match_policy(pdrv, frame_rate, data_multi, data_list);
