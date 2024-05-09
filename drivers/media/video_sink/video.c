@@ -10598,6 +10598,10 @@ static ssize_t vdx_state_show(u32 index, char *buf)
 		dw = afbc && _cur_frame_par->nocomp;
 		len += sprintf(buf + len, "afbc:%d double_write:%d.\n",
 			       afbc, dw);
+		len += sprintf(buf + len, "di pre_link:%d post_link:%d.\n",
+			IS_DI_PRELINK(dispbuf->di_flag), IS_DI_PSTLINK(dispbuf->di_flag));
+		len += sprintf(buf + len, "cur vf type:0x%x. flag: 0x%x\n",
+			dispbuf->type, dispbuf->flag);
 	}
 	vpp_filter = &_cur_frame_par->vpp_filter;
 	len += sprintf(buf + len,
