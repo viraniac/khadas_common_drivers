@@ -699,12 +699,12 @@ static struct clk_regmap t5w_gp1_pll = {
 
 #ifdef CONFIG_ARM
 static const struct pll_params_table t5w_hifi_pll_table[] = {
-	PLL_PARAMS(150, 1, 1), /* DCO = 1806.336M OD = 1 */
+	PLL_PARAMS(163, 1, 3), /* DCO = 3932.16M */
 	{ /* sentinel */  }
 };
 #else
 static const struct pll_params_table t5w_hifi_pll_table[] = {
-	PLL_PARAMS(150, 1), /* DCO = 1806.336M */
+	PLL_PARAMS(163, 1), /* DCO = 3932.16M */
 	{ /* sentinel */  }
 };
 #endif
@@ -713,7 +713,7 @@ static const struct pll_params_table t5w_hifi_pll_table[] = {
  * Internal hifi pll emulation configuration parameters
  */
 static const struct reg_sequence t5w_hifi_init_regs[] = {
-	{ .reg = HHI_HIFI_PLL_CNTL1,	.def = 0x00010e56 },
+	{ .reg = HHI_HIFI_PLL_CNTL1,	.def = 0x00014820 },
 	{ .reg = HHI_HIFI_PLL_CNTL2,	.def = 0x00000000 },
 	{ .reg = HHI_HIFI_PLL_CNTL3,	.def = 0x6a285c00 },
 	{ .reg = HHI_HIFI_PLL_CNTL4,	.def = 0x65771290 },
@@ -738,6 +738,11 @@ static struct clk_regmap t5w_hifi_pll_dco = {
 			.shift   = 10,
 			.width   = 5,
 		},
+	.od = {
+		.reg_off = HHI_HIFI_PLL_CNTL0,
+		.shift   = 16,
+		.width   = 2,
+	},
 		.frac = {
 			.reg_off = HHI_HIFI_PLL_CNTL1,
 			.shift   = 0,
@@ -756,7 +761,8 @@ static struct clk_regmap t5w_hifi_pll_dco = {
 		.table = t5w_hifi_pll_table,
 		.init_regs = t5w_hifi_init_regs,
 		.init_count = ARRAY_SIZE(t5w_hifi_init_regs),
-		.flags = CLK_MESON_PLL_ROUND_CLOSEST,
+		.flags = CLK_MESON_PLL_ROUND_CLOSEST |
+			 CLK_MESON_PLL_FIXED_FRAC_WEIGHT_PRECISION
 	},
 	.hw.init = &(struct clk_init_data){
 		.name = "hifi_pll_dco",
@@ -772,6 +778,19 @@ static struct clk_regmap t5w_hifi_pll_dco = {
 	},
 };
 
+#ifdef CONFIG_ARM
+static struct clk_regmap t5w_hifi_pll = {
+.hw.init = &(struct clk_init_data){
+	.name = "hifi_pll",
+	.ops = &meson_pll_clk_no_ops,
+	.parent_hws = (const struct clk_hw *[]) {
+		&t5w_hifi_pll_dco.hw
+	},
+	.num_parents = 1,
+	.flags = CLK_SET_RATE_PARENT,
+},
+};
+#else
 static struct clk_regmap t5w_hifi_pll = {
 	.data = &(struct clk_regmap_div_data){
 		.offset = HHI_HIFI_PLL_CNTL0,
@@ -795,6 +814,7 @@ static struct clk_regmap t5w_hifi_pll = {
 		.flags = CLK_SET_RATE_PARENT | CLK_GET_RATE_NOCACHE,
 	},
 };
+#endif
 
 static struct clk_fixed_factor t5w_mpll_50m_div = {
 	.mult = 1,
