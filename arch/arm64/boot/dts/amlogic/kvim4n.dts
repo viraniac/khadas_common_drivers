@@ -121,7 +121,7 @@
 			reusable;
 			size = <0x0 0x800000>;
 			alignment = <0x0 0x400000>;
-			reg = <0x0 0x3f800000 0x0 0x800000>;
+			reg = <0x0 0x3fdeec00 0x0 0x800000>;
 		};
 
 		codec_mm_cma:linux,codec_mm_cma {
@@ -1817,7 +1817,7 @@
 	mem_size = <0x00800000 0x4000000 0x100000 0x100000 0x100000>;
 	4k2k_fb = <1>;
 	display_device_cnt = <2>;
-	logo_addr = "0x3f800000";
+	logo_addr = "0x3fdecc00";
 	mem_alloc = <0>;
 	pxp_mode = <0>; /** 0:normal mode 1:pxp mode */
 };
@@ -1831,7 +1831,7 @@
 
 &drm_vpu {
 	status = "okay";
-	logo_addr = "0x3f800000";
+	logo_addr = "0x3fdeec00";
 
 	connectors_dev: port@1 {
 		drm_to_lcd0: endpoint@2 {

@@ -1741,7 +1741,7 @@ static int meson_hdmitx_encoder_atomic_check(struct drm_encoder *encoder,
 		hdmitx_get_init_state(common, &hdmitx_state->hcs);
 		if (vic != hdmitx_state->hcs.para.vic) {
 			DRM_ERROR("Logo mode not match with hdmitx hw.\n");
-			return -EINVAL;
+//			return -EINVAL;
 		}
 		attr->colorformat = hdmitx_state->hcs.para.cs;
 		attr->bitdepth = colordepth_to_bitdepth(hdmitx_state->hcs.para.cd);
