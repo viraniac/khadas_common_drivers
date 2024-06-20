@@ -1354,6 +1354,11 @@
 		status = "okay";
 	};
 
+	hym8563-rtc@51 {
+		compatible = "haoyu,hym8563";
+		reg = <0x51>;
+	};
+
 	khadas-mcu@18 {
 		compatible = "khadas-mcu";
 		reg = <0x18>;
@@ -2122,4 +2127,8 @@
 
 &ge2d {
 	memory-region = <&ge2d_cma_reserved>;
+};
+
+&vrtc {
+	status = "disabled";
 };

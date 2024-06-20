@@ -1521,6 +1521,11 @@
 	pinctrl-0=<&i2c0_ao_pins1>;
 	clock-frequency = <100000>; /* default 100k */
 
+	hym8563-rtc@51 {
+		compatible = "haoyu,hym8563";
+		reg = <0x51>;
+	};
+
 	khadas-mcu@18 {
 		compatible = "khadas-mcu";
 		reg = <0x18>;
@@ -1541,7 +1546,6 @@
 		irq-gpio = <&gpio GPIOY_3 IRQ_TYPE_EDGE_RISING>;
 		status = "okay";
 	};
-
 };
 
 /* SDIO */
@@ -2151,4 +2155,8 @@
 
 &ge2d {
 	memory-region = <&ge2d_cma_reserved>;
+};
+
+&vrtc {
+	status = "disabled";
 };
