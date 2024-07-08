@@ -103,7 +103,7 @@ set -e
 
 export_env_variable
 
-autotest
+copy_pre_commit
 
 adjust_config_action
 
@@ -282,6 +282,7 @@ else
 			if [[ "${FULL_KERNEL_VERSION}" != "common13-5.15" && "${ARCH}" = "arm" ]]; then
 				build_android_32bit $@
 			else
+				clear_files_compressed_with_lzma_in_last_build
 				${ROOT_DIR}/${BUILD_DIR}/build.sh "$@"
 			fi
 		fi
@@ -305,3 +306,7 @@ set +e
 check_undefined_symbol
 
 abi_symbol_list_detect
+
+if [[ ${ARCH} = "arm64" ]]; then
+	generate_lzma_format_image
+fi

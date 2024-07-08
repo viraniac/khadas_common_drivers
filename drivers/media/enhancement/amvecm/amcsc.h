@@ -312,6 +312,7 @@ extern int customer_hdr_clipping;
 /* api to get sink capability */
 uint32_t sink_dv_support(const struct vinfo_s *vinfo);
 uint32_t sink_hdr_support(const struct vinfo_s *vinfo);
+uint32_t sink_hdr_support_ori_cap(const struct vinfo_s *vinfo);
 
 extern uint gamut_conv_enable;
 void force_toggle(void);
@@ -322,5 +323,7 @@ int get_s5_slice_mode(void);
 #define VD1_4SLICE							4
 
 void pkt_delay_flag_init(void);
+
+void get_source_csc_info(int vpp_index, int *source_type, int *csc_type);
 #endif /* AM_CSC_H */
 

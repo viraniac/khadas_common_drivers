@@ -79,7 +79,7 @@ static void ramdump_parse_info(void)
 	pr_info("%s, .text : 0x%px - 0x%px, pa(.text): 0x%lx\n",
 			__func__, (unsigned long *)_text,
 			(unsigned long *)_etext, (unsigned long)__pa_symbol(_text));
-	pr_info("%s, kimage_voffset = 0x%px\n",
+	pr_info("%s, -m kimage_voffset=0x%px\n",
 			__func__, (unsigned long)_text - (unsigned long)__pa_symbol(_text));
 #endif
 
@@ -90,10 +90,10 @@ static void ramdump_parse_info(void)
 	pr_info("%s, KIMAGE_VADDR: 0x%px, v2p: 0x%lx\n",
 			__func__, (unsigned long *)KIMAGE_VADDR,
 			(unsigned long)__pa_symbol(KIMAGE_VADDR));
-	pr_info("%s, kimage_voffset = 0x%lx\n", __func__,
+	pr_info("%s, --kaslr 0x%lx\n", __func__, kaslr_offset());
+	pr_info("%s, -m kimage_voffset=0x%lx\n", __func__,
 			(unsigned long)kimage_vaddr - (unsigned long)__pa_symbol(kimage_vaddr));
-	pr_info("%s, kaslr_offset   = 0x%lx\n", __func__, kaslr_offset());
-	pr_info("%s, vabits_actual  = %d\n", __func__, (unsigned int)vabits_actual);
+	pr_info("%s, -m vabits_actual=%d\n", __func__, (unsigned int)vabits_actual);
 #endif
 }
 
@@ -297,10 +297,17 @@ static void lazy_clear_work(struct work_struct *work)
 	struct list_head head, *pos, *next;
 	void *virt;
 	int order;
-	gfp_t flags = __GFP_NORETRY   |
-		      __GFP_NOWARN    |
-		      __GFP_MOVABLE;
+	gfp_t flags = __GFP_NORETRY		|
+					__GFP_NOWARN	|
+					__GFP_MOVABLE;
 	unsigned long clear = 0, size = 0, free = 0, tick;
+	unsigned long free_pages;
+	unsigned long target_size;
+
+	free_pages = global_zone_page_state(NR_FREE_PAGES);
+	pr_info("ramdump, Free pages available: %lu (%lu MB)\n",
+			free_pages, free_pages * PAGE_SIZE / 1024 / 1024);
+	target_size = (free_pages * 90) / 100 * PAGE_SIZE;
 
 	INIT_LIST_HEAD(&head);
 	order = MAX_ORDER - 3;
@@ -314,6 +321,8 @@ static void lazy_clear_work(struct work_struct *work)
 			memset(virt, 0, size);
 			clear += size;
 		}
+		if (clear > target_size)
+			break;
 	} while (page);
 	tick = sched_clock() - tick;
 
@@ -323,29 +332,28 @@ static void lazy_clear_work(struct work_struct *work)
 		__free_pages(page, order);
 		free += size;
 	}
-	pr_info("ramdump, clear:%lx, free:%lx, tick:%ld us\n",
-		clear, free, tick / 1000);
+	pr_info("ramdump, clear:%lu MB, free:%lu MB, tick:%ld ms\n",
+			clear / 1024 / 1024, free / 1024 / 1024, tick / 1000000);
 }
 
 #if defined(CONFIG_TRACEPOINTS) && defined(CONFIG_ANDROID_VENDOR_HOOKS)
-static void do_flush_cpu_cache(void)
+static void flush_all_cache_hook(void *data, struct pt_regs *regs)
 {
 	int cpu = smp_processor_id();
 
-	pr_info("ramdump: CPU-%d flush cache ...\n", cpu);
+	pr_info("ramdump: ONLINE CPU-%d flush cache ...\n", cpu);
 	ramdump_sync_data();
-	pr_info("ramdump: CPU-%d flush cache finish.\n", cpu);
-}
-
-static void flush_all_cache_hook(void *data, struct pt_regs *regs)
-{
-	do_flush_cpu_cache();
+	pr_info("ramdump: ONLINE CPU-%d flush cache finish.\n", cpu);
 }
 
 static int panic_notify(struct notifier_block *self,
 			unsigned long cmd, void *ptr)
 {
-	do_flush_cpu_cache();
+	int cpu = smp_processor_id();
+
+	pr_info("ramdump: PANIC CPU-%d flush cache ...\n", cpu);
+	ramdump_sync_data();
+	pr_info("ramdump: PANIC CPU-%d flush cache finish.\n", cpu);
 	return NOTIFY_DONE;
 }
 
@@ -407,7 +415,8 @@ static int __init ramdump_probe(struct platform_device *pdev)
 	if (!ram->disable) {
 		if (!ram->mem_base) {	/* No compressed data */
 			INIT_DELAYED_WORK(&ram->work, lazy_clear_work);
-			schedule_delayed_work(&ram->work, msecs_to_jiffies(100));
+			schedule_delayed_work(&ram->work, msecs_to_jiffies(120 * 1000));
+			pr_info("%s, clear ddr 120s later.\n", __func__);
 		} else {		/* with compressed data */
 #ifdef	SAVE_DATA_BY_INIT_RC_SHELL
 			pr_info("%s, SAVE_DATA_BY_INIT_RC_SHELL\n", __func__);

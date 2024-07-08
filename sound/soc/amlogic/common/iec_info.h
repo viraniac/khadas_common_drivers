@@ -211,15 +211,29 @@ static const char *const audio_type_texts[] = {
 	"PAUSE"
 };
 
+/* current sample mode and its sample rate */
+static const char *const spdifin_samplerate[] = {
+	"N/A",
+	"32000",
+	"44100",
+	"48000",
+	"88200",
+	"96000",
+	"176400",
+	"192000"
+};
+
 extern const struct spdif_audio_info type_texts[];
 extern const char *const audio_type_texts[];
 
 extern const struct soc_enum audio_coding_type_enum;
 
+extern const struct soc_enum spdifin_sample_rate_enum[];
+
 bool audio_coding_is_lpcm(enum audio_coding_types coding_type);
 bool audio_coding_is_non_lpcm(enum audio_coding_types coding_type);
 int audio_multi_clk(enum audio_coding_types coding_type);
-unsigned int iec_rate_from_csfs(unsigned int csfs);
+unsigned int iec_rate_from_csfs(unsigned int csfs, bool h);
 void iec_get_cnsmr_cs_info(struct iec_cnsmr_cs *cs_info,
 			   enum audio_coding_types coding_type,
 			   unsigned int channels,
@@ -285,7 +299,7 @@ void spdif_notify_to_hdmitx(struct snd_pcm_substream *substream,
 			    enum aud_codec_types codec_type);
 void notify_hdmitx_to_prepare(void);
 
-#ifdef CONFIG_AMLOGIC_HDMITX
+#if defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21)
 int aml_get_hdmi_out_audio(struct snd_kcontrol *kcontrol,
 			   struct snd_ctl_elem_value *ucontrol);
 int aml_set_hdmi_out_audio(struct snd_kcontrol *kcontrol,

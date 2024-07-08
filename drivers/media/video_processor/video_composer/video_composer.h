@@ -88,6 +88,14 @@
 
 extern int actual_delay_count[MAX_VD_LAYERS];
 
+#ifndef MAX
+#define MAX(a, b) ({ \
+	typeof(a) _a = a; \
+	typeof(b) _b = b; \
+	_a > _b ? _a : _b; \
+	})
+#endif // MAX
+
 enum vc_transform_t {
 	/* flip source image horizontally */
 	VC_TRANSFORM_FLIP_H = 1,
@@ -314,4 +322,9 @@ void vc_private_q_init(struct composer_dev *dev);
 void vc_private_q_recycle(struct composer_dev *dev,
 	struct video_composer_private *vc_private);
 struct video_composer_private *vc_private_q_pop(struct composer_dev *dev);
+void debug_vc_print_flag(const char *module, int debug_flags);
+void debug_vc_transform(const char *module, int debug_flags);
+void debug_vc_force_composer(const char *module, int debug_flags);
+void debug_vc_get_count(const char *module, int debug_flags);
+
 #endif /* VIDEO_COMPOSER_H */

@@ -26,6 +26,7 @@
 #include <linux/amlogic/media/registers/register_map.h>
 #include <linux/amlogic/media/registers/cpu_version.h>
 #include <linux/amlogic/media/vfm/vframe.h>
+#include <linux/amlogic/media/vout/dsc.h>
 
 #if IS_ENABLED(CONFIG_AMLOGIC_TVIN_USE_DEBUG_FILE)
 #include <linux/kernel.h>
@@ -322,6 +323,9 @@ static inline u32 rd_bits(u32 offset, u32 reg, const u32 start, const u32 len)
 #define CDTO_FILTER_FACTOR			1
 #endif
 
+#define HDR_RAW_DATA_SIZE	32
+#define HDR_EMP_DATA_SIZE	1024
+
 enum tvin_color_space_e {
 	TVIN_CS_RGB444 = 0,
 	TVIN_CS_YUV444,
@@ -358,14 +362,15 @@ enum vpp_wrbak_src_e {
 /* Hs_cnt        Pixel_Clk(Khz/10) */
 
 enum tvin_ar_b3_b0_val_e {
-	TVIN_AR_14x9_LB_CENTER_VAL = 0x11,
-	TVIN_AR_14x9_LB_TOP_VAL = 0x12,
-	TVIN_AR_16x9_LB_TOP_VAL = 0x14,
-	TVIN_AR_16x9_FULL_VAL = 0x17,
-	TVIN_AR_4x3_FULL_VAL = 0x18,
-	TVIN_AR_16x9_LB_CENTER_VAL = 0x1b,
-	TVIN_AR_16x9_LB_CENTER1_VAL = 0x1d,
-	TVIN_AR_14x9_FULL_VAL = 0x1e,
+	TVIN_AR_14x9_LB_CENTER_VAL = 0x1,
+	TVIN_AR_14x9_LB_TOP_VAL = 0x2,
+	TVIN_AR_16x9_LB_TOP_VAL = 0x4,
+	TVIN_AR_16x9_FULL_VAL = 0x7,
+	TVIN_AR_4x3_FULL_VAL = 0x8,
+	TVIN_AR_16x9_LB_CENTER_VAL = 0xb,
+	TVIN_AR_16x9_LB_CENTER1_VAL = 0xd,
+	TVIN_AR_14x9_FULL_VAL = 0xe,
+	TVIN_AR_NOT_VALUE = 0xf,
 };
 const char *tvin_aspect_ratio_str(enum tvin_aspect_ratio_e aspect_ratio);
 
@@ -383,6 +388,13 @@ enum tvin_hdr_state_e {
 	HDR_STATE_SET,
 };
 
+/* hdmirx have main/sub ports on t3x */
+enum tvin_port_type_e {
+	TVIN_PORT_MAIN,
+	TVIN_PORT_SUB,
+	TVIN_PORT_UNKNOWN,
+};
+
 struct tvin_hdr_property_s {
 	unsigned int x;/* max */
 	unsigned int y;/* min */
@@ -398,7 +410,7 @@ struct tvin_hdr_data_s {
 	struct tvin_hdr_property_s master_lum;/* max min lum */
 	unsigned int mcll;
 	unsigned int mfall;
-	u8 rawdata[32];
+	u8 rawdata[HDR_RAW_DATA_SIZE];
 };
 
 struct tvin_hdr_info_s {
@@ -416,18 +428,22 @@ struct tvin_dv_vsif_raw_s {
 
 struct tvin_emp_data_s {
 	u8 size; //dv is pkt_cnt
-	u8 empbuf[1024];
+	u8 empbuf[HDR_EMP_DATA_SIZE];
 	u8 tag_id;
 };
 
 /* refer to hdmi_rx_drv.h */
 struct tvin_vtem_data_s {
+	/* gaming-vrr & FVA */
 	u8 vrr_en;
+	u8 fva_factor_m1;
+
+	/* qms-vrr */
 	u8 m_const;
 	u8 qms_en;
-	u8 fva_factor_m1;
-	u8 base_v_front;
-	u8 rb;
+	u32 next_tfr;
+
+	u8 base_vfront;
 	u16 base_framerate;
 };
 
@@ -502,6 +518,7 @@ struct tvin_spd_data_s {
 struct tvin_hdr10plus_info_s {
 	bool hdr10p_on;
 	struct tvin_hdr10p_data_s hdr10p_data;
+	unsigned int hdr10p_check_cnt;
 };
 
 struct tvin_3d_meta_data_s {
@@ -581,9 +598,12 @@ struct tvin_sig_property_s {
 	struct tvin_sbtm_data_s sbtm_data;
 	struct tvin_cuva_emds_data_s cuva_emds_data;
 	struct tvin_spd_data_s spd_data;
+	bool dsc_flag;
+	struct dsc_pps_data_s pps_data;
 	unsigned int cnt;
 	unsigned int hw_vic;
-	unsigned int avi_ec;//hdmi avi ext_colorimetry
+	unsigned int avi_colorimetry;//hdmi avi colorimetry
+	unsigned int avi_ext_colorimetry;//hdmi avi ext_colorimetry
 	/* only use for loopback, 0=positvie, 1=negative */
 	unsigned int polarity_vs;
 	unsigned int hdcp_sts;	/* protected content src. 1:protected 0:not*/

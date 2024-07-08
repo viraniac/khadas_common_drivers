@@ -30,10 +30,15 @@
 //#include "di_pqa.h"
 #include "di_dd.h"
 
+#ifdef CONFIG_AMLOGIC_LOWMEM
+#define DI_CHANNEL_NUB	(2)
+#define DI_CHANNEL_MAX  (2)
+#define DI_PLINK_CN_NUB	(2)
+#else
 #define DI_CHANNEL_NUB	(4)
 #define DI_CHANNEL_MAX  (4)
-
 #define DI_PLINK_CN_NUB	(4)
+#endif
 
 /* for vfm mode limit input vf */
 #define DIM_K_VFM_IN_LIMIT		(2)
@@ -173,6 +178,12 @@ enum EDI_CFG_TOP_IDX {
 	EDI_CFG_EN_PRE_LINK,
 	EDI_CFG_AFBCE_LOSS_EN,
 	EDI_CFG_TB,
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
+	EDI_CFG_TEMP_CONTROL,
+	EDI_CFG_422_8bit,
+#endif
+	EDI_CFG_PRE_NUB,
+	EDI_CFG_EN_POST_LINK,
 	EDI_CFG_END,
 };
 
@@ -719,6 +730,7 @@ enum EDI_TOP_STATE {
 	EDI_TOP_STATE_READY,		/*can do DI*/
 	EDI_TOP_STATE_BYPASS,		/*complet bypass*/
 	EDI_TOP_STATE_PREVPP_LINK,	/* pre-vpp link */
+	EDI_TOP_STATE_PSTVPP_LINK,	/* post-vpp link */
 	EDI_TOP_STATE_UNREG_STEP1,	/*till pre/post is finish;*/
 	/* do unreg and to IDLE.
 	 * no need to wait cma release after  this unreg event finish
@@ -817,8 +829,6 @@ union   DI_L_CMD_BITS {
 
 enum ECMD_LOCAL {
 	ECMD_NONE,
-	ECMD_PV_LINK_REG,
-	ECMD_PV_LINK_UNREG,
 	ECMD_REG,
 	ECMD_UNREG,
 	ECMD_READY,
@@ -1079,6 +1089,7 @@ enum EDI_MP_UI_T {
 	edi_mp_blend_mode,
 	edi_mp_tb_dump,
 	edi_mp_prelink_hold_line,
+	edi_mp_force_422_8bit,
 	EDI_MP_SUB_DI_E,
 	/**************************************/
 	EDI_MP_SUB_NR_B,
@@ -1281,7 +1292,7 @@ struct dim_itf_s {
 	/*status:*/
 	bool bypass_complete;
 	bool flg_s4dw; /* copy */
-	bool pre_vpp_link; //
+	bool p_vpp_link; //
 	struct dimn_itf_s *p_itf;	/* @ary 11-08 add */
 	bool reg;
 	struct mutex lock_reg; /* for reg */
@@ -1433,6 +1444,7 @@ struct di_mm_st_s {
 struct div2_mm_s {
 	struct di_mm_cfg_s cfg; /* clear in dip_init_value */
 	struct di_mm_st_s sts;
+	u32 fcc_value;
 };
 
 struct dim_sum_s {
@@ -1443,6 +1455,7 @@ struct dim_sum_s {
 	unsigned int b_pre_ready;
 	unsigned int b_pst_free;
 	unsigned int b_display;
+	unsigned int b_pst_link;
 	unsigned int b_nin;
 	unsigned int b_dct_in;
 	unsigned int b_in_free;
@@ -1991,6 +2004,7 @@ struct di_ch_s {
 	unsigned int sum_ext_buf_in2;
 	unsigned int sum_pre;
 	unsigned int sum_pst;
+	unsigned int sum_in_get;
 	unsigned int in_cnt;
 	unsigned int crc_cnt;
 	/*@ary_note:*/
@@ -2071,6 +2085,7 @@ struct di_ch_s {
 	bool en_dw_mem;
 	bool ponly_set;/* plink ponly check */
 	bool plink_dct;/* plink ponly check */
+	enum EPVPP_API_MODE link_mode;
 	unsigned int last_bypass;
 	struct kfifo	fifo32[DIM_Q_NUB];
 	bool flg_fifo32[DIM_Q_NUB];
@@ -2079,6 +2094,14 @@ struct di_ch_s {
 	bool en_tb; //
 	unsigned char tb_owner;	//
 	bool	tb_busy;//
+#ifdef CONFIG_AMLOGIC_MEDIA_THERMAL1
+	bool record_8bit_flag;
+	bool record_10bit_flag;
+	unsigned int cur_index;
+	unsigned int switch_index;
+#endif
+	unsigned int sts_keep	: 1,
+			rev	: 31;
 };
 
 struct dim_policy_s {
@@ -2276,7 +2299,7 @@ struct dw_s {
 };
 
 /************************************************
- * pre-vpp link
+ * pre/post-vpp link
  ************************************************/
 #define DPVPP_BUF_NUB	(2)
 #define DIM_LKIN_NUB	(20) /* buf number*/
@@ -2327,6 +2350,10 @@ enum EPVPP_BYPASS_REASON {
 	EPVPP_BYPASS_REASON_GAME_MODE,
 	EPVPP_BYPASS_REASON_DV_PATH,
 	EPVPP_BYPASS_REASON_120HZ,
+	EPVPP_BYPASS_REASON_TVP,
+	EPVPP_BYPASS_REASON_P,
+	EPVPP_BYPASS_REASON_INVALID,
+	EPVPP_BYPASS_REASON_NO_LOCAL_BUF,
 	EPVPP_NO_MEM = 0x100
 };
 
@@ -2334,6 +2361,34 @@ enum EPVPP_DISPLAY {
 	EPVPP_OK	= 0,
 	EPVPP_DIS_BYPASS = 0x01,
 	ERR_NOT_DI_VPP = 0x80000001,
+};
+
+enum EDIM_DVPP_DIFF {
+	EDIM_DVPP_DIFF_NONE = 0,
+	EDIM_DVPP_DIFF_SAME_FRAME = DI_BIT1,  /* 0 ~ 3 for not change */
+	EDIM_DVPP_DIFF_MEM	= DI_BIT2,
+
+	EDIM_DVPP_DIFF_ALL = DI_BIT4,
+	EDIM_DVPP_DIFF_SIZE_IN	= DI_BIT5,
+	EDIM_DVPP_DIFF_ONLY_ADDR = DI_BIT6,
+	EDIM_DVPP_DIFF_ONLY_NO_WR = DI_BIT7,
+};
+
+/* must from 0 and < 31*/
+enum EDVPP_SRC_NEED {
+	EDVPP_SRC_NEED_VAL	= DI_BIT0,
+	EDVPP_SRC_NEED_KFIFO	= DI_BIT1,
+	EDVPP_SRC_NEED_MSK_CRT	= 0xff, /* critical */
+
+	EDVPP_SRC_NEED_REG2	= DI_BIT8,
+	EDVPP_SRC_NEED_MEM	= DI_BIT9,
+	EDVPP_SRC_NEED_SCT_TAB	= DI_BIT10,
+	EDVPP_SRC_NEED_SCT_TOP	= DI_BIT11,
+
+	EDVPP_SRC_NEED_TEST	= DI_BIT15,
+
+	EDVPP_SRC_NEED_MSK_BYPASS = 0xff00,
+	EDVPP_SRC_NEED_LINK_ON	= DI_BIT16,/* no use ?*/
 };
 
 struct dimn_qs_cls_s;
@@ -2487,6 +2542,7 @@ struct dimn_dvfm_s {
 		unsigned int src_w;//temp
 		unsigned int src_h; //temp
 		struct dcntr_mem_s *dct_pre;
+		struct di_buf_s *di_buf;
 	} c;
 };
 
@@ -2502,7 +2558,7 @@ struct pvpp_buf_cfg_s {
 	unsigned int afbc_crc[DPVPP_BUF_NUB];
 };
 
-#define DIM_PRE_VPP_NUB		(0xf0)
+#define DIM_PVPP_NUB		(0xf0)
 
 /***************************************************/
 struct dim_pvpp_hw_s {
@@ -2561,7 +2617,7 @@ struct dim_pvpp_hw_s {
 };
 
 /* ds */
-struct dim_prevpp_ds_s {
+struct dim_pvpp_ds_s {
 	unsigned int id;
 	struct dimn_itf_s *itf;
 	/* que */
@@ -2635,6 +2691,7 @@ struct dim_prevpp_ds_s {
 	unsigned int pre_done_nub;
 	unsigned int dbg_last_diff;
 	int	field_count_for_cont;
+	unsigned int bypass_cnt;
 };
 
 struct dimn_vfm_s {
@@ -2670,9 +2727,9 @@ struct dimn_vfml_ops_s {
 };
 
 struct dimn_pvpp_ops_s {
-	bool (*reg)(struct dimn_itf_s *itf);
-	bool (*unreg)(struct dimn_itf_s *itf);
-	bool (*parser)(void *para);
+	//bool (*reg)(struct dimn_itf_s *itf);
+	//bool (*unreg)(struct dimn_itf_s *itf);
+	bool (*post)(void *para);
 	//int (*display)(struct vframe_s *vfm,
 	//		  void *in_para, void *out_para);
 };
@@ -2683,10 +2740,8 @@ struct dimn_pvpp_ops_api_s {
 		       void *out_para);
 	int (*display_unreg_bypass)(void);
 	int (*check_vf)(struct vframe_s *vfm);
-	int (*check_di_act)(void);
+	int (*check_di_act)(enum EPVPP_API_MODE mode);
 	int (*vpp_sw)(bool on);
-	int (*vpp_get)(struct vframe_s *vfm);
-	int (*vpp_put)(struct vframe_s *vfm);
 	int (*get_di_in_win)(struct di_ch_s *pch,
 		unsigned int src_w,
 		unsigned int src_h,
@@ -2707,14 +2762,8 @@ struct dimn_itf_s {
 	unsigned int ch;
 	unsigned int id; /* @ary 11-08 ref to DI_PLINK_CN_NUB */
 	atomic_t reg;
-#ifdef DIM_PLINK_ENABLE_CREATE
-	struct mutex lock_reg; /* for reg */ /*for internal reg no need */
-//	struct mutex lock_dbg;
-	atomic_t regging_api; /* in api, set from start to end */
-	atomic_t unregging_api;
-	atomic_t unregging_back;
-	struct completion reg_done; /* reg/unreg share */
-#endif
+	atomic_t in_unreg; /* only set before dpvpp_destroy_internal */
+	atomic_t in_unreg_step2; /* copy in_unreg status in dpvpp_unreg_val */
 	spinlock_t     lock_first_buf;/* for first buffer get */
 	bool		en_first_buf; /* for first buffer get */
 	enum EDIM_NIN_TYPE etype; /* set by reg_api */
@@ -2723,10 +2772,12 @@ struct dimn_itf_s {
 	unsigned int src_need;
 	unsigned int tmode; /* ex:EDIM_TMODE_2_PW_OUT */
 
+	enum EPVPP_API_MODE link_mode;
+
 	/*status:*/
 	bool bypass_complete;
 	bool flg_freeze;	/* @ary 11-08 add */
-	unsigned int bind_ch;
+	int bind_ch;
 	struct {
 		unsigned int src_state; /* ref to src_need */
 		unsigned int src_last;
@@ -2758,7 +2809,7 @@ struct dimn_itf_s {
 	struct di_init_parm nitf_parm;
 	struct dim_itf_ops_s opsi;
 	struct dim_itf_ops_s opso;
-	struct dim_prevpp_ds_s *ds;
+	struct dim_pvpp_ds_s *ds;
 	struct vframe_s		vf_bf[DIM_LKIN_NUB];
 	struct di_buffer	buf_bf[DIM_LKIN_NUB];
 
@@ -2789,14 +2840,16 @@ struct dim_plink_dbg_s {
 	u32 display_cnt;
 };
 
-struct dim_dvs_prevpp_s {
-	bool allowed;	/* support vpp link */
-	bool insert;
-	bool en_polling; /* used for dbg crt */
+struct dim_dvs_pvpp_s {
+	u8 allowed;	/* support vpp link */
+	u8 insert;
+	u8 en_polling; /* used for dbg crt */
 	struct dimn_itf_s	itf[DI_PLINK_CN_NUB];
 	struct dim_pvpp_hw_s	hw;/* @ary 11-08 add */
-	const struct dimn_pvpp_ops_s *ops;
-	const struct dimn_pvpp_ops_api_s *ops_api;
+	const struct dimn_pvpp_ops_s *pre_ops;
+	const struct dimn_pvpp_ops_s *pst_ops;
+	const struct dimn_pvpp_ops_api_s *pre_ops_api;
+	const struct dimn_pvpp_ops_api_s *pst_ops_api;
 	struct hrtimer hrtimer_wk;
 	atomic_t wk_need; /* only debug ?*/
 	atomic_t hr_timer_have;
@@ -2855,12 +2908,16 @@ struct di_data_l_s {
 	unsigned char tb_src_cnt;//
 	//unsigned char tb_owner;	//
 	//bool	tb_busy;//
-	struct dim_dvs_prevpp_s dvs_prevpp;
+	struct dim_dvs_pvpp_s dvs_pvpp;
+	enum EPVPP_API_MODE cur_link_mode;
 	atomic_t	state_cnt_reg;
-	atomic_t	cnt_reg_pre_link;/* pre-vpp link cnt */
+	atomic_t	cnt_reg_plink;/* pre/post-vpp link cnt */
 	bool	pre_vpp_exist;	/* interface */
 	bool	pre_vpp_active; /* interface sw multi wr bypass contr */
 	bool	pre_vpp_set;	/* interface sw other multi wr */
+	bool	pst_vpp_exist;	/* interface */
+	bool	pst_vpp_active; /* interface sw multi wr bypass contr */
+	bool	pst_vpp_set;	/* interface sw other multi wr */
 	bool	fg_bypass_en; /* for t5dvb fg */
 	void *dd;
 };
@@ -2951,6 +3008,19 @@ extern unsigned int di_dbg;
 #define dbg_tb(fmt, args ...)		dbg_m(DBG_M_TB, fmt, ##args)
 #define dbg_bypass(fmt, args ...)	dbg_m(DBG_M_BPASS, fmt, ##args)
 #define dbg_ic(fmt, args ...)		dbg_m(DBG_M_IC, fmt, ##args)
+
+extern unsigned int tst_plink_vpp;
+
+#define dbg_plink(level, fmt, args ...)		\
+	do {						\
+		if ((tst_plink_vpp & 0x3) < (level))	\
+			break;				\
+		pr_info("dim:" fmt, ##args);		\
+	} while (0)
+
+#define dbg_plink1(fmt, args ...)		dbg_plink(1, fmt, ##args)
+#define dbg_plink2(fmt, args ...)		dbg_plink(2, fmt, ##args)
+#define dbg_plink3(fmt, args ...)		dbg_plink(3, fmt, ##args)
 
 char *di_cfgx_get_name(enum EDI_CFGX_IDX idx);
 bool di_cfgx_get(unsigned int ch, enum EDI_CFGX_IDX idx);
@@ -3489,7 +3559,7 @@ static inline unsigned int di_get_mem_size(unsigned int ch)
 
 static inline struct dim_plink_dbg_s *di_g_plink_dbg(void)
 {
-	return &get_datal()->dvs_prevpp.dbg_d;
+	return &get_datal()->dvs_pvpp.dbg_d;
 }
 
 void di_tout_int(struct di_time_out_s *tout, unsigned int thd);
@@ -3563,6 +3633,7 @@ static inline void p_ref_set_buf(struct di_buf_s *buf,
 #define IC_SUPPORT_DW		DI_BIT2 /* double write */
 #define IC_SUPPORT_PRE_VPP_LINK	DI_BIT3
 #define IC_SUPPORT_TB		DI_BIT4
+#define IC_SUPPORT_POST_VPP_LINK	DI_BIT5
 
 #define IS_IC_SUPPORT(cc)	(get_datal()->mdata->support & \
 				IC_SUPPORT_##cc ? true : false)

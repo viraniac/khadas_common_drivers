@@ -985,7 +985,7 @@ static int meson_s4_clk_hifi_pll_enable(struct clk_hw *hw)
 	 * Make the PLL more stable, if not,
 	 * It will probably lock failed (GP0 PLL)
 	 */
-	usleep_range(50, 100);
+	udelay(50);
 
 	/* Take the pll out reset */
 	meson_parm_write(clk->map, &pll->rst, 0);
@@ -1061,8 +1061,9 @@ static struct clk_regmap s4_hifi_pll_dco = {
 		.table = s4_hifi_pll_table,
 		.init_regs = s4_hifi_init_regs,
 		.init_count = ARRAY_SIZE(s4_hifi_init_regs),
-		.flags = CLK_MESON_PLL_ROUND_CLOSEST
-			 | CLK_MESON_PLL_FIXED_FRAC_WEIGHT_PRECISION,
+		.flags = CLK_MESON_PLL_ROUND_CLOSEST |
+			 CLK_MESON_PLL_FIXED_FRAC_WEIGHT_PRECISION |
+			 CLK_MESON_PLL_IGNORE_INIT,
 	},
 	.hw.init = &(struct clk_init_data){
 		.name = "hifi_pll_dco",
@@ -1096,8 +1097,13 @@ static struct clk_regmap s4_hifi_pll = {
 		.offset = ANACTRL_HIFIPLL_CTRL0,
 		.shift = 16,
 		.width = 2,
+#ifdef S4_HIFI_PLL_DEAL
+		.flags = (CLK_DIVIDER_POWER_OF_TWO |
+			  CLK_DIVIDER_READ_ONLY),
+#else
 		.flags = (CLK_DIVIDER_POWER_OF_TWO |
 			  CLK_DIVIDER_ROUND_CLOSEST),
+#endif
 	},
 	.hw.init = &(struct clk_init_data){
 		.name = "hifi_pll",
@@ -1186,8 +1192,9 @@ static struct clk_regmap s4d_hifi_pll_dco = {
 		.table = s4d_hifi_pll_table,
 		.init_regs = s4d_hifi_init_regs,
 		.init_count = ARRAY_SIZE(s4d_hifi_init_regs),
-		.flags = CLK_MESON_PLL_ROUND_CLOSEST
-			 | CLK_MESON_PLL_FIXED_FRAC_WEIGHT_PRECISION,
+		.flags = CLK_MESON_PLL_ROUND_CLOSEST |
+			 CLK_MESON_PLL_FIXED_FRAC_WEIGHT_PRECISION |
+			 CLK_MESON_PLL_IGNORE_INIT,
 	},
 	.hw.init = &(struct clk_init_data){
 		.name = "hifi_pll_dco",
@@ -4738,7 +4745,7 @@ static struct clk_regmap s4_pwm_j_div = {
 		.name = "pwm_j_div",
 		.ops = &clk_regmap_divider_ops,
 		.parent_hws = (const struct clk_hw *[]) {
-			&s4_pwm_h_mux.hw
+			&s4_pwm_j_mux.hw
 		},
 		.num_parents = 1,
 		.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,

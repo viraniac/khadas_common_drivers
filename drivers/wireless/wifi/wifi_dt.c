@@ -34,7 +34,7 @@
 #include <gpiolib-of.h>
 #define OWNER_NAME "sdio_wifi"
 
-static char aml_wifi_chip_type[10] = "NULL";
+static char aml_wifi_chip_type[15] = "NULL";
 
 struct pcie_wifi_chip {
 	unsigned int vendor;
@@ -171,8 +171,8 @@ int is_pcie_wifi(void)
 		device = pci_get_device(pcie_wifi[i].vendor,
 			pcie_wifi[i].device, NULL);
 		if (device) {
-			WIFI_INFO("found device 0x%x:0x%x!\n",
-				pcie_wifi[i].vendor, pcie_wifi[i].device);
+			//WIFI_INFO("found device 0x%x:0x%x!\n",
+				//pcie_wifi[i].vendor, pcie_wifi[i].device);
 			return 1;
 		}
 	}
@@ -265,6 +265,8 @@ static void usb_power_control(int is_power, int shift)
 				  (shift ? "WiFi" : "BT"));
 			msleep(200);
 			sdio_reinit();
+		} else if (shift == BT_BIT) {
+			msleep(200);
 		}
 		usb_power |= (1 << shift);
 		WIFI_INFO("Set %s power on !\n",
@@ -276,6 +278,8 @@ static void usb_power_control(int is_power, int shift)
 			msleep(200);
 			WIFI_INFO("Set %s power down\n",
 				  (shift ? "WiFi" : "BT"));
+		} else if (shift == BT_BIT) {
+			msleep(200);
 		}
 	}
 	mutex_unlock(&wifi_bt_mutex);
@@ -314,18 +318,18 @@ void pci_remove(void)
 	int n = 0;
 	int i = 0;
 
-	WIFI_INFO("pci remove!\n");
+	//WIFI_INFO("pci remove!\n");
 	n = (int)(sizeof(pcie_wifi) / sizeof(struct pcie_wifi_chip));
 	for (i = 0; i < n; i++) {
 		device = pci_get_device(pcie_wifi[i].vendor,
 			pcie_wifi[i].device, NULL);
 		if (device) {
-			WIFI_INFO("found device 0x%x:0x%x, remove it!\n",
-				pcie_wifi[i].vendor, pcie_wifi[i].device);
+			//WIFI_INFO("found device 0x%x:0x%x, remove it!\n",
+				//pcie_wifi[i].vendor, pcie_wifi[i].device);
 			devicebus = device->bus->self;
 			pci_stop_and_remove_bus_device_locked(device);
 			if (devicebus) {
-				WIFI_INFO("remove bus!\n");
+				//WIFI_INFO("remove bus!\n");
 				pci_stop_and_remove_bus_device_locked(devicebus);
 			}
 		}
@@ -338,12 +342,12 @@ void pci_reinit(void)
 	struct pci_bus *bus = NULL;
 	int cnt = 20;
 
-	WIFI_INFO("pci wifi reinit!\n");
+	//WIFI_INFO("pci wifi reinit!\n");
 
 	pci_lock_rescan_remove();
 	while ((bus = pci_find_next_bus(bus)) != NULL) {
 		pci_rescan_bus(bus);
-		WIFI_INFO("rescanning pci device\n");
+		//WIFI_INFO("rescanning pci device\n");
 		cnt--;
 		if (cnt <= 0)
 			break;
@@ -353,12 +357,12 @@ void pci_reinit(void)
 #else
 void pci_remove(void)
 {
-	WIFI_INFO("PCI removed!\n");
+	//WIFI_INFO("PCI removed!\n");
 }
 
 void pci_reinit(void)
 {
-	WIFI_INFO("PCI disabled!\n");
+	//WIFI_INFO("PCI disabled!\n");
 }
 #endif
 EXPORT_SYMBOL(pci_reinit);
@@ -371,20 +375,20 @@ void pci_remove_reinit(unsigned int vid, unsigned int pid, unsigned int del_bus)
 	struct pci_dev *dev_bus = NULL;
 	int cnt = 20;
 
-	WIFI_INFO("pci wifi remove and reinit\n");
+	//WIFI_INFO("pci wifi remove and reinit\n");
 	dev_device = pci_get_device(vid, pid, NULL);
 
 	if (dev_device) {
-		WIFI_INFO("device 0x%x:0x%x found, remove it\n", vid, pid);
+		//WIFI_INFO("device 0x%x:0x%x found, remove it\n", vid, pid);
 		dev_bus = dev_device->bus->self;
 		pci_stop_and_remove_bus_device_locked(dev_device);
 
 		if (del_bus > 0 && dev_bus) {
-			WIFI_INFO("remove ths bus this device on!\n");
+			//WIFI_INFO("remove ths bus this device on!\n");
 			pci_stop_and_remove_bus_device_locked(dev_bus);
 		}
 	} else {
-		WIFI_INFO("target pci device not found 0x%x:0x%x\n", vid, pid);
+		//WIFI_INFO("target pci device not found 0x%x:0x%x\n", vid, pid);
 	}
 
 	set_usb_wifi_power(0);
@@ -393,7 +397,7 @@ void pci_remove_reinit(unsigned int vid, unsigned int pid, unsigned int del_bus)
 	pci_lock_rescan_remove();
 	while ((bus = pci_find_next_bus(bus)) != NULL) {
 		pci_rescan_bus(bus);
-		WIFI_INFO("rescanning pci device\n");
+		//WIFI_INFO("rescanning pci device\n");
 		cnt--;
 		if (cnt <= 0)
 			break;
@@ -403,7 +407,7 @@ void pci_remove_reinit(unsigned int vid, unsigned int pid, unsigned int del_bus)
 #else
 void pci_remove_reinit(unsigned int vid, unsigned int pid, unsigned int del_bus)
 {
-	WIFI_INFO("PCI disabled!\n");
+	//WIFI_INFO("PCI disabled!\n");
 }
 #endif
 EXPORT_SYMBOL(pci_remove_reinit);
@@ -448,8 +452,8 @@ static long wifi_power_ioctl(struct file *filp,
 			return -ENOTTY;
 		break;
 	case GET_AML_WIFI_MODULE:
-		if (memcmp(aml_wifi_chip_type, "NULL", 4))
-			WIFI_INFO("aml module chip is %s", aml_wifi_chip_type);
+		//if (memcmp(aml_wifi_chip_type, "NULL", 4))
+			//WIFI_INFO("aml module chip is %s", aml_wifi_chip_type);
 		if (copy_to_user((char __user *)arg,
 					aml_wifi_chip_type, 10))
 			return -ENOTTY;
@@ -540,9 +544,9 @@ static int wifi_setup_dt(void)
 {
 	int ret;
 
-	WIFI_DEBUG("[%s] is enter\n", __func__);
+	//WIFI_DEBUG("[%s] is enter\n", __func__);
 	if (!wifi_info.plat_info_valid) {
-		WIFI_INFO("%s : invalid device tree setting\n", __func__);
+		//WIFI_INFO("%s : invalid device tree setting\n", __func__);
 		return -1;
 	}
 
@@ -618,9 +622,9 @@ static int wifi_setup_dt(void)
 
 static void wifi_teardown_dt(void)
 {
-	WIFI_INFO("%s is enter\n", __func__);
+	//WIFI_INFO("%s is enter\n", __func__);
 	if (!wifi_info.plat_info_valid) {
-		WIFI_INFO("%s : invalid device tree setting\n", __func__);
+		//WIFI_INFO("%s : invalid device tree setting\n", __func__);
 		return;
 	}
 
@@ -665,9 +669,9 @@ int pwm_single_channel_conf(struct wifi_plat_info *plat)
 	pwm_config(pwm, duty_value, pstate.period);
 	pwm_enable(pwm);
 
-	WIFI_DEBUG("pwm period val=%lld, pwm duty val=%lld\n",
-		  pstate.period, pstate.duty_cycle);
-	WIFI_INFO("wifi pwm conf ok\n");
+	//WIFI_DEBUG("pwm period val=%lld, pwm duty val=%lld\n",
+		  //pstate.period, pstate.duty_cycle);
+	//WIFI_INFO("wifi pwm conf ok\n");
 
 	return 0;
 }
@@ -720,7 +724,7 @@ int pwm_double_channel_conf_dt(struct wifi_plat_info *plat)
 		}
 		plat->ddata.num_pwm++;
 	}
-	WIFI_DEBUG("wifi pwm dt ok\n");
+	//WIFI_DEBUG("wifi pwm dt ok\n");
 
 	return 0;
 }
@@ -765,7 +769,7 @@ int pwm_double_channel_conf(struct wifi_plat_info *plat)
 	}
 	pwm_enable(pwm1);
 	pwm_enable(pwm2);
-	WIFI_DEBUG("wifi pwm conf ok\n");
+	//WIFI_DEBUG("wifi pwm conf ok\n");
 
 	return 0;
 }
@@ -877,12 +881,12 @@ static int wifi_dev_probe(struct platform_device *pdev)
 #ifdef CONFIG_AMLOGIC_PWM_32K
 		if (!of_get_property(pdev->dev.of_node, "disable-wifi-32k", NULL)) {
 			if (of_get_property(pdev->dev.of_node, "single_pwm", NULL)) {
-				WIFI_INFO("use single channel\n");
+				//WIFI_INFO("use single channel\n");
 				ret = pwm_single_channel_conf(plat);
 				if (ret)
 					pr_err("pwm config err\n");
 			} else {
-				WIFI_INFO("use double channel\n");
+				//WIFI_INFO("use double channel\n");
 				ret = pwm_double_channel_conf_dt(plat);
 				if (!ret)
 					pwm_double_channel_conf(plat);
@@ -906,7 +910,7 @@ static int wifi_dev_probe(struct platform_device *pdev)
 			WIFI_INFO("irq_num=%d, irq_trigger_type=%d\n",
 				  plat->irq_num, plat->irq_trigger_type);
 			WIFI_INFO("power_on_pin=%d\n", plat->power_on_pin);
-			WIFI_INFO("clock_32k_pin=%d\n", plat->clock_32k_pin);
+			//WIFI_INFO("clock_32k_pin=%d\n", plat->clock_32k_pin);
 		}
 	}
 #endif
@@ -973,7 +977,7 @@ out:
 
 static int wifi_dev_remove(struct platform_device *pdev)
 {
-	WIFI_INFO("%s is enter\n", __func__);
+	//WIFI_INFO("%s is enter\n", __func__);
 	wifi_teardown_dt();
 	return 0;
 }
@@ -1106,7 +1110,15 @@ EXPORT_SYMBOL(wifi_get_mac);
 
 void aml_wifi_chip(const char *type)
 {
-	memcpy(aml_wifi_chip_type, type, 10);
+	size_t len = strlen(type);
+
+	if (len >= sizeof(aml_wifi_chip_type)) {
+		WIFI_INFO("Input string is too long for aml_wifi_chip_type array.\n");
+		return;
+	}
+
+	memset(aml_wifi_chip_type, 0, sizeof(aml_wifi_chip_type));
+	strncpy(aml_wifi_chip_type, type, len);
 }
 EXPORT_SYMBOL(aml_wifi_chip);
 

@@ -58,6 +58,11 @@
 			bconsole-size = <0x10000>;
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0>;
+		};
+
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
 			reg = <0x04f00000 0x00100000>;
@@ -194,41 +199,6 @@
 		dev_name = "aml_amdolby_vision_driver";
 		status = "disabled";
 		tv_mode = <0>;/*1:enable ;0:disable*/
-	};
-	cvbsout {
-		compatible = "amlogic, cvbsout-s4";
-		status = "okay";
-
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* s4 */
-		performance_pal = <0x1bf0  0x9 /* default Matrx625 CTCC value*/
-			0x1b12  0x80c0
-			0x1b05  0xf7
-			0x1b56  0x333
-			0x1c59  0xf25c
-			0xffff  0x0>; /* ending flag */
-		performance = <0x1bf0  0x9 /* ccitt033 SVA value */
-			0x1b12  0x8040
-			0x1b05  0xfd
-			0x1b56  0x333
-			0x1c59  0xf654
-			0xffff  0x0>; /* ending flag */
-		performance_ntsc = <0x1bf0  0x9
-			0x1b12  0x8020
-			0x1b03  0x0
-			0x1b04  0x0
-			0x1b05  0x0
-			0x1b06  0x0
-			0x1b56  0x333
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
 	};
 
 	dvb-extern {
@@ -379,15 +349,6 @@
 		cma_mem_size = <0>; // MB
 		agc_pin_direction;//for S4D av2018 rf agc reverse
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -1550,7 +1511,7 @@
 };
 
 &vpu {
-	clk_level = <5>;
+	clk_level = <6>;
 };
 
 /*if you want to use vdin just modify status to "ok"*/

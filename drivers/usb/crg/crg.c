@@ -8,6 +8,8 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/of.h>
+//#include <linux/irq.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/pm_runtime.h>
@@ -17,7 +19,6 @@
 #include <linux/list.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
-#include <linux/of.h>
 #include <linux/acpi.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/usb/ch9.h>
@@ -27,9 +28,10 @@
 #include <linux/amlogic/usbtype.h>
 #include <linux/clk.h>
 #include <linux/phy/phy.h>
-#include "xhci.h"
-#include "xhci-plat.h"
-#include "crg_xhci.h"
+#include <linux/amlogic/cpu_version.h>
+#include "../xhci_amlogic/xhci-meson.h"
+#include "../xhci_amlogic/xhci-plat-meson.h"
+//#include "crg_xhci.h"
 
 #define CRG_DEFAULT_AUTOSUSPEND_DELAY	5000 /* ms */
 #define CRG_XHCI_RESOURCES_NUM	2
@@ -56,7 +58,7 @@ struct crg {
 	struct clk		*general_clk;
 };
 
-static const struct xhci_plat_priv crg_xhci_plat_priv = {
+static const struct aml_xhci_plat_priv crg_xhci_plat_priv = {
 	.quirks = XHCI_NO_64BIT_SUPPORT | XHCI_RESET_ON_RESUME,
 };
 
@@ -157,9 +159,11 @@ static int crg_core_get_phy(struct crg *crg)
 	return 0;
 }
 
+static struct property_entry	props[64];
+
 int crg_host_init(struct crg *crg)
 {
-	struct property_entry	props[4];
+	//struct property_entry	props[64];
 	struct platform_device	*xhci;
 	int			ret, irq;
 	struct resource		*res;
@@ -205,7 +209,7 @@ int crg_host_init(struct crg *crg)
 	crg->xhci_resources[1].flags = res->flags;
 	crg->xhci_resources[1].name = res->name;
 
-	xhci = platform_device_alloc("xhci-hcd", PLATFORM_DEVID_AUTO);
+	xhci = platform_device_alloc("xhci-hcd-meson", PLATFORM_DEVID_AUTO);
 	if (!xhci) {
 		dev_err(crg->dev, "couldn't allocate xHCI device\n");
 		return -ENOMEM;
@@ -234,6 +238,33 @@ int crg_host_init(struct crg *crg)
 	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host");
 	props[prop_idx++] = PROPERTY_ENTRY_BOOL("usb2-lpm-disable");
 
+	if (is_meson_t5_cpu() || is_meson_t5d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-003");
+
+	if (is_meson_t7_cpu() || is_meson_t3_cpu()) {
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-007");
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-010");
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-014");
+	}
+
+	if (is_meson_t7_cpu() || is_meson_t3_cpu() ||
+		is_meson_t5_cpu() || is_meson_t5d_cpu() ||
+		is_meson_s4_cpu() || is_meson_s4d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-008");
+
+	if (is_meson_s4_cpu() || is_meson_s4d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-009");
+
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-plug-died");
+
+	if (is_meson_t5w_cpu() || is_meson_t3_cpu() ||
+		is_meson_t5_cpu() || is_meson_t5d_cpu() ||
+		is_meson_s4_cpu() || is_meson_s4d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-011");
+
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-eproto");
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-016");
+
 	if (prop_idx) {
 		ret = device_create_managed_software_node(&xhci->dev, props, NULL);
 		if (ret) {
@@ -242,7 +273,7 @@ int crg_host_init(struct crg *crg)
 		}
 	}
 
-	crg_xhci_init();
+//	crg_xhci_init();
 	ret = platform_device_add_data(xhci, &crg_xhci_plat_priv,
 								sizeof(crg_xhci_plat_priv));
 	if (ret)

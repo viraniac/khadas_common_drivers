@@ -285,12 +285,6 @@
 				#reset-cells = <1>;
 			};
 
-			cpu_version {
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				reg=<0x5a20 0x140>;
-				amlogic,has-chip-id;
-			};
-
 			meson_clk_msr@3400 {
 				compatible = "amlogic,a1-clk-measure";
 				reg = <0x3400 0x10>;
@@ -906,12 +900,13 @@
 	};
 
 	dwc3: dwc3@ff400000 {
-		compatible = "snps,dwc3";
+		compatible = "snps,dwc3-meson";
 		reg = <0xff400000 0x100000>;
 		interrupts = <GIC_SPI 90 IRQ_TYPE_LEVEL_HIGH>;
 		dr_mode = "host";
 		maximum-speed = "high-speed";
 		snps,dis_u2_susphy_quirk;
+		snps,usb2-lpm-disable;
 		usb-phy = <&usb2_phy_v2>, <&usb3_phy_v2>;
 		clocks = <&clkc CLKID_USB_CTRL>;
 		clock-names = "usb_general";

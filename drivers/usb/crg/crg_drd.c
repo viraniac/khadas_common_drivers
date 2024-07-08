@@ -29,12 +29,13 @@
 #include <linux/amlogic/aml_gpio_consumer.h>
 
 #include <linux/kthread.h>
+#include <linux/amlogic/cpu_version.h>
 
-#include "xhci.h"
-#include "xhci-plat.h"
-#include "crg_xhci.h"
+#include "../xhci_amlogic/xhci-meson.h"
+#include "../xhci_amlogic/xhci-plat-meson.h"
+//#include "crg_xhci.h"
 
-static const struct xhci_plat_priv crg_xhci_plat_priv = {
+static const struct aml_xhci_plat_priv crg_xhci_plat_priv = {
 	.quirks = XHCI_NO_64BIT_SUPPORT | XHCI_RESET_ON_RESUME,
 };
 
@@ -197,9 +198,10 @@ static void crg_host_exit(struct crg_drd *crg)
 	crg->xhci = NULL;
 }
 
+static struct property_entry	props[64];
 static int crg_host_init(struct crg_drd *crg)
 {
-	struct property_entry	props[4];
+	//struct property_entry	props[64];
 	struct platform_device	*xhci;
 	int			ret, irq;
 	struct resource		*res;
@@ -245,7 +247,7 @@ static int crg_host_init(struct crg_drd *crg)
 	crg->xhci_resources[1].flags = res->flags;
 	crg->xhci_resources[1].name = res->name;
 
-	xhci = platform_device_alloc("xhci-hcd", PLATFORM_DEVID_AUTO);
+	xhci = platform_device_alloc("xhci-hcd-meson", PLATFORM_DEVID_AUTO);
 	if (!xhci) {
 		dev_err(crg->dev, "couldn't allocate xHCI device\n");
 		return -ENOMEM;
@@ -274,6 +276,32 @@ static int crg_host_init(struct crg_drd *crg)
 	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host");
 	props[prop_idx++] = PROPERTY_ENTRY_BOOL("usb2-lpm-disable");
 
+	if (is_meson_t5_cpu() || is_meson_t5d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-003");
+
+	if (is_meson_t7_cpu() || is_meson_t3_cpu()) {
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-007");
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-010");
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-014");
+	}
+	if (is_meson_t7_cpu() || is_meson_t3_cpu() ||
+		is_meson_t5_cpu() || is_meson_t5d_cpu() ||
+		is_meson_s4_cpu() || is_meson_s4d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-008");
+
+	if (is_meson_s4_cpu() || is_meson_s4d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-009");
+
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-plug-died");
+
+	if (is_meson_t5w_cpu() || is_meson_t3_cpu() ||
+		is_meson_t5_cpu() || is_meson_t5d_cpu() ||
+		is_meson_s4_cpu() || is_meson_s4d_cpu())
+		props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-011");
+
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-eproto");
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-crg-host-016");
+
 	if (prop_idx) {
 		ret = device_create_managed_software_node(&xhci->dev, props, NULL);
 		if (ret) {
@@ -281,7 +309,7 @@ static int crg_host_init(struct crg_drd *crg)
 			goto err1;
 		}
 	}
-	crg_xhci_init();
+//	crg_xhci_init();
 	ret = platform_device_add_data(xhci, &crg_xhci_plat_priv,
 								sizeof(crg_xhci_plat_priv));
 	if (ret)
@@ -335,6 +363,8 @@ static int crg_probe(struct platform_device *pdev)
 	int	ret;
 	void *mem;
 	u32 tmp;
+	const void *prop;
+	unsigned int wr_outstanding_tune = 0;
 
 	mem = devm_kzalloc(dev, sizeof(*crg) + CRG_ALIGN_MASK, GFP_KERNEL);
 	if (!mem)
@@ -424,6 +454,15 @@ static int crg_probe(struct platform_device *pdev)
 	ret = crg_core_init_mode(crg);
 	if (ret)
 		goto err0;
+	prop = of_get_property(pdev->dev.of_node, "wr-outstanding-tune", NULL);
+	if (prop)
+		wr_outstanding_tune = of_read_ulong(prop, 1);
+
+	if (wr_outstanding_tune) {
+		wr_outstanding_tune = readl((void __iomem *)((unsigned long)crg->regs + 0x210c));
+		wr_outstanding_tune &= (~0x7f000);
+		writel(wr_outstanding_tune, (void __iomem *)((unsigned long)crg->regs + 0x210c));
+	}
 
 	pm_runtime_put(dev);
 
@@ -666,15 +705,35 @@ static struct platform_driver crg_host_driver = {
 	},
 };
 
+static int crg_driver_state;
 void crg_exit(void)
 {
+	pr_info("crg exit\n");
+	if (crg_driver_state != 1)
+		return;
+	crg_driver_state = 0;
 	platform_driver_unregister(&crg_driver);
 }
 EXPORT_SYMBOL_GPL(crg_exit);
 
 int crg_init(void)
 {
-	return platform_driver_register(&crg_driver);
+	int ret;
+
+	pr_info("crg init\n");
+	if (crg_driver_state != 0) {
+		ret = -EBUSY;
+		goto exit;
+	}
+
+	ret = platform_driver_register(&crg_driver);
+	if (ret) {
+		pr_info("crg_driver register error %d, exit\n", ret);
+		goto exit;
+	}
+	crg_driver_state = 1;
+exit:
+	return ret;
 }
 EXPORT_SYMBOL_GPL(crg_init);
 

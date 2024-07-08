@@ -21,6 +21,7 @@
 #define ERR_CNT_EN		0x800
 #define TMDS_VALID_EN		0x1000
 #define ECC_ERR_CNT_EN      0x2000
+#define HDMIRX_PORT_MAX		4
 
 /* aud sample rate stable range */
 /* #define AUD_SR_RANGE 2000 */
@@ -42,10 +43,10 @@ enum fsm_states_e {
 	FSM_INIT,
 	FSM_HPD_LOW,
 	FSM_HPD_HIGH,
+	FSM_COR_RESET,
 	FSM_FRL_FLT_READY,
+	FSM_WAIT_SIG,
 	FLT_RX_LTS_3,
-	FLT_RX_LTS_3_PHY_INIT,
-	FLT_RX_LTS_3_LPT,
 	FLT_RX_LTS_P,
 	FSM_FRL_TRN,
 	FSM_WAIT_FRL_TRN_DONE,
@@ -55,8 +56,9 @@ enum fsm_states_e {
 	FSM_PCS_RESET,
 	FSM_SIG_UNSTABLE,
 	FSM_SIG_WAIT_STABLE,
-	FSM_SIG_STABLE,
 	FSM_SIG_HOLD,
+	FSM_SIG_STABLE,
+	FSM_SIG_STABLE_TO_READY,
 	FSM_SIG_READY,
 	FSM_NULL,
 };
@@ -132,23 +134,28 @@ extern u32 vpp_mute_enable;
 extern u32 dbg_cs;
 extern int color_bar_debug_en;
 extern int port_debug_en;
-extern int flt_ready_max;
+extern int fpll_ready_max;
 extern int frl_debug_en;
-
+extern int rx_emp_dbg_en;
+extern int fsm_debug;
+extern int rs_err_chk;
+extern int err_cnt;
 enum tvin_sig_fmt_e hdmirx_hw_get_fmt(u8 port);
-void rx_mute_vpp(void);
+void rx_mute_vpp(u8 port_type);
 void rx_main_state_machine(void);
 void rx_port2_main_state_machine(void);
 void dump_audio_status(u8 port);
 void rx_nosig_monitor(u8 port);
 bool rx_is_nosig(u8 port);
 bool rx_is_sig_ready(u8 port);
-void hdmirx_open_port(enum tvin_port_e port);
-void hdmirx_close_port(void);
+void hdmirx_open_main_port_t3x(u8 port);
+void hdmirx_open_main_port(u8 port);
+void hdmirx_open_sub_port(u8 port);
+void hdmirx_close_port(u8 port);
 bool is_clk_stable(u8 port);
 unsigned int rx_get_pll_lock_sts(void);
 unsigned int rx_get_scdc_clkrate_sts(u8 port);
-void set_scdc_cfg(int hpdlow, int pwr_provided, u8 port);
+void hdmirx_clr_scdc(bool en, u8 port);
 void fsm_restart(u8 port);
 void rx_5v_monitor(void);
 void rx_audio_pll_sw_update(void);
@@ -162,16 +169,23 @@ void rx_emp_data_capture(u8 port);
 void rx_tmds_data_capture(u8 port);
 void dump_state(int enable, u8 port);
 void hdmirx_init_params(u8 port);
-void edid_auto_mode_init(void);
-void rx_dwc_reset(u8 port);
+void rx_cor_reset(u8 port);
 void set_video_mute(u32 owner, bool on);
+u8 get_frame_interval_cnt(u8 cnt, u8 port);
+void rx_edid_update_handler(struct work_struct *dwork);
+void frate_monitor(void);
+void frate_monitor1(void);
+
 void __weak set_video_mute(u32 owner, bool on)
 {
 }
 
-int get_video_mute(void);
-int __weak get_video_mute(void)
+bool get_video_mute_val(u32 owner);
+bool __weak get_video_mute_val(u32 owner)
 {
-	return 0;
+	return false;
 }
+
+void rx_monitor_error_counter(u8 port);
+
 #endif

@@ -77,6 +77,8 @@ u32 debug_axis_en;
 struct output_axis_s axis;
 u32 rdma_en;
 u32 debug_rdma_en;
+u32 debug_reg_en;
+u32 suspend_flag;
 
 struct mutex vicp_mutex; /*used to avoid user space call at the same time*/
 struct vicp_hdr_data_s *vicp_hdr;
@@ -154,7 +156,7 @@ static ssize_t reg_store(struct class *class,
 		struct class_attribute *attr, const char *buf, size_t count)
 {
 	char *buf_orig, *parm[8] = {NULL};
-	u32 val = 0, param_count, offset;
+	u32 val = 0, param_count;
 	u32 reg_addr, reg_val, reg_count;
 
 	if (!buf)
@@ -182,13 +184,9 @@ static ssize_t reg_store(struct class *class,
 				return -EINVAL;
 			}
 			reg_count = val;
-			for (offset = 0; offset < reg_count; reg_addr++, offset++) {
-				reg_val = read_vicp_reg(reg_addr);
-				pr_info("[0x%04x] = 0x%08x\n", reg_addr, reg_val);
-			}
+			vicp_dump_reg(reg_addr, reg_count);
 		} else {
-			reg_val = read_vicp_reg(reg_addr);
-			pr_info("[0x%04x] = 0x%08x\n", reg_addr, reg_val);
+			vicp_dump_reg(reg_addr, 1);
 		}
 	} else if (!strcmp(parm[0], "wv")) {
 		if (param_count < 2) {
@@ -718,6 +716,29 @@ static ssize_t debug_rdma_en_store(struct class *cla, struct class_attribute *at
 	return count;
 }
 
+static ssize_t debug_reg_en_show(struct class *cla, struct class_attribute *attr,
+	char *buf)
+{
+	return snprintf(buf, 80, "current debug_reg_enable is %d.\n", debug_reg_en);
+}
+
+static ssize_t debug_reg_en_store(struct class *cla, struct class_attribute *attr,
+				const char *buf, size_t count)
+{
+	long tmp;
+	int ret;
+
+	ret = kstrtol(buf, 0, &tmp);
+	if (ret != 0) {
+		pr_info("ERROR converting %s to long int!\n", buf);
+		return ret;
+	}
+	debug_reg_en = tmp;
+
+	pr_info("set debug_reg_en to %d.\n", debug_reg_en);
+	return count;
+}
+
 static CLASS_ATTR_RW(print_flag);
 static CLASS_ATTR_RW(reg);
 static CLASS_ATTR_RW(demo_enable);
@@ -739,6 +760,7 @@ static CLASS_ATTR_RW(debug_axis_en);
 static CLASS_ATTR_RW(axis);
 static CLASS_ATTR_RW(rdma_en);
 static CLASS_ATTR_RW(debug_rdma_en);
+static CLASS_ATTR_RW(debug_reg_en);
 
 static struct attribute *vicp_class_attrs[] = {
 	&class_attr_print_flag.attr,
@@ -762,6 +784,7 @@ static struct attribute *vicp_class_attrs[] = {
 	&class_attr_axis.attr,
 	&class_attr_rdma_en.attr,
 	&class_attr_debug_rdma_en.attr,
+	&class_attr_debug_reg_en.attr,
 	NULL
 };
 ATTRIBUTE_GROUPS(vicp_class);
@@ -1242,6 +1265,7 @@ static int vicp_resume(struct platform_device *pdev)
 static int vicp_pm_suspend(struct device *dev)
 {
 	vicp_clock_config(0);
+	suspend_flag = 1;
 
 	return 0;
 }

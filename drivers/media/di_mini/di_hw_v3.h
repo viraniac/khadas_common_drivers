@@ -206,7 +206,11 @@ struct di_hw_ops_info_s {
 };
 
 extern const struct dim_hw_opsv_s dim_ops_l1_v3;
+
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 extern const struct dim_hw_opsv_s dim_ops_l1_v4;
+#endif
+
 extern const struct dim_hw_opsv_s dim_ops_l1_v5;
 const struct dim_hw_opsv_s  *opl1_v2(void);
 

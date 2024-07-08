@@ -106,9 +106,24 @@
 // frc_20231016 add frc pattern dbg ctrl
 // frc_20231016 set disable with input is 120Hz
 // frc_20231018 dly frc enable in video window
+// frc_20231020 set disable stats when video mute enable
+// frc_20231102 fix frc fhd windows flash
+// frc_20231102 restore enable setting
+// frc_20231031 frc compress mc memory usage size
+// frc_20240111 n2m and vpu slice workaround
+// frc_20240104 open clk when sys resume
+// frc_20240116 frc rdma process optimisation
+// frc_20240306 high-priority task and timestamp debug
+// frc_20240312 frc protect badedit effect
+// frc_20240319 frc sync alg macro
+// frc_20240315 buf num configure
+// frc_20240325 frc sync motion from drv
+// frc_20240407 frc modify urgent control
+// frc_20240417 frc add debug setting for T5M user
+// frc_20240405 fix pps adapt abnormal
 
-#define FRC_FW_VER			"2023-1020 set disable stats when video mute enable"
-#define FRC_KERDRV_VER                  3205
+#define FRC_FW_VER			"2024-0428 frc add lost task info when working"
+#define FRC_KERDRV_VER		3500
 
 #define FRC_DEVNO	1
 #define FRC_NAME	"frc"
@@ -130,23 +145,33 @@ extern int frc_dbg_en;
 #define FRC_COMPRESS_RATE_80_SIZE       (276 * 1024 * 1024)    // Need 274.7MB  4MB Align
 #define FRC_COMPRESS_RATE_50_SIZE       (180 * 1024 * 1024)    // Need 176.4MB  4MB Align
 #define FRC_COMPRESS_RATE_55_SIZE       (196 * 1024 * 1024)    // Need 192.7MB  4MB Align
+
+#define HAVE_MCDW                 1
+#define NONE_MCDW                 0
+
 // mc-y 48%  mc-c 39%  me 60%
-#define FRC_COMPRESS_RATE_MC_Y		48
-#define FRC_COMPRESS_RATE_MC_C		39
-#define FRC_COMPRESS_RATE_MC_Y_T3X	80 // 48 // 100
-#define FRC_COMPRESS_RATE_MC_C_T3X	39 // 80 // 0
+#define FRC_COMPRESS_RATE_MC_Y		45
+#define FRC_COMPRESS_RATE_MC_C		35
+#define FRC_COMPRESS_RATE_MC_Y_T3X	78 // 48 // 100
+#define FRC_COMPRESS_RATE_MC_C_T3X	36 // 80 // 0
 
 #define FRC_COMPRESS_RATE_ME_T3		60
 #define FRC_COMPRESS_RATE_ME_T5M	100
 
-#define FRC_COMPRESS_RATE_MCDW_Y	80 // 48
-#define FRC_COMPRESS_RATE_MCDW_C	39 // 80 // 39
+#define FRC_COMPRESS_RATE_MCDW_Y	78 // 48
+#define FRC_COMPRESS_RATE_MCDW_C	36 // 80 // 39
 
 #define FRC_INFO_BUF_FACTOR_T3		2
 #define FRC_INFO_BUF_FACTOR_T5M		2
 #define FRC_INFO_BUF_FACTOR_T3X		32
 
+#define FRC_COMPRESS_RATE_MARGIN    2
+
 #define FRC_TOTAL_BUF_NUM		16
+#define FRC_BUF_NUM_T3		FRC_TOTAL_BUF_NUM
+#define FRC_BUF_NUM_T5M		FRC_TOTAL_BUF_NUM //  / 2
+#define FRC_BUF_NUM_T3X		FRC_TOTAL_BUF_NUM
+
 #define FRC_MEMV_BUF_NUM		6
 #define FRC_MEMV2_BUF_NUM		7
 #define FRC_MEVP_BUF_NUM		2
@@ -227,7 +252,7 @@ extern int frc_dbg_en;
 #define FRC_FLAG_PC_MODE		0x02
 #define FRC_FLAG_PIC_MODE		0x04
 #define FRC_FLAG_HIGH_BW		0x08
-#define FRC_FLAG_LIMIT_SIZE		0x10
+#define FRC_FLAG_LIMIT_SIZE		0x10 // out of use
 #define FRC_FLAG_VLOCK_ST		0x20
 #define FRC_FLAG_INSIZE_ERR		0x40
 #define FRC_FLAG_HIGH_FREQ		0x80
@@ -260,12 +285,33 @@ extern int frc_dbg_en;
 
 #define FRC_BOOT_TIMESTAMP 35
 
+#define FRC_DELAY_FRAME_2OPEN  1
+
+#define FRC_BYPASS_FRAME_NUM  3
+#define FRC_FREEZE_FRAME_NUM  3    // should less than 16
+
+#define FRC_BYPASS_FRAME_NUM_T3X  7
+#define FRC_FREEZE_FRAME_NUM_T3X  8  // should less than 16
+
+#define FRC_TITLE        "Display_FRC"
+#define DEFAULT_TITLE    "default"
+#define DEBUG_LEVEL      "debuglevel"
+#define DEBUG_NODES      6
+#define CMD_LEN          32
+#define MODULE_LEN       128
+
 enum chip_id {
 	ID_NULL = 0,
 	ID_T3,
 	ID_T5M,
 	ID_T3X,
 	ID_TMAX,
+};
+
+typedef void (*set_debug_func) (const char *module, const char *debug_mode);
+struct module_debug_node {
+	const char *name;
+	set_debug_func set_debug_func_notify;
 };
 
 struct dts_match_data {
@@ -293,6 +339,9 @@ struct st_frc_buf {
 	phys_addr_t cma_mem_paddr_start;
 	u8  cma_mem_alloced;
 	u8  secured;
+	u8  frm_buf_num;
+	u8  logo_buf_num;
+	u8  rate_margin;
 	u8  addr_shft_bits;
 	u8  mcdw_size_rate;
 
@@ -303,6 +352,7 @@ struct st_frc_buf {
 	u8  mcdw_y_comprate;
 	u8  mcdw_c_comprate;
 	u8  info_factor;
+	u8  mcdw_en;
 
 	/*frame size*/
 	u32 in_hsize;
@@ -422,6 +472,7 @@ struct st_frc_sts {
 	u32 vp_undone_cnt;
 	u32 retrycnt;
 	u32 video_mute_cnt;
+	u32 vs_data_cnt;
 };
 
 struct st_frc_in_sts {
@@ -440,6 +491,7 @@ struct st_frc_in_sts {
 	u32 vs_tsk_cnt;
 	u32 vs_duration;
 	u64 vs_timestamp;
+	u32 lost_tsk_cnt;
 
 	u32 have_vf_cnt;
 	u32 no_vf_cnt;
@@ -471,6 +523,11 @@ struct st_frc_in_sts {
 	u8 boot_timestamp_en;
 	u8 boot_check_finished;
 	u8 auto_ctrl_reserved;
+	u8 enable_mute_flag;
+	u8 mute_vsync_cnt;
+	u8 hi_en;
+	u8 frm_en;
+	u8 t3x_proc_size_chg;
 };
 
 struct st_frc_out_sts {
@@ -482,6 +539,9 @@ struct st_frc_out_sts {
 	u32 vs_tsk_cnt;
 	u32 vs_duration;
 	u64 vs_timestamp;
+	u32 lost_tsk_cnt;
+
+	u8 hi_en;
 };
 
 struct tool_debug_s {
@@ -578,6 +638,7 @@ struct frc_ud_s {
 	unsigned vp_undone_err:2;
 
 	u8 pr_dbg;
+	u8 align_dbg_en;
 };
 
 struct frc_force_size_s {
@@ -627,6 +688,12 @@ struct frc_pat_dbg_s {
 	u8 pat_reserved;
 };
 
+struct frc_timer_dbg {
+	u8 timer_en;
+	u8 time_interval;
+	u16 timer_level; // dbg level
+};
+
 struct frc_dev_s {
 	dev_t devt;
 	struct cdev cdev;
@@ -665,14 +732,14 @@ struct frc_dev_s {
 	u32 clk_me_frq;
 	unsigned int clk_state;
 	u32 clk_chg;
-	u32 rdma_handle;
 
 	/* vframe check */
 	u32 vs_duration;	/*vpu int duration*/
 	u64 vs_timestamp;	/*vpu int time stamp*/
 	u32 in_out_ratio;
-	u64 rdma_time;
-	u64 rdma_time2;
+	u8 st_change;
+	u8 need_bypass;	/*notify vpu to bypass frc*/
+	u8 next_frame;
 
 	u32 dbg_force_en;
 	u32 dbg_in_out_ratio;
@@ -684,11 +751,12 @@ struct frc_dev_s {
 	u32 dbg_out_reg[MONITOR_REG_MAX];
 	u32 dbg_buf_len;
 	u32 dbg_vf_monitor;
-
+	u16 dbg_mvrd_mode;
+	u16 dbg_mute_disable;
 	u8  little_win;
 	u8  vlock_flag;
 	u8  use_pre_vsync; /* bit_0:120hz_enable , bit_1: 60hz enable */
-	u8  test2;
+	u8  test2;         /* test patch function*/
 
 	u8  prot_mode;
 	u8  no_ko_mode;
@@ -699,6 +767,8 @@ struct frc_dev_s {
 	u32 film_mode_det;/*0: hw detect, 1: sw detect*/
 	u32 auto_n2m;
 	u32 out_line;/*ctl mc out line for user*/
+
+	u32 vpu_byp_frc_reg_addr;
 
 	struct tasklet_struct input_tasklet;
 	struct tasklet_struct output_tasklet;
@@ -724,7 +794,10 @@ struct frc_dev_s {
 	struct frc_dmc_cfg_s  dmc_cfg[3];
 	struct frc_csc_set_s init_csc[2];
 	struct frc_pat_dbg_s pat_dbg;
+	struct frc_timer_dbg timer_dbg;
 };
+
+extern struct hrtimer frc_hi_timer;
 
 struct frc_dev_s *get_frc_devp(void);
 void get_vout_info(struct frc_dev_s *frc_devp);

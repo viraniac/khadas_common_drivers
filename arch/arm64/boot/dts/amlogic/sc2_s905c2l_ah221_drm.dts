@@ -60,6 +60,11 @@
 			bconsole-size = <0x10000>;
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
+		};
+
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
 			reg = <0x0 0x04f00000 0x0 0x00100000>;
@@ -137,7 +142,7 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			/* ion_codec_mm max can alloc size 80M*/
-			size = <0x0 0x1b000000>;
+			size = <0x0 0x16C00000>;
 			alignment = <0x0 0x400000>;
 			linux,contiguous-region;
 		};
@@ -171,10 +176,10 @@
 		vdin1_cma_reserved:linux,vdin1_cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			/* up to 1920x1080 yuv422 8bit and 5 buffers
-			 * 1920x1080x2x5 = 20 M
+			/* up to 720p yuv420 8bit and 4 buffers
+			 * 1280x720x1.5x4 = 8 M
 			 */
-			size = <0x0 0x01400000>;
+			size = <0x0 0x00800000>;
 			alignment = <0x0 0x400000>;
 		};
 		dsp_fw_reserved:linux,dsp_fw {
@@ -207,6 +212,16 @@
 		status = "disable";
 		#iommu-cells = <1>;
 		memory-region = <&pcie_dma_ops_mm>;
+	};
+
+	gpio_leds {
+		compatible = "gpio-leds";
+		status = "okay";
+		pwr_led {
+			label = "pwr_led";
+			gpios = <&gpio GPIOD_11 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
 	};
 
 	main_12v: fixregulator@1 {
@@ -259,45 +274,13 @@
 		status = "okay";
 		tv_mode = <0>;/*1:enable ;0:disable*/
 	};
-	cvbsout {
-		compatible = "amlogic, cvbsout-sc2";
-		status = "okay";
-
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* sc2 */
-		performance_pal = <0x1bf0  0x3 /* default Matrx625 CTCC value */
-			0x1b12  0x8060
-			0x1b05  0xf9
-			0x1b56  0x333
-			0x1c59  0xf15e
-			0xffff  0x0>; /* ending flag */
-		performance = <0x1bf0  0x3 /* ccitt033 SVA value */
-			0x1b12  0x8080
-			0x1b05  0xfc
-			0x1b56  0x333
-			0x1c59  0xf458
-			0xffff  0x0>; /* ending flag */
-		performance_ntsc = <0x1bf0  0x3 /* Matrx525 TTC value */
-			0x1b12  0x8180
-			0x1b05  0xf0
-			0x1b56  0x333
-			0x1c59  0xed66
-			0xffff  0x0>; /* ending flag */
-	};
 
 	dvb-extern {
 		compatible = "amlogic, dvb-extern";
 		dev_name = "dvb-extern";
 		status = "okay";
 
-		fe_num = <2>;
+		fe_num = <1>;
 		fe0_demod = "cxd2856";
 		fe0_i2c_adap_id = <&i2c2>;
 		fe0_demod_i2c_addr = <0xD8>;
@@ -503,15 +486,6 @@
 		key_tolerance = <40 40 40>;
 		mboxes = <&mbox_fifo SC2_REE2AO_KEYPAD>;
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -989,7 +963,7 @@
 			&tdm_d3_pins
 			&tdm_d4_pins
 			&tdm_clk_pins>;
-
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 
@@ -1033,7 +1007,7 @@
 
 		/*tdm clk tuning enable*/
 		clk_tuning_enable = <1>;
-
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 
@@ -1048,6 +1022,7 @@
 		clock-names = "mclk", "clk_srcpll", "clk_src_cd";
 		src-clk-freq = <491520000>;
 		i2s2hdmi = <1>;
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 
@@ -1074,7 +1049,7 @@
 
 		/*spdif clk tuning enable*/
 		clk_tuning_enable = <1>;
-
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 	spdifb: spdif@1 {
@@ -1087,6 +1062,7 @@
 		clock-names = "sysclk", "clk_src_cd",
 				"gate_spdifout", "clk_spdifout";
 		src-clk-freq = <491520000>;
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 	apdm: pdm {
@@ -1306,6 +1282,7 @@
 		lane_mask = <0x1>;
 		/* max 0xff, each bit for one channel */
 		channel_mask = <0x3>;
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 }; /* end of audiobus */

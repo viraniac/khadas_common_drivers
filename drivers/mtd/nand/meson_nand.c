@@ -23,6 +23,7 @@
 #include <linux/mtd/partitions.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/reboot.h>
+#include <linux/amlogic/key_manage.h>
 
 struct mtd_info *aml_mtd_info[NAND_MAX_DEVICE];
 u8 aml_mtd_devnum;
@@ -122,6 +123,97 @@ static void meson_nfc_select_chip(struct nand_chip *nand, int chip)
 		writel((1 << 31), nfc->reg_base + NFC_REG_CMD);
 		nfc->bus_timing =  meson_chip->bus_timing;
 	}
+}
+
+int meson_nand_rsv_erase(struct mtd_info *mtd, struct erase_info *instr)
+{
+	struct nand_chip *chip = mtd_to_nand(mtd);
+	int page, chipnr, ret = 0;
+
+	page = (int)(instr->addr >> chip->page_shift);
+	chipnr = (int)(instr->addr >> chip->chip_shift);
+	nand_select_target(chip, chipnr);
+	ret = nand_erase_op(chip, (page & chip->pagemask) >>
+				(chip->phys_erase_shift - chip->page_shift));
+	nand_deselect_target(chip);
+
+	return ret;
+}
+
+int meson_nand_rsv_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
+{
+	struct nand_chip *chip = mtd_to_nand(mtd);
+	int oob_required = ops->oobbuf ? 1 : 0;
+	int chipnr, realpage, page;
+	int ret;
+
+	chipnr = (int)(to >> chip->chip_shift);
+	realpage = (int)(to >> chip->page_shift);
+	page = realpage & chip->pagemask;
+	meson_nfc_select_chip(chip, chipnr);
+	memset(chip->oob_poi, 0xff, mtd->oobsize);
+	mtd_ooblayout_set_databytes(mtd, ops->oobbuf, chip->oob_poi,
+					ops->ooboffs, ops->ooblen);
+	ret = chip->ecc.write_page(chip, ops->datbuf, oob_required, page);
+	meson_nfc_select_chip(chip, -1);
+
+	return ret;
+}
+
+int meson_nand_rsv_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
+{
+	struct nand_chip *chip = mtd_to_nand(mtd);
+	struct meson_nfc_nand_chip *meson_chip = to_meson_nand(chip);
+	struct mtd_ecc_stats stats;
+	int page, realpage, chipnr, oob_required, ret = 0;
+
+	stats = mtd->ecc_stats;
+	oob_required = ops->oobbuf ? 1 : 0;
+
+	chipnr = (int)(from >> chip->chip_shift);
+	realpage = (int)(from >> chip->page_shift);
+	page = realpage & chip->pagemask;
+
+	meson_nfc_select_chip(chip, chipnr);
+	if (!ops->datbuf) {
+		ret = chip->ecc.read_oob(chip, page);
+	} else {
+		ret = chip->ecc.read_page(chip, meson_chip->data_buf,
+				oob_required, page);
+		memcpy(ops->datbuf, meson_chip->data_buf, ops->len);
+	}
+	meson_nfc_select_chip(chip, -1);
+
+	if (ret < 0 || mtd->ecc_stats.failed - stats.failed)
+		return -EBADMSG;
+
+	mtd_ooblayout_get_databytes(mtd, ops->oobbuf,
+								chip->oob_poi, ops->ooboffs,
+								ops->ooblen);
+
+	return 0;
+}
+
+int meson_nand_rsv_isbad(struct mtd_info *mtd, loff_t offs)
+{
+	struct nand_chip *chip = mtd_to_nand(mtd);
+	struct meson_nfc *nfc = nand_get_controller_data(chip);
+	int block, status;
+
+	block = (int)(offs >> chip->bbt_erase_shift);
+	status = nfc->block_status[block];
+
+	return status ? 1 : 0;
+}
+
+int meson_nand_rsv_get_device(struct mtd_info *mtd)
+{
+	return nand_get_device(mtd_to_nand(mtd));
+}
+
+void meson_nand_rsv_release_device(struct mtd_info *mtd)
+{
+	nand_release_device(mtd_to_nand(mtd));
 }
 
 static void meson_nfc_cmd_idle(struct meson_nfc *nfc, u32 time)
@@ -1012,7 +1104,7 @@ READ_BAD_BLOCK:
 	}
 
 	memset(buf, 0xff, (1 << nand->page_shift));
-	ret = meson_nfc_read_page_hwecc(nand, buf, 1, page);
+	ret = meson_nfc_read_page_hwecc(nand, buf, 1, real_page);
 	return ret;
 }
 
@@ -1037,8 +1129,12 @@ static int meson_nfc_boot_read_oob(struct nand_chip *nand, int page)
 
 static bool meson_nfc_is_buffer_dma_safe(const void *buffer)
 {
+	if ((uintptr_t)buffer % DMA_ADDR_ALIGN)
+		return false;
+
 	if (virt_addr_valid(buffer) && (!object_is_on_stack(buffer)))
 		return true;
+
 	return false;
 }
 
@@ -1051,7 +1147,7 @@ meson_nand_op_get_dma_safe_input_buf(const struct nand_op_instr *instr)
 	if (meson_nfc_is_buffer_dma_safe(instr->ctx.data.buf.in))
 		return instr->ctx.data.buf.in;
 
-	return kzalloc(instr->ctx.data.len, GFP_KERNEL);
+	return kzalloc(ALIGN(instr->ctx.data.len, DMA_ADDR_ALIGN), GFP_KERNEL);
 }
 
 static void
@@ -1196,6 +1292,7 @@ static int meson_nfc_clk_init(struct meson_nfc *nfc)
 	int ret;
 	struct clk_init_data init = {0};
 	const char *fix_div2_pll_name[1];
+	unsigned int reg_val = 0;
 
 	nfc->clk_gate = devm_clk_get(nfc->dev, "gate");
 	if (IS_ERR(nfc->clk_gate)) {
@@ -1220,6 +1317,11 @@ static int meson_nfc_clk_init(struct meson_nfc *nfc)
 		dev_err(nfc->dev, "failed to enable fix pll");
 		return ret;
 	}
+
+	/* select nand clk and set fix PLL, 1000MHz(fixdiv2pll), always on */
+	reg_val = readl(nfc->nand_clk_reg);
+	writel(CLK_SELECT_SRC_FIXDIV2PLL | (reg_val & ~CLK_SELECT_SRC_MASK) |
+			CLK_ALWAYS_ON | CLK_SELECT_NAND, nfc->nand_clk_reg);
 
 	init.name = devm_kstrdup(nfc->dev, "nfc#div", GFP_KERNEL);
 	init.ops = &clk_divider_ops;
@@ -1633,6 +1735,14 @@ meson_nfc_nand_chip_init(struct device *dev,
 	mtd->_block_isbad =  meson_nand_block_isbad;
 	mtd->_block_markbad = meson_nand_block_markbad;
 	if (aml_mtd_devnum != 0) {
+		nfc->rsv->mtd = mtd;
+		nfc->rsv->rsv_ops._erase = meson_nand_rsv_erase;
+		nfc->rsv->rsv_ops._write_oob = meson_nand_rsv_write_oob;
+		nfc->rsv->rsv_ops._read_oob = meson_nand_rsv_read_oob;
+		nfc->rsv->rsv_ops._block_markbad = NULL;
+		nfc->rsv->rsv_ops._block_isbad = meson_nand_rsv_isbad;
+		nfc->rsv->rsv_ops._get_device = meson_nand_rsv_get_device;
+		nfc->rsv->rsv_ops._release_device = meson_nand_rsv_release_device;
 		meson_rsv_init(mtd, nfc->rsv);
 		nfc->block_status = kzalloc((mtd->size >> mtd->erasesize_shift),
 					    GFP_KERNEL);
@@ -1952,6 +2062,8 @@ static int meson_nfc_probe(struct platform_device *pdev)
 	ret = readl(nfc->nand_clk_reg);
 	ret = clk_get_rate(nfc->nand_div_clk);
 	ret = readl(nfc->reg_base + NFC_REG_CFG);
+
+	auto_attach();
 
 	return 0;
 err_clk:

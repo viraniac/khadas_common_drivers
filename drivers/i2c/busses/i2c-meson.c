@@ -20,6 +20,8 @@
 #include <linux/pm_runtime.h>
 #include <linux/pm_domain.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/arm-smccc.h>
+#include <linux/amlogic/secure_pwm_i2c.h>
 #endif
 
 /* Meson I2C register map */
@@ -69,6 +71,11 @@ enum {
 	STATE_WRITE,
 };
 
+struct meson_i2c_data {
+	bool tee;
+	u32 tee_id;
+};
+
 /**
  * struct meson_i2c - Meson I2C device private data
  *
@@ -111,8 +118,21 @@ struct meson_i2c {
 	unsigned int		frequency;
 	int retain_fastmode;
 	int irq;
+	bool is_runtime_sleep;
 #endif
+	struct meson_i2c_data		*data;
 };
+
+static void meson_i2c_writel(struct meson_i2c *i2c, u32 data, int reg)
+{
+	struct arm_smccc_res res;
+
+	if (i2c->data->tee)
+		arm_smccc_smc(SECURE_PWM_I2C, SECID_I2C, i2c->data->tee_id,
+			reg, data, 0, 0, 0, &res);
+	else
+		writel(data, i2c->regs + reg);
+}
 
 static void meson_i2c_set_mask(struct meson_i2c *i2c, int reg, u32 mask,
 			       u32 val)
@@ -122,7 +142,7 @@ static void meson_i2c_set_mask(struct meson_i2c *i2c, int reg, u32 mask,
 	data = readl(i2c->regs + reg);
 	data &= ~mask;
 	data |= val & mask;
-	writel(data, i2c->regs + reg);
+	meson_i2c_writel(i2c, data, reg);
 }
 
 static void meson_i2c_reset_tokens(struct meson_i2c *i2c)
@@ -303,8 +323,8 @@ static void meson_i2c_put_data(struct meson_i2c *i2c, char *buf, int len)
 	for (i = 4; i < min(8, len); i++)
 		wdata1 |= *buf++ << ((i - 4) * 8);
 
-	writel(wdata0, i2c->regs + REG_TOK_WDATA0);
-	writel(wdata1, i2c->regs + REG_TOK_WDATA1);
+	meson_i2c_writel(i2c, wdata0, REG_TOK_WDATA0);
+	meson_i2c_writel(i2c, wdata1, REG_TOK_WDATA1);
 
 	dev_dbg(i2c->dev, "%s: data %08x %08x len %d\n", __func__,
 		wdata0, wdata1, len);
@@ -332,9 +352,8 @@ static void meson_i2c_prepare_xfer(struct meson_i2c *i2c)
 
 	if (i2c->last && i2c->pos + i2c->count >= i2c->msg->len)
 		meson_i2c_add_token(i2c, TOKEN_STOP);
-
-	writel(i2c->tokens[0], i2c->regs + REG_TOK_LIST0);
-	writel(i2c->tokens[1], i2c->regs + REG_TOK_LIST1);
+	meson_i2c_writel(i2c, i2c->tokens[0], REG_TOK_LIST0);
+	meson_i2c_writel(i2c, i2c->tokens[1], REG_TOK_LIST1);
 }
 
 static irqreturn_t meson_i2c_irq(int irqno, void *dev_id)
@@ -401,7 +420,7 @@ static void meson_i2c_do_start(struct meson_i2c *i2c, struct i2c_msg *msg)
 	meson_i2c_set_mask(i2c, REG_SLAVE_ADDR, GENMASK(7, 0),
 			   (unsigned int)((msg->addr << 1) & GENMASK(7, 0)));
 #else
-	writel(msg->addr << 1, i2c->regs + REG_SLAVE_ADDR);
+	meson_i2c_writel(i2c, msg->addr << 1, REG_SLAVE_ADDR);
 #endif
 	meson_i2c_add_token(i2c, TOKEN_START);
 	meson_i2c_add_token(i2c, token);
@@ -564,6 +583,7 @@ static int meson_i2c_probe(struct platform_device *pdev)
 
 	if (fwnode_property_present(&np->fwnode, "retain-fast-mode"))
 		i2c->retain_fastmode = 1;
+	i2c->data = (struct meson_i2c_data *)of_device_get_match_data(&pdev->dev);
 #endif
 	i2c->dev = &pdev->dev;
 	platform_set_drvdata(pdev, i2c);
@@ -578,6 +598,15 @@ static int meson_i2c_probe(struct platform_device *pdev)
 	}
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	i2c->regs = devm_ioremap_resource(&pdev->dev, mem);
+	if (i2c->data->tee) {
+		/* get i2c tee_id property */
+		ret = of_property_read_u32(pdev->dev.of_node, "tee_id",
+				   &i2c->data->tee_id);
+		if (ret) {
+			dev_err(&pdev->dev, "not config tee_id\n");
+			return ret;
+		}
+	}
 	if (IS_ERR(i2c->regs))
 		return PTR_ERR(i2c->regs);
 
@@ -694,36 +723,32 @@ static int meson_i2c_remove(struct platform_device *pdev)
 	return 0;
 }
 #endif
-
-#ifdef CONFIG_AMLOGIC_MODIFY
-static int __maybe_unused meson_i2c_runtime_suspend(struct device *dev)
+static int meson_i2c_put(struct meson_i2c *i2c)
 {
-	struct meson_i2c *i2c = (struct meson_i2c *)dev_get_drvdata(dev);
 
 	disable_irq(i2c->irq);
-	pinctrl_pm_select_sleep_state(dev);
+	pinctrl_pm_select_sleep_state(i2c->dev);
 	clk_disable(i2c->clk);
 	clk_unprepare(i2c->clk);
 
 	return 0;
 }
 
-static int __maybe_unused meson_i2c_runtime_resume(struct device *dev)
+static int meson_i2c_regain(struct meson_i2c *i2c)
 {
-	struct meson_i2c *i2c = (struct meson_i2c *)dev_get_drvdata(dev);
-	int ret, i;
+	int i, ret;
 
 	ret = clk_prepare(i2c->clk);
 	if (ret < 0) {
-		dev_err(dev, "can not prepare clock\n");
+		dev_err(i2c->dev, "can not prepare clock\n");
 		return ret;
 	}
 	ret = clk_enable(i2c->clk);
 	if (ret < 0) {
-		dev_err(dev, "can not enable clock\n");
+		dev_err(i2c->dev, "can not enable clock\n");
 		return ret;
 	}
-	pinctrl_pm_select_default_state(dev);
+	pinctrl_pm_select_default_state(i2c->dev);
 	enable_irq(i2c->irq);
 
 	/*
@@ -736,14 +761,87 @@ static int __maybe_unused meson_i2c_runtime_resume(struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_HIBERNATION
+static int meson_i2c_freeze(struct device *dev)
+{
+	int ret;
+	struct meson_i2c *i2c = (struct meson_i2c *)dev_get_drvdata(dev);
+
+	if (i2c->is_runtime_sleep)
+		return 0;
+	ret = meson_i2c_put(i2c);
+
+	return ret;
+}
+
+static int meson_i2c_thaw(struct device *dev)
+{
+	return 0;
+}
+
+static int meson_i2c_restore(struct device *dev)
+{
+	int ret;
+	struct meson_i2c *i2c = (struct meson_i2c *)dev_get_drvdata(dev);
+
+	if (i2c->is_runtime_sleep)
+		return 0;
+	ret = meson_i2c_regain(i2c);
+
+	return ret;
+}
+#endif
+
+#ifdef CONFIG_AMLOGIC_MODIFY
+static int __maybe_unused meson_i2c_runtime_suspend(struct device *dev)
+{
+	int ret;
+	struct meson_i2c *i2c = (struct meson_i2c *)dev_get_drvdata(dev);
+
+	ret = meson_i2c_put(i2c);
+	i2c->is_runtime_sleep = true;
+
+	return ret;
+}
+
+static int __maybe_unused meson_i2c_runtime_resume(struct device *dev)
+{
+	int ret;
+	struct meson_i2c *i2c = (struct meson_i2c *)dev_get_drvdata(dev);
+
+	ret = meson_i2c_regain(i2c);
+	i2c->is_runtime_sleep = false;
+
+	return ret;
+}
+
 static const struct dev_pm_ops meson_i2c_pm_ops = {
 	SET_RUNTIME_PM_OPS(meson_i2c_runtime_suspend,
 			   meson_i2c_runtime_resume, NULL)
+#ifdef CONFIG_HIBERNATION
+	.freeze		= meson_i2c_freeze,
+	.thaw		= meson_i2c_thaw,
+	.restore	= meson_i2c_restore,
+#endif
 };
 #endif
 
+static struct meson_i2c_data i2c_tee_data = {
+	.tee = true,
+};
+
+static struct meson_i2c_data i2c_normal_data = {
+	.tee = false,
+};
+
 static const struct of_device_id meson_i2c_match[] = {
-	{ .compatible = "amlogic,meson-i2c" },
+	{	.compatible = "amlogic,meson-i2c",
+		.data = &i2c_normal_data
+	},
+	{
+		.compatible = "amlogic,meson-tee-i2c",
+		.data = &i2c_tee_data
+	},
 	{},
 };
 

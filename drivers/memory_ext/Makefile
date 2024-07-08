@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 
 ccflags-y += -I$(srctree)/mm -I$(srctree)/drivers/iommu/arm/arm-smmu-v3
+CFLAGS_REMOVE_aml_cma.o += -Wframe-larger-than=${CONFIG_FRAME_WARN}
 
 obj-$(CONFIG_AMLOGIC_PAGE_TRACE)        += page_trace.o
 obj-$(CONFIG_AMLOGIC_SLAB_TRACE)        += slab_trace.o
@@ -12,3 +13,4 @@ obj-$(CONFIG_AMLOGIC_USER_FAULT)	+= user_fault.o
 obj-$(CONFIG_AMLOGIC_PIN_LOCKED_FILE)	+= pin_file.o
 obj-$(CONFIG_AMLOGIC_PCIE_DMA_OPS)	+= dma_pcie_mapping.o
 obj-$(CONFIG_AMLOGIC_FAKE_SMMU)		+= aml_smmu.o
+obj-$(CONFIG_AMLOGIC_MIX_ZRAM)		+= mix_zram.o

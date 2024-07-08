@@ -662,9 +662,6 @@ static struct hw_enc_clk_val_group setting_enc_clk_val_24[] = {
 	  HDMI_VIC_END},
 		3450000, 1, 2, 2, VID_PLL_DIV_5, 1, 1, 1, -1},
 	/* pll setting for VESA modes */
-	{{HDMIV_640x480p60hz, /* 4.028G / 16 = 251.75M */
-	  HDMI_VIC_END},
-		4028000, 4, 4, 1, VID_PLL_DIV_5, 2, 1, 1, -1},
 	{{HDMIV_800x480p60hz,
 	  HDMI_VIC_END},
 		4761600, 4, 4, 1, VID_PLL_DIV_5, 2, 1, 1, -1},
@@ -677,7 +674,7 @@ static struct hw_enc_clk_val_group setting_enc_clk_val_24[] = {
 		4838400, 4, 4, 1, VID_PLL_DIV_5, 2, 1, 1, -1},
 	{{HDMIV_1024x600p60hz,
 	  HDMI_VIC_END},
-		4032000, 4, 2, 1, VID_PLL_DIV_5, 2, 1, 1, -1},
+		4115866, 4, 2, 1, VID_PLL_DIV_5, 2, 1, 1, -1},
 	{{HDMIV_1024x768p60hz,
 	  HDMI_VIC_END},
 		5200000, 4, 2, 1, VID_PLL_DIV_5, 2, 1, 1, -1},
@@ -1061,11 +1058,11 @@ static void hdmitx_check_frac_rate(struct hdmitx_dev *hdev)
 	if (timing && timing->name && likely_frac_rate_mode(timing->name)) {
 		;
 	} else {
-		HDMITX_INFO("this mode doesn't have frac_rate\n");
+		HDMITX_DEBUG("this mode doesn't have frac_rate\n");
 		frac_rate = 0;
 	}
 
-	HDMITX_INFO("frac_rate = %d\n", hdev->tx_comm.frac_rate_policy);
+	HDMITX_DEBUG("frac_rate = %d\n", hdev->tx_comm.frac_rate_policy);
 }
 
 /*

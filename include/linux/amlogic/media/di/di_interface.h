@@ -26,7 +26,6 @@ enum di_work_mode {
 	/*copy for decoder 1/4 * 1/4 */
 	/*  */
 	WORK_MODE_S4_DCOPY,
-	WORK_MODE_PRE_VPP_LINK,
 	WORK_MODE_MAX
 };
 
@@ -132,6 +131,8 @@ struct di_init_parm {
 	struct di_operations_s ops;
 	void *caller_data;
 	enum di_output_format output_format;
+	unsigned int buffer_keep	: 1,
+				rev	: 31;
 };
 
 struct di_status {
@@ -214,6 +215,15 @@ int di_write(struct di_buffer *buffer, struct composer_dst *dst);
 int di_release_keep_buf(struct di_buffer *buffer);
 
 /**
+ * @brief  di_set_buffer_num
+ *
+ * @param[in]  number pre/post
+ *
+ * @return      0 for success, or fail type if < 0
+ */
+int di_set_buffer_num(unsigned int post, unsigned int pre);
+
+/**
  * @brief  di_get_output_buffer_num  get output buffer num
  *
  * @param[in]  index   instance index
@@ -234,11 +244,20 @@ int di_get_output_buffer_num(int index);
 int di_get_input_buffer_num(int index);
 
 /**************************************
- * pre-vpp link define
+ * pre/post-vpp link define
  **************************************/
+
+enum EPVPP_API_MODE {
+	EPVPP_API_MODE_NONE,
+	EPVPP_API_MODE_PRE,
+	EPVPP_API_MODE_POST,
+	EPVPP_MEM_MODE_MAX
+};
+
 enum EPVPP_DISPLAY_MODE {
 	EPVPP_DISPLAY_MODE_BYPASS = 0,
 	EPVPP_DISPLAY_MODE_NR,
+	EPVPP_DISPLAY_MODE_DI,
 };
 
 enum EPVPP_ERROR {
@@ -271,6 +290,8 @@ struct di_win_s {
 struct screen_vinfo {
 	unsigned int vtotal;
 	unsigned int htotal;
+	unsigned int width;
+	unsigned int height;
 	unsigned int frequency;
 	unsigned int x_d_st;
 	unsigned int y_d_st;
@@ -286,8 +307,9 @@ struct pvpp_dis_para_in_s {
 	struct di_win_s win;
 	struct screen_vinfo vinfo;
 	unsigned int follow_hold_line;
-	bool plink_reverse;//reverse mirror flag at pre_vpp link
+	bool plink_reverse;//reverse mirror flag at pre/post vpp link
 	unsigned int plink_hv_mirror;//0x1,H-mirror;0x2,V-mirror;
+	enum EPVPP_API_MODE link_mode;
 };
 
 int pvpp_display(struct vframe_s *vfm,
@@ -295,9 +317,9 @@ int pvpp_display(struct vframe_s *vfm,
 			    void *out_para);
 
 int pvpp_check_vf(struct vframe_s *vfm);
-int pvpp_check_act(void);
+int pvpp_check_act(bool interlace);
 
-int pvpp_sw(bool on);
+int pvpp_sw(bool on, bool interlace);
 
 /************************************************
  * di_api_get_plink_instance_id
@@ -306,9 +328,9 @@ int pvpp_sw(bool on);
  ************************************************/
 u32 di_api_get_plink_instance_id(void);
 
-void di_disable_prelink_notify(bool async);
-void di_prelink_state_changed_notify(void);
-void di_prelink_force_dmc_priority(bool urgent, bool wait);
+void di_disable_plink_notify(bool async);
+void di_plink_state_changed_notify(void);
+void di_plink_force_dmc_priority(bool urgent, bool wait, bool interlace);
 
 /*********************************************************
  * @brief  di_s_bypass_ch  set channel bypass

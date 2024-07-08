@@ -156,12 +156,26 @@ static noinline int call_smc(u64 func_id, u64 arg0, u64 arg1, u64 arg2)
 	return res.a0;
 }
 
+static inline void wait_owner_bit(struct dma_dsc *dsc)
+{
+	if (dsc) {
+		/* Must provide the last dsc */
+		WARN_ON(!dsc->dsc_cfg.b.eoc);
+		if (dsc->dsc_cfg.b.eoc == 1) {
+			while (dsc->dsc_cfg.b.owner != 0) {
+				dbgp(2, "wait owner bit\n");
+				cpu_relax();
+			}
+		}
+	}
+}
+
 #if !USE_BUSY_POLLING
 static irqreturn_t aml_crypto_dev_irq(int irq, void *dev_id)
 {
 	struct aml_crypto_dev *dd = dev_id;
 	struct device *dev = dd->dev;
-	u8 status = aml_read_crypto_reg(dd->status);
+	u32 status = aml_read_crypto_reg(dd->status);
 
 	if (status) {
 		if (status == 0x1)
@@ -173,7 +187,7 @@ static irqreturn_t aml_crypto_dev_irq(int irq, void *dev_id)
 			} else {
 				dd->err = 0;
 			}
-			aml_write_crypto_reg(dd->status, 0xf);
+			aml_write_crypto_reg(dd->status, 0xff);
 			wake_up_process(dd->processing);
 			return IRQ_HANDLED;
 		} else {
@@ -804,10 +818,12 @@ int __crypto_run_physical(struct crypto_session *ses_ptr,
 #if USE_BUSY_POLLING
 	while ((err = aml_read_crypto_reg(crypto_dd->status)) == 0)
 		;
-	aml_write_crypto_reg(crypto_dd->status, 0xf);
+	wait_owner_bit(&dsc[s + i]);
+	aml_write_crypto_reg(crypto_dd->status, 0xff);
 #else
 	schedule();
 	err = crypto_dd->err;
+	wait_owner_bit(&dsc[s + i]);
 #endif
 	crypto_dd->dma_busy = 0;
 	mutex_unlock(&crypto_dd->lock);
@@ -1074,10 +1090,12 @@ int __crypto_run_virt_to_phys(struct crypto_session *ses_ptr,
 #if USE_BUSY_POLLING
 		while ((err = aml_read_crypto_reg(crypto_dd->status)) == 0)
 			;
+		wait_owner_bit(&dsc[s]);
 		aml_write_crypto_reg(crypto_dd->status, 0xf);
 #else
 		schedule();
 		err = crypto_dd->err;
+		wait_owner_bit(&dsc[s]);
 #endif
 		crypto_dd->dma_busy = 0;
 		mutex_unlock(&crypto_dd->lock);
@@ -1115,10 +1133,12 @@ int __crypto_run_virt_to_phys(struct crypto_session *ses_ptr,
 #if USE_BUSY_POLLING
 	while ((err = aml_read_crypto_reg(crypto_dd->status)) == 0)
 		;
-	aml_write_crypto_reg(crypto_dd->status, 0xf);
+	wait_owner_bit(&dsc[0]);
+	aml_write_crypto_reg(crypto_dd->status, 0xff);
 #else
 	schedule();
 	err = crypto_dd->err;
+	wait_owner_bit(&dsc[0]);
 #endif
 	crypto_dd->dma_busy = 0;
 	mutex_unlock(&crypto_dd->lock);
@@ -1303,10 +1323,12 @@ int __crypto_run_phys_to_virt(struct crypto_session *ses_ptr,
 #if USE_BUSY_POLLING
 		while ((err = aml_read_crypto_reg(crypto_dd->status)) == 0)
 			;
-		aml_write_crypto_reg(crypto_dd->status, 0xf);
+		wait_owner_bit(&dsc[s]);
+		aml_write_crypto_reg(crypto_dd->status, 0xff);
 #else
 		schedule();
 		err = crypto_dd->err;
+		wait_owner_bit(&dsc[s]);
 #endif
 		crypto_dd->dma_busy = 0;
 		mutex_unlock(&crypto_dd->lock);
@@ -1351,10 +1373,12 @@ int __crypto_run_phys_to_virt(struct crypto_session *ses_ptr,
 #if USE_BUSY_POLLING
 	while ((err = aml_read_crypto_reg(crypto_dd->status)) == 0)
 		;
-	aml_write_crypto_reg(crypto_dd->status, 0xf);
+	wait_owner_bit(&dsc[0]);
+	aml_write_crypto_reg(crypto_dd->status, 0xff);
 #else
 	schedule();
 	err = crypto_dd->err;
+	wait_owner_bit(&dsc[0]);
 #endif
 	crypto_dd->dma_busy = 0;
 	mutex_unlock(&crypto_dd->lock);
@@ -1562,10 +1586,12 @@ int __crypto_run_virtual(struct crypto_session *ses_ptr,
 #if USE_BUSY_POLLING
 		while ((err = aml_read_crypto_reg(crypto_dd->status)) == 0)
 			;
-		aml_write_crypto_reg(crypto_dd->status, 0xf);
+		wait_owner_bit(&dsc[s]);
+		aml_write_crypto_reg(crypto_dd->status, 0xff);
 #else
 		schedule();
 		err = crypto_dd->err;
+		wait_owner_bit(&dsc[s]);
 #endif
 		crypto_dd->dma_busy = 0;
 		mutex_unlock(&crypto_dd->lock);
@@ -1612,10 +1638,12 @@ int __crypto_run_virtual(struct crypto_session *ses_ptr,
 #if USE_BUSY_POLLING
 	while ((err = aml_read_crypto_reg(crypto_dd->status)) == 0)
 		;
-	aml_write_crypto_reg(crypto_dd->status, 0xf);
+	wait_owner_bit(&dsc[0]);
+	aml_write_crypto_reg(crypto_dd->status, 0xff);
 #else
 	schedule();
 	err = crypto_dd->err;
+	wait_owner_bit(&dsc[0]);
 #endif
 	crypto_dd->dma_busy = 0;
 	mutex_unlock(&crypto_dd->lock);
@@ -2100,7 +2128,13 @@ static int aml_crypto_dev_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	dev_dbg(dev, "Aml crypto device\n");
+	dev_info(dev, "Aml crypto device (%s)\n",
+#if USE_BUSY_POLLING
+			"polling"
+#else
+			"irq"
+#endif
+			);
 
 	return err;
 

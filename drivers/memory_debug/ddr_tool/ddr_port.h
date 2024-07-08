@@ -6,6 +6,8 @@
 #ifndef __DDR_PORT_DESC_H__
 #define __DDR_PORT_DESC_H__
 
+#define DMC_MON_RW			0x8200004A
+
 /* see cpu_version.h define */
 #define MAX_PORTS			127
 #define MAX_NAME			15
@@ -44,6 +46,8 @@
 #define DMC_TYPE_T3X			0x42
 #define DMC_TYPE_TXHD2			0x44
 #define DMC_TYPE_S1A			0x45
+#define DMC_TYPE_S7			0x46
+#define DMC_TYPE_S7D			0x47
 
 #define DMC_READ			0
 #define DMC_WRITE			1

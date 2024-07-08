@@ -67,7 +67,12 @@
 #include <linux/amlogic/user_fault.h>
 #endif
 
+#include <trace/hooks/mm.h>
+#include <linux/amlogic/gki_module.h>
+#include <linux/swap.h>
+
 #define MAX_DEBUG_LEVEL		5
+#define MAX_JOB_NUM		40
 
 struct work_cma {
 	struct list_head list;
@@ -78,11 +83,9 @@ struct work_cma {
 };
 
 struct cma_pcp {
-	struct list_head list;
 	struct completion start;
 	struct completion end;
 	struct task_struct *task;
-	spinlock_t  list_lock;		/* protect job list */
 	int cpu;
 };
 
@@ -95,8 +98,15 @@ static int cma_alloc_trace;
 int cma_debug_level;
 static int allow_cma_tasks;
 static unsigned long cma_isolated;
+static struct list_head work_list;
+static spinlock_t work_list_lock;		/* protect job list */
 
 static atomic_t cma_allocate;
+
+#ifdef CONFIG_ANDROID_VENDOR_HOOKS
+static int cma_enabled;
+module_param(cma_enabled, int, 0644);
+#endif
 
 #ifdef CONFIG_AMLOGIC_CMA_DIS
 unsigned long ion_cma_allocated;
@@ -186,10 +196,6 @@ static void cma_clear_bitmap(struct dummy_cma *cma, unsigned long pfn,
 	spin_unlock_irqrestore(&cma->lock, flags);
 }
 
-unsigned long aml_totalcma_pages;
-
-void (*aml_lru_cache_disable)(void);
-
 #ifdef CONFIG_PAGE_PINNER
 static void __nocfi aml_page_pinner_failure_detect(struct page *page)
 {
@@ -209,8 +215,6 @@ static void aml_page_pinner_failure_detect(struct page *page)
 }
 #endif /* CONFIG_PAGE_PINNER */
 
-void (*aml_lru_cache_enable)(void);
-
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 void (*aml_prep_huge_page)(struct page *page);
 #else /* CONFIG_TRANSPARENT_HUGEPAGE */
@@ -227,7 +231,7 @@ void (*aml_undo_isolate_page_range)(unsigned long start_pfn, unsigned long end_p
 unsigned long (*aml_iso_free_range)(struct compact_control *cc,
 			unsigned long start_pfn, unsigned long end_pfn);
 void (*aml_drain_all_pages)(struct zone *zone);
-void (*aml_lru_add_drain)(void);
+void (*aml_lru_add_drain_all)(void);
 #if CONFIG_AMLOGIC_KERNEL_VERSION >= 14515
 int (*aml_start_isolate_page_range)(unsigned long start_pfn, unsigned long end_pfn,
 			     unsigned int migratetype, int flags,
@@ -328,6 +332,11 @@ void check_cma_isolated(unsigned long *isolate,
 
 bool can_use_cma(gfp_t gfp_flags)
 {
+#ifdef CONFIG_ANDROID_VENDOR_HOOKS
+	if (!cma_enabled)
+		return false;
+#endif
+
 	if (unlikely(!cma_first_wm_low))
 		return false;
 
@@ -810,11 +819,6 @@ static int __nocfi aml_alloc_contig_migrate_range(struct compact_control *cc,
 		.gfp_mask = GFP_USER | __GFP_MOVABLE | __GFP_RETRY_MAYFAIL,
 	};
 
-#if IS_BUILTIN(CONFIG_AMLOGIC_CMA)
-	lru_cache_disable();
-#else
-	aml_lru_cache_disable();
-#endif
 	while (pfn < end || !list_empty(&cc->migratepages)) {
 		if (fatal_signal_pending(host)) {
 			ret = -EINTR;
@@ -860,11 +864,6 @@ static int __nocfi aml_alloc_contig_migrate_range(struct compact_control *cc,
 			break;
 	}
 
-#if IS_BUILTIN(CONFIG_AMLOGIC_CMA)
-	lru_cache_enable();
-#else
-	aml_lru_cache_enable();
-#endif
 	if (ret < 0) {
 		if (ret == -EBUSY) {
 			struct page *page;
@@ -918,31 +917,37 @@ static int __nocfi cma_boost_work_func(void *cma_data)
 			pr_err("%s, cpu %d is not work cpu:%d\n",
 			       __func__, this_cpu, c_work->cpu);
 		}
-		spin_lock(&c_work->list_lock);
-		if (list_empty(&c_work->list)) {
+again:
+		spin_lock(&work_list_lock);
+		if (list_empty(&work_list)) {
 			/* NO job todo ? */
-			pr_err("%s,%d, list empty\n", __func__, __LINE__);
-			spin_unlock(&c_work->list_lock);
+			spin_unlock(&work_list_lock);
+			cma_debug(1, NULL, "%s,%d, list empty\n", __func__, __LINE__);
 			goto next;
 		}
-		job = list_first_entry(&c_work->list, struct work_cma, list);
+		job = list_first_entry(&work_list, struct work_cma, list);
 		list_del(&job->list);
-		spin_unlock(&c_work->list_lock);
+		spin_unlock(&work_list_lock);
 
 		INIT_LIST_HEAD(&cc.migratepages);
-	#if IS_BUILTIN(CONFIG_AMLOGIC_CMA)
-		lru_add_drain();
-	#else
-		aml_lru_add_drain();
-	#endif
 		pfn      = job->pfn;
 		cc.zone  = page_zone(pfn_to_page(pfn));
 		end      = pfn + job->count;
 		ret      = aml_alloc_contig_migrate_range(&cc, pfn, end,
 							  1, job->host);
 		job->ret = ret;
-		if (ret)
-			cma_debug(1, NULL, "failed, ret:%d\n", ret);
+		if (!ret) {
+			goto again;
+		} else if (ret == -EBUSY) {
+			spin_lock(&work_list_lock);
+			job->ret = 0;
+			list_add(&job->list, &work_list);
+			spin_unlock(&work_list_lock);
+			cma_debug(1, pfn_to_page(pfn), "contig migrate ebusy\n");
+			goto again;
+		} else {
+			pr_err("cma alloc contig failed, ret:%d\n", ret);
+		}
 next:
 		complete(&c_work->end);
 		if (kthread_should_stop()) {
@@ -953,12 +958,92 @@ next:
 	return 0;
 }
 
+#ifdef CONFIG_ANDROID_VENDOR_HOOKS
+static int cma_enabled_setup(char *str)
+{
+	if (kstrtoint(str, 0, &cma_enabled)) {
+		pr_err("cma_enabled: bad arg:%s\n", str);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+__setup("cma_enabled=", cma_enabled_setup);
+
+static int cma_enabled_swap_ratio = 70;
+module_param(cma_enabled_swap_ratio, int, 0644);
+
+static int cma_enabled_swap_ratio_setup(char *str)
+{
+	if (kstrtoint(str, 0, &cma_enabled_swap_ratio)) {
+		pr_err("cma_enabled_swap_ratio: bad arg:%s\n", str);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+__setup("cma_enabled_swap_ratio=", cma_enabled_swap_ratio_setup);
+
+static struct delayed_work cma_enabled_work;
+
+static void cma_enabled_work_fn(struct work_struct *work)
+{
+	struct sysinfo i;
+
+	if (cma_enabled)
+		return;
+
+	si_swapinfo(&i);
+
+	if (i.totalswap && i.freeswap * 100 < i.totalswap * cma_enabled_swap_ratio) {
+		pr_info("swap free low(MB):%lu/%lu, ratio=%d, enable cma now!\n",
+				i.freeswap * 4 / 1024,
+				i.totalswap * 4 / 1024,
+				cma_enabled_swap_ratio);
+		cma_enabled = 1;
+	} else {
+		schedule_delayed_work(&cma_enabled_work, HZ / 10);
+	}
+}
+
+#if CONFIG_AMLOGIC_KERNEL_VERSION >= 14515
+static void __maybe_unused delay_enable_cma_hook(void *data,
+		gfp_t gfp_mask, unsigned int *alloc_flags, bool *bypass)
+{
+	if (!cma_enabled)
+		*bypass = 1;
+}
+#else
+static void __maybe_unused delay_enable_cma_hook(void *data,
+		gfp_t gfp_mask, unsigned int *alloc_flags)
+{
+	if (!cma_enabled)
+		*alloc_flags &= ~ALLOC_CMA;
+}
+#endif
+
+static void delay_enable_cma_init(void)
+{
+#if CONFIG_AMLOGIC_KERNEL_VERSION >= 14515
+	register_trace_android_vh_calc_alloc_flags(delay_enable_cma_hook, NULL);
+#else
+
+	register_trace_android_vh_alloc_flags_cma_adjust(delay_enable_cma_hook, NULL);
+#endif
+
+	INIT_DELAYED_WORK(&cma_enabled_work, cma_enabled_work_fn);
+	schedule_delayed_work(&cma_enabled_work, HZ);
+}
+#endif
+
 static int __init init_cma_boost_task(void)
 {
 	int cpu;
 	struct task_struct *task;
 	struct cma_pcp *work;
 	char task_name[20] = {};
+	INIT_LIST_HEAD(&work_list);
+	spin_lock_init(&work_list_lock);
 
 	for_each_possible_cpu(cpu) {
 		memset(task_name, 0, sizeof(task_name));
@@ -966,8 +1051,6 @@ static int __init init_cma_boost_task(void)
 		work = &per_cpu(cma_pcp_thread, cpu);
 		init_completion(&work->start);
 		init_completion(&work->end);
-		INIT_LIST_HEAD(&work->list);
-		spin_lock_init(&work->list_lock);
 		work->cpu = cpu;
 		task = kthread_create(cma_boost_work_func, work, task_name);
 		if (!IS_ERR(task)) {
@@ -983,6 +1066,11 @@ static int __init init_cma_boost_task(void)
 		}
 	}
 	can_boost = 1;
+
+#ifdef CONFIG_ANDROID_VENDOR_HOOKS
+	delay_enable_cma_init();
+#endif
+
 	return 0;
 }
 
@@ -999,7 +1087,7 @@ int cma_alloc_contig_boost(unsigned long start_pfn, unsigned long count)
 	unsigned long cnt;
 	unsigned long flags;
 	struct cma_pcp *work;
-	struct work_cma job[NR_CPUS] = {};
+	struct work_cma job[MAX_JOB_NUM] = {};
 
 	cpumask_clear(&has_work);
 
@@ -1007,23 +1095,46 @@ int cma_alloc_contig_boost(unsigned long start_pfn, unsigned long count)
 		cpus = allow_cma_tasks;
 	else
 		cpus = num_online_cpus() - 1;
-	cnt   = count;
-	delta = count / cpus;
+
+	/* cnt   = count; */
+	if (count < pageblock_nr_pages) {
+		delta = count / cpus;
+		cnt = cpus;
+	} else if (count <= pageblock_nr_pages * 10) {
+		delta = 256;
+		cnt = count / delta;
+	} else if (count <= pageblock_nr_pages * 20) {
+		delta = 512;
+		cnt = count / delta;
+	} else {
+		delta = count / MAX_JOB_NUM;
+		cnt = MAX_JOB_NUM;
+	}
+	if (cnt > MAX_JOB_NUM) {
+		pr_err("cnt too large: %ld, delta: %ld, count: %ld\n", cnt, delta, count);
+		return -ENOMEM;
+	}
+	spin_lock(&work_list_lock);
+	if (!list_empty(&work_list))
+		INIT_LIST_HEAD(&work_list);
+	for (i = 0; i < cnt; i++) {
+		INIT_LIST_HEAD(&job[i].list);
+		job[i].pfn   = start_pfn + i * delta;
+		job[i].count = delta;
+		job[i].ret   = 0;
+		job[i].host  = current;
+		if (i == cnt - 1)
+			job[i].count = count - i * delta;
+		list_add(&job[i].list, &work_list);
+	}
+	spin_unlock(&work_list_lock);
+	i = 0;
+
 	atomic_set(&ok, 0);
 	local_irq_save(flags);
 	for_each_online_cpu(cpu) {
 		work = &per_cpu(cma_pcp_thread, cpu);
-		spin_lock(&work->list_lock);
-		INIT_LIST_HEAD(&job[cpu].list);
-		job[cpu].pfn   = start_pfn + i * delta;
-		job[cpu].count = delta;
-		job[cpu].ret   = -1;
-		job[cpu].host  = current;
-		if (i == cpus - 1)
-			job[cpu].count = count - i * delta;
 		cpumask_set_cpu(cpu, &has_work);
-		list_add(&job[cpu].list, &work->list);
-		spin_unlock(&work->list_lock);
 		complete(&work->start);
 		i++;
 		if (i == cpus) {
@@ -1206,6 +1317,7 @@ int __nocfi aml_cma_alloc_range(unsigned long start, unsigned long end,
 		.no_set_skip_hint = true,
 		.gfp_mask = current_gfp_context(gfp_mask),
 		.alloc_contig = true,
+		.contended = false,
 	};
 	INIT_LIST_HEAD(&cc.migratepages);
 
@@ -1240,10 +1352,10 @@ int __nocfi aml_cma_alloc_range(unsigned long start, unsigned long end,
 	cma_isolated += (aml_pfn_max_align_up(end) - pfn_max_align_down(start));
 try_again:
 #if IS_BUILTIN(CONFIG_AMLOGIC_CMA)
-	lru_add_drain();
+	lru_add_drain_all();
 	drain_all_pages(cc.zone);
 #else
-	aml_lru_add_drain();
+	aml_lru_add_drain_all();
 	aml_drain_all_pages(cc.zone);
 #endif
 	/*
@@ -1307,7 +1419,12 @@ try_again:
 	outer_end = aml_iso_free_range(&cc, outer_start, end);
 #endif
 	if (!outer_end) {
-		ret = -EBUSY;
+		if (cc.contended) {
+			ret = -EINTR;
+			pr_info("cma_alloc [%lx-%lx] aborted\n", start, end);
+		} else {
+			ret = -EBUSY;
+		}
 		cma_debug(1, NULL, "iso free range(%lx, %lx) failed\n",
 			  outer_start, end);
 		goto done;
@@ -1378,6 +1495,10 @@ void aml_cma_free(unsigned long pfn, unsigned int nr_pages, int update)
 	int free_order, start_order = 0;
 	int batch;
 	unsigned int orig_nr_pages = nr_pages;
+#if (IS_MODULE(CONFIG_AMLOGIC_PAGE_TRACE) && IS_MODULE(CONFIG_AMLOGIC_CMA)) || \
+	(IS_BUILTIN(CONFIG_AMLOGIC_PAGE_TRACE) && IS_BUILTIN(CONFIG_AMLOGIC_CMA))
+	unsigned long orig_pfn = pfn;
+#endif
 
 	while (nr_pages) {
 		page = pfn_to_page(pfn);
@@ -1407,7 +1528,7 @@ void aml_cma_free(unsigned long pfn, unsigned int nr_pages, int update)
 		(IS_BUILTIN(CONFIG_AMLOGIC_PAGE_TRACE) && IS_BUILTIN(CONFIG_AMLOGIC_CMA))
 		if (cma_alloc_trace)
 			pr_info("c f p:%lx, c:%d, f:%ps\n",
-				pfn, count, (void *)find_back_trace());
+				orig_pfn, orig_nr_pages, (void *)find_back_trace());
 	#endif /* CONFIG_AMLOGIC_PAGE_TRACE */
 		atomic_long_sub(orig_nr_pages, &nr_cma_allocated);
 	}
@@ -1470,11 +1591,10 @@ static int cma_debug_show(struct seq_file *m, void *arg)
 	seq_printf(m, "level=%d, alloc trace:%d, allow task:%d\n",
 		   cma_debug_level, cma_alloc_trace, allow_cma_tasks);
 #if IS_BUILTIN(CONFIG_AMLOGIC_CMA)
-	seq_printf(m, "driver used:%lu isolated:%d total:%lu\n",
-		   get_cma_allocated(), 0, totalcma_pages);
+	seq_printf(m, "driver used:%lu, total:%lu\n",
+		   get_cma_allocated(), totalcma_pages);
 #else
-	seq_printf(m, "driver used:%lu isolated:%d total:%lu\n",
-		   get_cma_allocated(), 0, aml_totalcma_pages);
+	seq_printf(m, "driver used:%lu\n", get_cma_allocated());
 #endif
 	return 0;
 }
@@ -1488,7 +1608,7 @@ static ssize_t cma_debug_write(struct file *file, const char __user *buffer,
 	struct cma_pcp *work;
 	char *buf;
 
-	buf = kmalloc(count, GFP_KERNEL);
+	buf = kzalloc(count + 1, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
 
@@ -1789,60 +1909,6 @@ struct kprobe kp_cma_release = {
 	.pre_handler = cma_release_pre_handler,
 };
 
-static int compaction_alloc_debug;
-module_param(compaction_alloc_debug, int, 0644);
-
-static unsigned long low_cma_pfn = -1UL; //max
-module_param(low_cma_pfn, ulong, 0644);
-
-struct cma;
-static int low_cma_func(struct cma *cma, void *data)
-{
-	struct dummy_cma *d_cma = (struct dummy_cma *)cma;
-
-	if (d_cma->base_pfn < low_cma_pfn)
-		low_cma_pfn = d_cma->base_pfn;
-
-	return 0;
-}
-
-static __nocfi void low_cma_init(void)
-{
-	cma_for_each_area(low_cma_func, NULL);
-	pr_info("low_cma_pfn=%lx\n", low_cma_pfn);
-
-	if (low_cma_pfn < 500 * 1024 / 4) {
-		pr_err("low_cma_pfn less than 500M ignore\n");
-		low_cma_pfn = -1UL;
-	}
-}
-
-static int __nocfi __kprobes compaction_alloc_pre_handler(struct kprobe *p, struct pt_regs *regs)
-{
-#ifdef CONFIG_ARM64
-	struct compact_control *cc = (struct compact_control *)regs->regs[1];
-#elif CONFIG_ARM
-	struct compact_control *cc = (struct compact_control *)regs->ARM_r1;
-#endif
-
-	if (list_empty(&cc->freepages)) {
-		if (cc->free_pfn >= low_cma_pfn) {
-			if (compaction_alloc_debug)
-				pr_info("compaction_alloc: set free_pfn %lx->%lx\n",
-						cc->free_pfn, low_cma_pfn - pageblock_nr_pages);
-
-			cc->free_pfn = low_cma_pfn - pageblock_nr_pages;
-		}
-	}
-
-	return 0;
-}
-
-struct kprobe kp_compaction_alloc = {
-	.symbol_name  = "compaction_alloc",
-	.pre_handler = compaction_alloc_pre_handler,
-};
-
 static void *get_symbol_addr(const char *symbol_name)
 {
 	struct kprobe kp = {
@@ -1861,6 +1927,16 @@ static void *get_symbol_addr(const char *symbol_name)
 	return kp.addr;
 }
 
+static void aml_bypass_cma_page(void *data,
+		struct compact_control *cc, struct page *page, bool *bypass)
+{
+	int migrate_type = get_pageblock_migratetype(page);
+
+	if (is_migrate_cma(migrate_type) ||
+	    is_migrate_isolate(migrate_type))
+		*bypass = 1;
+}
+
 static int __nocfi common_symbol_init(void *data)
 {
 	int ret;
@@ -1874,9 +1950,6 @@ static int __nocfi common_symbol_init(void *data)
 
 	aml_kallsyms_lookup_name = (unsigned long (*)(const char *name))kp_lookup_name.addr;
 
-	aml_totalcma_pages = *(unsigned long *)aml_kallsyms_lookup_name("totalcma_pages");
-	aml_lru_cache_disable = (void (*)(void))get_symbol_addr("lru_cache_disable");
-	aml_lru_cache_enable = (void (*)(void))aml_kallsyms_lookup_name("lru_cache_enable");
 	aml_prep_huge_page = (void (*)(struct page *page))get_symbol_addr("prep_transhuge_page");
 	aml_reclaim_clean_pages_from_list = (unsigned int (*)(struct zone *zone,
 		struct list_head *page_list))get_symbol_addr("reclaim_clean_pages_from_list");
@@ -1889,7 +1962,7 @@ static int __nocfi common_symbol_init(void *data)
 	aml_iso_free_range = (unsigned long (*)(struct compact_control *cc, unsigned long start_pfn,
 		unsigned long end_pfn))get_symbol_addr("isolate_freepages_range");
 	aml_drain_all_pages = (void (*)(struct zone *zone))get_symbol_addr("drain_all_pages");
-	aml_lru_add_drain = (void (*)(void))get_symbol_addr("lru_add_drain");
+	aml_lru_add_drain_all = (void (*)(void))get_symbol_addr("lru_add_drain_all");
 #if CONFIG_AMLOGIC_KERNEL_VERSION >= 14515
 	aml_start_isolate_page_range = (int (*)(unsigned long start_pfn, unsigned long end_pfn,
 			unsigned int migratetype, int flags,
@@ -1916,12 +1989,9 @@ static int __nocfi common_symbol_init(void *data)
 		return 1;
 	}
 
-	ret = register_kprobe(&kp_compaction_alloc);
-	if (ret < 0) {
-		pr_err("register_kprobe:%s failed, returned %d\n",
-		       kp_compaction_alloc.symbol_name, ret);
-		return 1;
-	}
+	ret = register_trace_android_vh_isolate_freepages(aml_bypass_cma_page, NULL);
+	if (ret)
+		pr_err("register_trace_android_vh_isolate_freepages fail ret=%d\n", ret);
 
 	return 0;
 }
@@ -1940,8 +2010,6 @@ static int __init aml_cma_module_init(void)
 	init_cma_boost_task();
 	kthread_run(common_symbol_init, NULL, "AML_CMA_TASK");
 
-	low_cma_init();
-
 	return 0;
 }
 
@@ -1952,5 +2020,6 @@ static void __exit aml_cma_module_exit(void)
 module_init(aml_cma_module_init);
 module_exit(aml_cma_module_exit);
 MODULE_LICENSE("GPL v2");
+MODULE_IMPORT_NS(MINIDUMP);
 #endif
 

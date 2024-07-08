@@ -46,6 +46,7 @@ struct resample_chipinfo {
 
 	bool chnum_sync;
 	bool watchdog;
+	bool need_reset;
 };
 
 struct audioresample {
@@ -172,6 +173,20 @@ bool get_resample_enable_chnum_sync(enum resample_idx id)
 	return p_resample->chipinfo->chnum_sync;
 }
 
+bool get_resample_need_reset(enum resample_idx id)
+{
+	struct audioresample *p_resample;
+
+	p_resample = ((id == RESAMPLE_A) ? s_resample_a : s_resample_b);
+
+	if (!p_resample || !p_resample->chipinfo) {
+		pr_debug("Not init audio resample\n");
+		return false;
+	}
+
+	return p_resample->chipinfo->need_reset;
+}
+
 int get_resample_source(enum resample_idx id)
 {
 	struct audioresample *p_resample;
@@ -210,7 +225,8 @@ static int resample_clk_set(struct audioresample *p_resample, int output_sr)
 
 	clk_name = (char *)__clk_get_name(p_resample->pll);
 	if (!strcmp(clk_name, "hifi_pll") || !strcmp(clk_name, "t5_hifi_pll")) {
-		if (aml_return_chip_id() != CLK_NOTIFY_CHIP_ID) {
+		if ((aml_return_chip_id() != CLK_NOTIFY_CHIP_ID)  &&
+			(aml_return_chip_id() != CLK_NOTIFY_CHIP_ID_T3X)) {
 			pr_info("%s:set hifi pll\n", __func__);
 			if (p_resample->syssrc_clk_rate)
 				clk_set_rate(p_resample->pll,
@@ -714,6 +730,16 @@ static struct resample_chipinfo tm2_revb_resample_a_chipinfo = {
 	.watchdog  = true,
 };
 
+static struct resample_chipinfo sc2_resample_a_chipinfo = {
+	.num        = 2,
+	.id         = RESAMPLE_A,
+	.dividor_fn = true,
+	.resample_version = SM1_RESAMPLE,
+	.chnum_sync = true,
+	.watchdog  = true,
+	.need_reset = true,
+};
+
 static struct resample_chipinfo tm2_revb_resample_b_chipinfo = {
 	.num        = 2,
 	.id         = RESAMPLE_B,
@@ -829,7 +855,10 @@ static const struct of_device_id resample_device_id[] = {
 		.compatible = "amlogic, t5-resample-b",
 		.data = &t5_resample_b_chipinfo,
 	},
-
+	{
+		.compatible = "amlogic, sc2-resample-a",
+		.data = &sc2_resample_a_chipinfo,
+	},
 	{}
 };
 MODULE_DEVICE_TABLE(of, resample_device_id);
@@ -939,7 +968,7 @@ static int resample_platform_probe(struct platform_device *pdev)
 	unsigned int resample_module;
 	int ret = 0;
 
-	pr_info("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	p_resample = kzalloc(sizeof(*p_resample), GFP_KERNEL);
 	if (!p_resample) {
@@ -1032,7 +1061,8 @@ static int resample_platform_probe(struct platform_device *pdev)
 		ret = PTR_ERR(p_resample->clk);
 		goto err;
 	}
-	if ((!IS_ERR(p_resample->pll)) && (aml_return_chip_id() == CLK_NOTIFY_CHIP_ID)) {
+	if ((!IS_ERR(p_resample->pll)) && ((aml_return_chip_id() == CLK_NOTIFY_CHIP_ID) ||
+		(aml_return_chip_id() == CLK_NOTIFY_CHIP_ID_T3X))) {
 		if (p_resample->id == RESAMPLE_B) {
 			p_resample->clk_nb.notifier_call = aml_resample_clock_notifier;
 			ret = clk_notifier_register(p_resample->pll, &p_resample->clk_nb);
@@ -1091,7 +1121,8 @@ static void resample_platform_shutdown(struct platform_device *pdev)
 	struct audioresample *p_resample = dev_get_drvdata(&pdev->dev);
 	int ret = 0;
 
-	if (!IS_ERR(p_resample->pll) && (aml_return_chip_id() == CLK_NOTIFY_CHIP_ID)) {
+	if (!IS_ERR(p_resample->pll) && ((aml_return_chip_id() == CLK_NOTIFY_CHIP_ID) ||
+		(aml_return_chip_id() == CLK_NOTIFY_CHIP_ID_T3X))) {
 		if (p_resample->id == RESAMPLE_B) {
 			ret = clk_notifier_unregister(p_resample->pll, &p_resample->clk_nb);
 			if (ret)

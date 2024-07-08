@@ -16,6 +16,7 @@
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/input/meson_ir.h>
 #include <dt-bindings/mailbox/s5-mbox.h>
+#include <dt-bindings/iio/adc/amlogic-saradc.h>
 #include "meson-ir-map.dtsi"
 #include "meson-valhall.dtsi"
 //#include <dt-bindings/memory/meson-p1-sid-map.h>
@@ -68,7 +69,7 @@
 			voltage-tolerance = <0>;
 			clock-latency = <50000>;
 			capacity-dmips-mhz = <512>;
-			dynamic-power-coefficient = <1024>;
+			dynamic-power-coefficient = <341>;
 			cpu-supply = <&vddcpua>;
 			cpu_supply_external_used;
 			dsu-opp-table = <1200000 879000 1500000 939000>;
@@ -101,7 +102,7 @@
 			voltage-tolerance = <0>;
 			clock-latency = <50000>;
 			capacity-dmips-mhz = <512>;
-			dynamic-power-coefficient = <1024>;
+			dynamic-power-coefficient = <341>;
 			cpu-supply = <&vddcpua>;
 			cpu_supply_external_used;
 			dsu-opp-table = <1200000 879000 1500000 939000>;
@@ -134,7 +135,7 @@
 			voltage-tolerance = <0>;
 			clock-latency = <50000>;
 			capacity-dmips-mhz = <512>;
-			dynamic-power-coefficient = <1024>;
+			dynamic-power-coefficient = <341>;
 			cpu-supply = <&vddcpua>;
 			cpu_supply_external_used;
 			dsu-opp-table = <1200000 879000 1500000 939000>;
@@ -167,7 +168,7 @@
 			voltage-tolerance = <0>;
 			clock-latency = <50000>;
 			capacity-dmips-mhz = <512>;
-			dynamic-power-coefficient = <1024>;
+			dynamic-power-coefficient = <341>;
 			cpu-supply = <&vddcpua>;
 			cpu_supply_external_used;
 			dsu-opp-table = <1200000 879000 1500000 939000>;
@@ -331,6 +332,15 @@
 		compatible = "linaro,optee-tz";
 		method = "smc";
 	};
+
+	provisionkey {
+		compatible = "amlogic, provisionkey";
+		status = "okay";
+		key-permit-default = "write";
+		//new key not need add dts if started with KEY_PROVISION_
+		KEY_PROVISION_XXX { };
+		//test_my_added_keyname { };
+	};//End provisionkey
 
 	cma_shrinker: cma_shrinker {
 		compatible = "amlogic, cma-shrinker";
@@ -1046,12 +1056,6 @@
 				#reset-cells = <1>;
 			};
 
-			cpu_version {
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				status = "disable";
-				reg=<0x0 0x10220 0x0 0x140>;
-			};
-
 			gbl_timer_core: global-timer@8e000 {
 				compatible = "amlogic,meson-glb-timer-core";
 				reg = <0x0 0x8e000 0x0 0x28>;
@@ -1641,7 +1645,7 @@
 			tx-fifo-depth = <2048>;
 			/*1:inphy; 2:exphy;*/
 			internal_phy = <2>;
-			cali_val = <0xC0000>;
+			cali_val = <0x80000>;
 			mboxes = <&mbox_fifo S5_REE2AO_ETH>;
 			status = "disabled";
 
@@ -2032,6 +2036,7 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-s5";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg = <0 0xfe036000 0 0x200
 		       0 0xfe034000 0 0x200
 		       0 0xfe032000 0 0x200
@@ -2052,6 +2057,9 @@
 		pinctrl-names="hdmitx_hpd", "hdmitx_ddc";
 		pinctrl-0=<&hdmitx_hpd>;
 		pinctrl-1=<&hdmitx_ddc>;
+		hdmitx-gpios-hpd = <&gpio GPIOH_2 0>;
+		hdmitx-gpios-scl = <&gpio GPIOH_1 0>;
+		hdmitx-gpios-sda = <&gpio GPIOH_0 0>;
 		interrupts = <0 80 4
 			0 115 1>;
 		interrupt-names = "hdmitx_hpd", "vrr_vsync";
@@ -2265,9 +2273,9 @@
 				"vpu_clk0",
 				"vpu_clk1",
 				"vpu_clk";
-		clk_level = <7>;
-		/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-		/* 4: 333.3M    5: 400.0M    6: 500.0M    7: 666.7M */
+		clk_level = <8>;
+		/* 0: 24M       1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+		/* 5: 333.3M    6: 400.0M    7: 500.0M    8: 666.7M */
 	};
 
 	meson_uvm{
@@ -2301,6 +2309,8 @@
 		compatible = "amlogic, dsc-s5";
 		status = "okay";
 		reg = <0x0 0xfe0be000 0x0 0x80>;
+		resets = <&reset RESET_DSC_ENC>;
+		reset-names = "dsc_enc_reset";
 	};
 
 	vclk_serve: vclk_serve {
@@ -2313,6 +2323,12 @@
 	vout_mux: vout_mux {
 		compatible = "amlogic, vout_mux-s5";
 		status = "okay";
+		assigned-clocks = <&clkc CLKID_VIN_MEAS_SEL>,
+				<&clkc CLKID_VIN_MEAS>;
+		assigned-clock-parents = <&clkc CLKID_FCLK_DIV5>,
+				<0>; /* Do Nothing */
+		assigned-clock-rates = <0>, /* Do Nothing */
+				<50000000>;
 		clocks = <&clkc CLKID_FCLK_DIV5>, <&clkc CLKID_VIN_MEAS>;
 		clock-names = "fclk_div5", "vdin_meas_clk";
 	};
@@ -3061,6 +3077,7 @@
 		compatible = "amlogic,aml_mkl";
 		reg = <0x0 0xfe440200 0x0 0xf0>;
 		kl_type = <1>;
+		kl_vid_type = <1>;
 		kl_offset = <0x80 0x88 0x8c 0x90>;
 		status = "okay";
 	};

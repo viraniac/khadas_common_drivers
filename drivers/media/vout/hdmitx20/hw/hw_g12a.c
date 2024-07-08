@@ -7,6 +7,7 @@
 #include <linux/pinctrl/devinfo.h>
 #include "common.h"
 #include "mach_reg.h"
+#include "../../hdmitx_common/hdmitx_compliance.h"
 
 /*
  * NAME		PAD		PINMUX		GPIO
@@ -89,7 +90,7 @@ static bool set_hpll_hclk_v1(unsigned int m, unsigned int frac_val)
 	hd_write_reg(P_HHI_HDMI_PLL_CNTL1, frac_val);
 	hd_write_reg(P_HHI_HDMI_PLL_CNTL2, 0x00000000);
 
-	if (frac_val == 0x8148) {
+	if (frac_val == 0x8168) {
 		if ((para->vic == HDMI_96_3840x2160p50_16x9 ||
 		     para->vic == HDMI_97_3840x2160p60_16x9 ||
 		     para->vic == HDMI_106_3840x2160p50_64x27 ||
@@ -103,7 +104,7 @@ static bool set_hpll_hclk_v1(unsigned int m, unsigned int frac_val)
 		}
 	} else {
 		if (hdev->tx_hw.chip_data->chip_type == MESON_CPU_ID_SM1 &&
-		    hdmitx_find_vendor_6g(hdev) &&
+		    hdmitx_find_vendor_6g(hdev->tx_comm.EDID_buf) &&
 		    (para->vic == HDMI_96_3840x2160p50_16x9 ||
 		    para->vic == HDMI_97_3840x2160p60_16x9 ||
 		    para->vic == HDMI_106_3840x2160p50_64x27 ||
@@ -210,7 +211,7 @@ void set_g12a_hpll_clk_out(unsigned int frac_rate, unsigned int clk)
 			set_hpll_hclk_dongle_5940m();
 			break;
 		}
-		if (set_hpll_hclk_v1(0xf7, frac_rate ? 0x8148 : 0x10000))
+		if (set_hpll_hclk_v1(0xf7, frac_rate ? 0x8168 : 0x10000))
 			break;
 		if (set_hpll_hclk_v2(0x7b, 0x18000))
 			break;
@@ -466,9 +467,21 @@ void set_g12a_hpll_clk_out(unsigned int frac_rate, unsigned int clk)
 		WAIT_FOR_PLL_LOCKED(P_HHI_HDMI_PLL_CNTL0);
 		HDMITX_INFO("HPLL: 0x%x\n", hd_read_reg(P_HHI_HDMI_PLL_CNTL0));
 		break;
-	case 4032000:
-		hd_write_reg(P_HHI_HDMI_PLL_CNTL0, 0x3b0004a8);
-		hd_write_reg(P_HHI_HDMI_PLL_CNTL1, 0x00000000);
+	case 4115866:
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL0, 0x3b0004ab);
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL1, 0x0000fd22);
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL2, 0x00000000);
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL3, 0x0a691c00);
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL4, 0x33771290);
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL5, 0x39270000);
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL6, 0x50540000);
+		hd_set_reg_bits(P_HHI_HDMI_PLL_CNTL0, 0x0, 29, 1);
+		WAIT_FOR_PLL_LOCKED(P_HHI_HDMI_PLL_CNTL0);
+		HDMITX_INFO("HPLL: 0x%x\n", hd_read_reg(P_HHI_HDMI_PLL_CNTL0));
+		break;
+	case 4028000:
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL0, 0x3b0004a7);
+		hd_write_reg(P_HHI_HDMI_PLL_CNTL1, 0x0001aa80);
 		hd_write_reg(P_HHI_HDMI_PLL_CNTL2, 0x00000000);
 		hd_write_reg(P_HHI_HDMI_PLL_CNTL3, 0x0a691c00);
 		hd_write_reg(P_HHI_HDMI_PLL_CNTL4, 0x33771290);

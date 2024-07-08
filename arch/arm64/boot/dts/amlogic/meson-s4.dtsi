@@ -234,6 +234,15 @@
 		method = "smc";
 	};
 
+	provisionkey {
+		compatible = "amlogic, provisionkey";
+		status = "okay";
+		key-permit-default = "write";
+		//new key not need add dts if started with KEY_PROVISION_
+		KEY_PROVISION_XXX { };
+		//test_my_added_keyname { };
+	};//End provisionkey
+
 	cma_shrinker: cma_shrinker {
 		compatible = "amlogic, cma-shrinker";
 		status = "okay";
@@ -1093,11 +1102,6 @@
 				reg = <0x0 0x2000 0x0 0x98>;
 				#reset-cells = <1>;
 			};
-
-			cpu_version {
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				reg=<0x0 0x10220 0x0 0x4>;
-			};
 		};
 
 		usb2_phy_v2: usb2phy@fe03a000 {
@@ -1544,9 +1548,46 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-s4";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg = <0 0xfe036000 0 0x400>;
 		reg_base = <0xfe037000>;
 		interrupts = <0 62 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+	cvbsout {
+		compatible = "amlogic, cvbsout-s4";
+		status = "okay";
+
+		/* clk path */
+		/* 0:vid_pll vid2_clk */
+		/* 1:gp0_pll vid2_clk */
+		/* 2:vid_pll vid1_clk */
+		/* 3:gp0_pll vid1_clk */
+		clk_path = <0>;
+
+		/* performance: reg_address, reg_value */
+		/* s4 */
+		performance_pal = <0x1bf0  0x9 /* default Matrx625 CTCC value*/
+			0x1b12  0x80c0
+			0x1b05  0xf7
+			0x1b56  0x333
+			0x1c59  0xf25c
+			0xffff  0x0>; /* ending flag */
+		performance = <0x1bf0  0x9 /* ccitt033 SVA value */
+			0x1b12  0x8040
+			0x1b05  0xfd
+			0x1b56  0x333
+			0x1c59  0xf654
+			0xffff  0x0>; /* ending flag */
+		performance_ntsc = <0x1bf0  0x9
+			0x1b12  0x8020
+			0x1b03  0x0
+			0x1b04  0x0
+			0x1b05  0x0
+			0x1b06  0x0
+			0x1b56  0x333
+			0x1c59  0xf850
+			0xffff  0x0>; /* ending flag */
 	};
 
 	amhdmitx: amhdmitx{
@@ -1781,9 +1822,9 @@
 				"vpu_clk0",
 				"vpu_clk1",
 				"vpu_clk";
-		clk_level = <7>;
-		/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-		/* 4: 333.3M    5: 400.0M    6: 500.0M    7: 666.7M */
+		clk_level = <8>;
+		/* 0: 24M       1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+		/* 5: 333.3M    6: 400.0M    7: 500.0M    8: 666.7M */
 	};
 
 	rdma {
@@ -2201,6 +2242,7 @@
 		compatible = "amlogic,aml_mkl";
 		reg = <0x0 0xfe440200 0x0 0xf0>;
 		kl_type = <1>;
+		kl_vid_type = <0>;
 		kl_offset = <0x80 0x88 0x8c 0x90>;
 		status = "okay";
 	};

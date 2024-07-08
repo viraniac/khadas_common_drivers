@@ -280,8 +280,9 @@ static int vad_transfer_data_to_algorithm(struct vad *p_vad,
 static int vad_engine_check(struct vad *p_vad, bool init)
 {
 	unsigned char *hwbuf;
-	int bytes, read_bytes;
+	int bytes = 0, read_bytes = 0;
 	int start, end, size, last_addr, curr_addr;
+	int last_cur_addr = 0;
 	int chnum, bitdepth, rate, bytes_per_sample;
 	int frame_count = VAD_READ_FRAME_COUNT;
 	unsigned int timeout_cnt = 0;
@@ -351,6 +352,9 @@ static int vad_engine_check(struct vad *p_vad, bool init)
 			curr_addr = toddr_vad_get_status2(p_vad->tddr);
 		else
 			curr_addr = aml_toddr_get_position(p_vad->tddr);
+		if (last_cur_addr == curr_addr)
+			continue;
+		last_cur_addr = curr_addr;
 		if (curr_addr < start || curr_addr > end ||
 			last_addr < start || last_addr > end) {
 			pr_info("%s line:%d, start:%x,end:%x, addr:%x, curr_addr=%x\n",
@@ -867,11 +871,13 @@ void vad_enable(bool enable)
 		int gain_index = 0;
 		int osr = 0;
 
-		if (pdm)
+		if (pdm) {
 			gain_index = pdm->pdm_gain_index;
-		osr = pdm_get_ors(0, p_vad->wakeup_sample_rate);
-		/*only used pdm 0*/
-		aml_pdm_filter_ctrl(gain_index, osr, 1, 0);
+			osr = pdm_get_ors(0, p_vad->wakeup_sample_rate);
+			/*only used pdm 0*/
+			aml_pdm_filter_ctrl(gain_index, osr, pdm->lpf_filter_mode,
+					pdm->hpf_filter_mode, 0);
+		}
 		p_vad->tddr->fmt.rate = p_vad->wakeup_sample_rate;
 		pr_info("%s, gain_index = %d, osr = %d, vad_sample_rate = %d\n",
 			__func__, gain_index, osr, p_vad->tddr->fmt.rate);

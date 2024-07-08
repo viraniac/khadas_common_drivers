@@ -1,4 +1,4 @@
-From cd3f8df10d48d44dd5333f46202aaf70aca9203d Mon Sep 17 00:00:00 2001
+From 009a05bdb9ada3d1a4ab804e70aeb5c109350e63 Mon Sep 17 00:00:00 2001
 From: Jianxiong Pan <jianxiong.pan@amlogic.com>
 Date: Tue, 20 Jun 2023 19:32:11 +0800
 Subject: [PATCH] mm: add memory optimization. [1/1]
@@ -17,16 +17,66 @@ local.
 Change-Id: I28b07555f88ce0c395edd384d7664217f6ddc329
 Signed-off-by: Jianxiong Pan <jianxiong.pan@amlogic.com>
 ---
+ drivers/base/core.c            |  2 ++
+ drivers/of/base.c              |  5 ++++-
  include/linux/android_kabi.h   |  5 ++++-
  include/linux/android_vendor.h | 10 ++++++++++
  include/linux/printk.h         |  4 ++++
  include/linux/scs.h            |  4 ++++
  init/init_task.c               |  2 ++
- kernel/Makefile                |  2 ++
+ kernel/Makefile                | 10 ++++++++++
  kernel/fork.c                  |  2 ++
+ kernel/module.c                |  6 ++++++
+ kernel/printk/printk.c         |  5 +++++
+ kernel/scs.c                   | 17 +++++++++++++++++
  mm/slab_common.c               |  4 ++++
- 8 files changed, 32 insertions(+), 1 deletion(-)
+ scripts/link-vmlinux.sh        |  4 +++-
+ 14 files changed, 77 insertions(+), 3 deletions(-)
 
+diff --git a/drivers/base/core.c b/drivers/base/core.c
+index 741d7c3bcba5..de133a6c7820 100644
+--- a/drivers/base/core.c
++++ b/drivers/base/core.c
+@@ -3105,8 +3105,10 @@ static int device_add_class_symlinks(struct device *dev)
+ 
+ 	if (of_node) {
+ 		error = sysfs_create_link(&dev->kobj, of_node_kobj(of_node), "of_node");
++#ifndef CONFIG_AMLOGIC_DTB_NODE_OPT
+ 		if (error)
+ 			dev_warn(dev, "Error %d creating of_node link\n",error);
++#endif
+ 		/* An error here doesn't warrant bringing down the device */
+ 	}
+ 
+diff --git a/drivers/of/base.c b/drivers/of/base.c
+index 54719f8156ed..95e8c18a4a24 100644
+--- a/drivers/of/base.c
++++ b/drivers/of/base.c
+@@ -166,8 +166,9 @@ void __of_phandle_cache_inv_entry(phandle handle)
+ 
+ void __init of_core_init(void)
+ {
++#ifndef CONFIG_AMLOGIC_DTB_NODE_OPT
+ 	struct device_node *np;
+-
++#endif
+ 
+ 	/* Create the kset, and register existing nodes */
+ 	mutex_lock(&of_mutex);
+@@ -177,11 +178,13 @@ void __init of_core_init(void)
+ 		pr_err("failed to register existing nodes\n");
+ 		return;
+ 	}
++#ifndef CONFIG_AMLOGIC_DTB_NODE_OPT
+ 	for_each_of_allnodes(np) {
+ 		__of_attach_node_sysfs(np);
+ 		if (np->phandle && !phandle_cache[of_phandle_cache_hash(np->phandle)])
+ 			phandle_cache[of_phandle_cache_hash(np->phandle)] = np;
+ 	}
++#endif
+ 	mutex_unlock(&of_mutex);
+ 
+ 	/* Symlink in /proc as required by userspace ABI */
 diff --git a/include/linux/android_kabi.h b/include/linux/android_kabi.h
 index f6dd7f00b386..ee6b29e8d796 100644
 --- a/include/linux/android_kabi.h
@@ -91,7 +141,7 @@ index 9497f6b98339..83e8cfd192e8 100644
  #define pr_fmt(fmt) fmt
  #endif
 diff --git a/include/linux/scs.h b/include/linux/scs.h
-index 4ab5bdc898cf..db157506346d 100644
+index 4ab5bdc898cf..3bd8f1c3019c 100644
 --- a/include/linux/scs.h
 +++ b/include/linux/scs.h
 @@ -16,7 +16,11 @@
@@ -99,7 +149,7 @@ index 4ab5bdc898cf..db157506346d 100644
  
  #define SCS_ORDER		0
 +#ifdef CONFIG_AMLOGIC_MEMORY_OPT
-+#define SCS_SIZE		SZ_1K
++#define SCS_SIZE		(SZ_2K)
 +#else
  #define SCS_SIZE		(PAGE_SIZE << SCS_ORDER)
 +#endif
@@ -124,7 +174,7 @@ index 559eff84a620..dfe427268949 100644
  EXPORT_SYMBOL(init_task);
  
 diff --git a/kernel/Makefile b/kernel/Makefile
-index ce5fc348b16a..27790124a651 100644
+index 2e0dac3da346..7669ad1dc1c0 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
 @@ -81,7 +81,9 @@ obj-$(CONFIG_UTS_NS) += utsname.o
@@ -137,11 +187,28 @@ index ce5fc348b16a..27790124a651 100644
  obj-$(CONFIG_SMP) += stop_machine.o
  obj-$(CONFIG_KPROBES_SANITY_TEST) += test_kprobes.o
  obj-$(CONFIG_AUDIT) += audit.o auditfilter.o
+@@ -146,8 +148,16 @@ $(obj)/config_data.gz: $(obj)/config_data FORCE
+ 
+ filechk_cat = cat $<
+ 
++ifdef CONFIG_AMLOGIC_CONFIG_OPT
++$(obj)/cfg_less.txt: $(KCONFIG_CONFIG) FORCE
++	$(shell sed '/#/d' $(KCONFIG_CONFIG) > $(src)/cfg_less.txt)
++
++$(obj)/config_data: $(obj)/cfg_less.txt FORCE
++	$(call filechk,cat)
++else
+ $(obj)/config_data: $(KCONFIG_CONFIG) FORCE
+ 	$(call filechk,cat)
++endif
+ 
+ $(obj)/kheaders.o: $(obj)/kheaders_data.tar.xz
+ 
 diff --git a/kernel/fork.c b/kernel/fork.c
-index abc1fd6c19c4..936f8162c4e4 100644
+index d8b26077824c..993e24f06f1d 100644
 --- a/kernel/fork.c
 +++ b/kernel/fork.c
-@@ -1019,9 +1019,11 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
+@@ -1045,9 +1045,11 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
  #ifdef CONFIG_MEMCG
  	tsk->active_memcg = NULL;
  #endif
@@ -153,11 +220,117 @@ index abc1fd6c19c4..936f8162c4e4 100644
  #endif
  	trace_android_vh_dup_task_struct(tsk, orig);
  	return tsk;
+diff --git a/kernel/module.c b/kernel/module.c
+index f99e733f451a..2995dd5e4bd9 100644
+--- a/kernel/module.c
++++ b/kernel/module.c
+@@ -2743,15 +2743,21 @@ static bool is_core_symbol(const Elf_Sym *src, const Elf_Shdr *sechdrs,
+ 	    || !src->st_name)
+ 		return false;
+ 
++#ifndef CONFIG_AMLOGIC_KALLSYM_OPT
+ #ifdef CONFIG_KALLSYMS_ALL
+ 	if (src->st_shndx == pcpundx)
+ 		return true;
++#endif
+ #endif
+ 
+ 	sec = sechdrs + src->st_shndx;
+ 	if (!(sec->sh_flags & SHF_ALLOC)
++#ifdef CONFIG_AMLOGIC_KALLSYM_OPT
++	    || !(sec->sh_flags & SHF_EXECINSTR)
++#else
+ #ifndef CONFIG_KALLSYMS_ALL
+ 	    || !(sec->sh_flags & SHF_EXECINSTR)
++#endif
+ #endif
+ 	    || (sec->sh_entsize & INIT_OFFSET_MASK))
+ 		return false;
+diff --git a/kernel/printk/printk.c b/kernel/printk/printk.c
+index 41b7b07afcf5..443561532c76 100644
+--- a/kernel/printk/printk.c
++++ b/kernel/printk/printk.c
+@@ -421,8 +421,13 @@ static u32 log_buf_len = __LOG_BUF_LEN;
+ #if CONFIG_LOG_BUF_SHIFT <= PRB_AVGBITS
+ #error CONFIG_LOG_BUF_SHIFT value too small.
+ #endif
++#ifdef CONFIG_AMLOGIC_PRINTK_OPT
++_DEFINE_PRINTKRB(printk_rb_static, CONFIG_LOG_BUF_SHIFT - PRB_AVGBITS - 2,
++		 PRB_AVGBITS, &__log_buf[0]);
++#else
+ _DEFINE_PRINTKRB(printk_rb_static, CONFIG_LOG_BUF_SHIFT - PRB_AVGBITS,
+ 		 PRB_AVGBITS, &__log_buf[0]);
++#endif
+ 
+ static struct printk_ringbuffer printk_rb_dynamic;
+ 
+diff --git a/kernel/scs.c b/kernel/scs.c
+index d7809affe740..aa4135c3c43e 100644
+--- a/kernel/scs.c
++++ b/kernel/scs.c
+@@ -11,6 +11,9 @@
+ #include <linux/scs.h>
+ #include <linux/vmalloc.h>
+ #include <linux/vmstat.h>
++#ifdef CONFIG_AMLOGIC_MEMORY_OPT
++#include <linux/slab.h>
++#endif
+ 
+ #ifdef CONFIG_DYNAMIC_SCS
+ DEFINE_STATIC_KEY_FALSE(dynamic_scs_enabled);
+@@ -36,16 +39,22 @@ static void *__scs_alloc(int node)
+ 	for (i = 0; i < NR_CACHED_SCS; i++) {
+ 		s = this_cpu_xchg(scs_cache[i], NULL);
+ 		if (s) {
++		#ifndef CONFIG_AMLOGIC_MEMORY_OPT
+ 			s = kasan_unpoison_vmalloc(s, SCS_SIZE,
+ 						   KASAN_VMALLOC_PROT_NORMAL);
++		#endif
+ 			memset(s, 0, SCS_SIZE);
+ 			goto out;
+ 		}
+ 	}
+ 
++#ifdef CONFIG_AMLOGIC_MEMORY_OPT
++	s = kmalloc(SCS_SIZE, GFP_SCS);
++#else
+ 	s = __vmalloc_node_range(SCS_SIZE, 1, VMALLOC_START, VMALLOC_END,
+ 				    GFP_SCS, PAGE_KERNEL, 0, node,
+ 				    __builtin_return_address(0));
++#endif
+ 
+ out:
+ 	return kasan_reset_tag(s);
+@@ -86,8 +95,12 @@ void scs_free(void *s)
+ 		if (this_cpu_cmpxchg(scs_cache[i], 0, s) == NULL)
+ 			return;
+ 
++#ifdef CONFIG_AMLOGIC_MEMORY_OPT
++	kfree(s);
++#else
+ 	kasan_unpoison_vmalloc(s, SCS_SIZE, KASAN_VMALLOC_PROT_NORMAL);
+ 	vfree_atomic(s);
++#endif
+ }
+ 
+ static int scs_cleanup(unsigned int cpu)
+@@ -96,7 +109,11 @@ static int scs_cleanup(unsigned int cpu)
+ 	void **cache = per_cpu_ptr(scs_cache, cpu);
+ 
+ 	for (i = 0; i < NR_CACHED_SCS; i++) {
++	#ifdef CONFIG_AMLOGIC_MEMORY_OPT
++		kfree(cache[i]);
++	#else
+ 		vfree(cache[i]);
++	#endif
+ 		cache[i] = NULL;
+ 	}
+ 
 diff --git a/mm/slab_common.c b/mm/slab_common.c
-index 8cf667b3065e..1a05fbf0e817 100644
+index 9fad291c443c..2d727cb4c5c3 100644
 --- a/mm/slab_common.c
 +++ b/mm/slab_common.c
-@@ -64,7 +64,11 @@ static DECLARE_WORK(slab_caches_to_rcu_destroy_work,
+@@ -67,7 +67,11 @@ static DECLARE_WORK(slab_caches_to_rcu_destroy_work,
  /*
   * Merge control. If this is set then no merging of slab caches will occur.
   */
@@ -169,6 +342,21 @@ index 8cf667b3065e..1a05fbf0e817 100644
  
  static int __init setup_slab_nomerge(char *str)
  {
+diff --git a/scripts/link-vmlinux.sh b/scripts/link-vmlinux.sh
+index 57ef6accbb40..6f2ba76b3612 100755
+--- a/scripts/link-vmlinux.sh
++++ b/scripts/link-vmlinux.sh
+@@ -245,7 +245,9 @@ kallsyms()
+ {
+ 	local kallsymopt;
+ 
+-	if [ -n "${CONFIG_KALLSYMS_ALL}" ]; then
++	# we don't need all symbols, this can help to save about 1MB memory
++	#if [ -n "${CONFIG_KALLSYMS_ALL}" ]; then
++	if [[ -n "${CONFIG_KALLSYMS_ALL}" && ! -n "${CONFIG_AMLOGIC_KALLSYM_OPT}" ]]; then
+ 		kallsymopt="${kallsymopt} --all-symbols"
+ 	fi
+ 
 -- 
-2.25.1
+2.42.0
 

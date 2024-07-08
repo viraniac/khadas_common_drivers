@@ -41,12 +41,25 @@ static int mua_debug_level = MUA_ERROR;
 module_param(mua_debug_level, int, 0644);
 static int realloc_size;
 module_param(realloc_size, int, 0644);
+static int force_skip_fill;
+module_param_named(force_skip_fill, force_skip_fill, int, 0664);
 
 #define MUA_PRINTK(level, fmt, arg...) \
 	do {	\
 		if (mua_debug_level & (level))     \
 			pr_info("MUA: " fmt, ## arg); \
 	} while (0)
+
+#define UVM_DECODER_NODE_NUM 32
+#define UVM_DECODER_PARA_NUM 6 // (sizeof(struct uvm_decoder_para) / sizeof(uint32_t))
+static int uvm_decoder_para_num = UVM_DECODER_PARA_NUM * UVM_DECODER_NODE_NUM;
+/*
+ * The values in the array represent width and height respectively.
+ * If the first value is 0, the second value represents size.
+ * If both values are 0, it means that the node has been released.
+ */
+static int decoder_para[UVM_DECODER_PARA_NUM * UVM_DECODER_NODE_NUM] = { 0 };
+module_param_array(decoder_para, uint, &uvm_decoder_para_num, 0644);
 
 static bool mua_is_valid_dmabuf(int fd)
 {
@@ -170,6 +183,11 @@ static int mua_process_gpu_realloc(struct dma_buf *dmabuf,
 		skip_fill_buf = true;
 	}
 
+	if (force_skip_fill) {
+		MUA_PRINTK(MUA_DBG, "gpu_realloc: force skip fill buffer.\n");
+		skip_fill_buf = true;
+	}
+
 	if (buffer->idmabuf[1])
 		pre_size = buffer->idmabuf[1]->size;
 	else
@@ -178,6 +196,7 @@ static int mua_process_gpu_realloc(struct dma_buf *dmabuf,
 		new_size = buffer->origin_size;
 	else
 		new_size = mua_calc_real_dmabuf_size(buffer);
+	new_size = PAGE_ALIGN(new_size);
 	MUA_PRINTK(MUA_INFO, "buffer(0x%p)->size:%zu realloc new_size=%zu, pre_size = %zu\n",
 			buffer, buffer->size, new_size, pre_size);
 	if (new_size < pre_size)
@@ -622,6 +641,7 @@ static int mua_attach(int fd, int type, char *buf)
 	info.acquire_fence = NULL;
 
 	switch (type) {
+#ifndef CONFIG_AMLOGIC_TXHD2_REMOVE
 	case PROCESS_NN:
 		ret = attach_nn_hook_mod_info(fd, buf, &info);
 		if (ret)
@@ -642,7 +662,7 @@ static int mua_attach(int fd, int type, char *buf)
 		if (ret)
 			return -EINVAL;
 		break;
-
+#endif
 	default:
 		MUA_PRINTK(MUA_DBG, "mod_type is not valid.\n");
 	}
@@ -703,6 +723,44 @@ static int mua_detach(int fd, int type)
 
 	dma_buf_put(dmabuf);
 
+	return ret;
+}
+
+static int mua_set_decoder_para(struct uvm_decoder_para *para)
+{
+	int ret = 0;
+	struct uvm_decoder_para *node;
+
+	if (para->slot_id >= UVM_DECODER_NODE_NUM) {
+		MUA_PRINTK(MUA_ERROR, "%s: slot_id = %u is invalid!\n", __func__, para->slot_id);
+		return -EINVAL;
+	}
+
+	node = (struct uvm_decoder_para *)decoder_para + para->slot_id;
+	*node = *para;
+
+	MUA_PRINTK(MUA_INFO, "%s: set for slot %u. w*h(%u*%u) align_w*h(%u*%u) size(%u)\n",
+		__func__, para->slot_id, para->width, para->height,
+		para->w_align, para->h_align, para->size);
+	return ret;
+}
+
+static int mua_get_decoder_para(struct uvm_decoder_para *para)
+{
+	int ret = 0;
+	struct uvm_decoder_para *node;
+
+	if (para->slot_id >= UVM_DECODER_NODE_NUM) {
+		MUA_PRINTK(MUA_ERROR, "%s: slot_id = %u is invalid!\n", __func__, para->slot_id);
+		return -EINVAL;
+	}
+
+	node = (struct uvm_decoder_para *)decoder_para + para->slot_id;
+	*para = *node;
+
+	MUA_PRINTK(MUA_INFO, "%s: get for slot %u. w*h(%u*%u) align_w*h(%u*%u) size(%u)\n",
+		__func__, para->slot_id, para->width, para->height,
+		para->w_align, para->h_align, para->size);
 	return ret;
 }
 
@@ -894,6 +952,14 @@ static long mua_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		data.fd_info.type = videotype;
 		data.fd_info.timestamp = timestamp;
 
+		if (copy_to_user((void __user *)arg, &data, _IOC_SIZE(cmd)))
+			return -EFAULT;
+		break;
+	case UVM_IOC_SET_DECODER_PARA:
+		ret = mua_set_decoder_para(&data.decode_para);
+		break;
+	case UVM_IOC_GET_DECODER_PARA:
+		ret = mua_get_decoder_para(&data.decode_para);
 		if (copy_to_user((void __user *)arg, &data, _IOC_SIZE(cmd)))
 			return -EFAULT;
 		break;

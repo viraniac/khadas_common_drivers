@@ -58,7 +58,9 @@ struct meson_msr {
 static spinlock_t measure_lock;
 static struct meson_msr *glo_meson_msr;
 static unsigned int measure_num;
+struct meson_msr_id *msr_table;
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
 static struct meson_msr_id clk_msr_m8[] __initdata = {
 	CLK_MSR_ID(0, "ring_osc_out_ee0"),
@@ -509,8 +511,10 @@ static struct meson_msr_id clk_msr_s1a[] __initdata = {
 	CLK_MSR_ID(185, "top_osc_ring[1](SVT35)"),
 	CLK_MSR_ID(186, "top_osc_ring[2](HVT35)"),
 };
+#endif
 
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct meson_msr_id clk_msr_g12a[] __initdata = {
 	CLK_MSR_ID(0, "ring_osc_out_ee_0"),
 	CLK_MSR_ID(1, "ring_osc_out_ee_1"),
@@ -2080,6 +2084,7 @@ static struct meson_msr_id clk_msr_c2[] __initdata = {
 	CLK_MSR_ID(94, "osc_ring_cpu0"),
 	CLK_MSR_ID(95, "osc_ring_cpu0"),
 };
+#endif
 
 static struct meson_msr_id clk_msr_c3[] __initdata = {
 	CLK_MSR_ID(0,	"cts_sys_clk"),
@@ -2220,6 +2225,7 @@ static struct meson_msr_id clk_msr_c3[] __initdata = {
 	CLK_MSR_ID(203,	"rng_ring_osc_clk_1[3]"),
 };
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct meson_msr_id clk_msr_a1[] __initdata = {
 	CLK_MSR_ID(0, "tdmout_b_sclk"),
 	CLK_MSR_ID(1, "tdmout_a_sclk"),
@@ -3246,6 +3252,243 @@ static struct meson_msr_id clk_msr_c1[] __initdata = {
 	CLK_MSR_ID(91, "mod_eth_phy_ref_clk"),
 	CLK_MSR_ID(92, "ddr_dpll_pt_clk"),
 };
+
+static struct meson_msr_id clk_msr_s7[] __initdata = {
+	CLK_MSR_ID(0, "cts_sys_clk"),
+	CLK_MSR_ID(1, "cts_axi_clk"),
+	CLK_MSR_ID(2, "cts_rtc_clk"),
+	CLK_MSR_ID(5, "cts_mali_clk"),
+	CLK_MSR_ID(6, "sys_cpu_clk_div16"),
+	CLK_MSR_ID(8, "cts_cecb_clk"),
+	CLK_MSR_ID(10, "fclk_div5"),
+	CLK_MSR_ID(11, "p21_usb2_ckout"),
+	CLK_MSR_ID(12, "p20_usb2_ckout"),
+	CLK_MSR_ID(13, "eth_mpll_test"),
+	CLK_MSR_ID(15, "mpll_clk_50m"),
+	CLK_MSR_ID(18, "gp1_pll_clk"),
+	CLK_MSR_ID(19, "hifi0_pll_clk"),
+	CLK_MSR_ID(20, "gp0_pll_clk"),
+	CLK_MSR_ID(21, "hifi1_pll_clk"),
+	CLK_MSR_ID(22, "eth_mppll_50m_ckout"),
+	CLK_MSR_ID(23, "sys_pll_div16"),
+	CLK_MSR_ID(24, "ddr_dpll_pt_clk"),
+	CLK_MSR_ID(25, "mod_Tsin_A_CLK_IN"),
+	CLK_MSR_ID(32, "cts_eth_clk125Mhz"),
+	CLK_MSR_ID(33, "cts_eth_clk_rmii"),
+	CLK_MSR_ID(34, "co_clkin_to_mac"),
+	CLK_MSR_ID(36, "co_rx_clk"),
+	CLK_MSR_ID(37, "co_tx_clk"),
+	CLK_MSR_ID(38, "eth_phy_rxclk"),
+	CLK_MSR_ID(39, "eth_phy_plltxclk"),
+	CLK_MSR_ID(40, "ephy_test_clk"),
+	CLK_MSR_ID(49, "hdmi_vx1_pix_clk"),
+	CLK_MSR_ID(50, "vid_pll_div_clk_out"),
+	CLK_MSR_ID(51, "cts_enci_clk"),
+	CLK_MSR_ID(52, "cts_encp_clk"),
+	CLK_MSR_ID(53, "cts_encl_clk"),
+	CLK_MSR_ID(54, "cts_vdac_clk"),
+	CLK_MSR_ID(55, "cts_cdac_clk_c"),
+	CLK_MSR_ID(57, "lcd_an_clk_ph2"),
+	CLK_MSR_ID(58, "lcd_an_clk_ph3"),
+	CLK_MSR_ID(59, "cts_hdmi_tx_pixel_clk"),
+	CLK_MSR_ID(60, "cts_vdin_meas_clk"),
+	CLK_MSR_ID(61, "cts_vpu_clk"),
+	CLK_MSR_ID(62, "cts_vpu_clkb"),
+	CLK_MSR_ID(63, "cts_vpu_clkb_tmp"),
+	CLK_MSR_ID(64, "cts_vpu_clkc"),
+	CLK_MSR_ID(65, "cts_vid_lock_clk"),
+	CLK_MSR_ID(66, "cts_vapbclk"),
+	CLK_MSR_ID(67, "cts_ge2d_clk"),
+	CLK_MSR_ID(76, "hdmitx_tmds_clk"),
+	CLK_MSR_ID(77, "cts_hdmitx_sys_clk"),
+	CLK_MSR_ID(78, "cts_hdmitx_fe_clk"),
+	CLK_MSR_ID(80, "cts_hdmitx_prif_clk"),
+	CLK_MSR_ID(81, "cts_hdmitx_200m_clk"),
+	CLK_MSR_ID(82, "cts_hdmitx_aud_clk"),
+	CLK_MSR_ID(84, "audio_tohdmitx_mclk"),
+	CLK_MSR_ID(85, "audio_tohdmitx_bclk"),
+	CLK_MSR_ID(86, "audio_tohdmitx_lrclk"),
+	CLK_MSR_ID(87, "audio_tohdmitx_spdif_clk"),
+	CLK_MSR_ID(88, "htx_aes_clk"),
+	CLK_MSR_ID(93, "cts_vdec_clk"),
+	CLK_MSR_ID(99, "cts_hevcf_clk"),
+	CLK_MSR_ID(106, "deskew_pll_clk_div32_out"),
+	CLK_MSR_ID(110, "cts_sc_clk(smartcard)"),
+	CLK_MSR_ID(111, "cts_sar_adc_clk"),
+	CLK_MSR_ID(113, "cts_sd_emmc_C_clk(nand)"),
+	CLK_MSR_ID(114, "cts_sd_emmc_B_clk"),
+	CLK_MSR_ID(115, "cts_sd_emmc_A_clk"),
+	CLK_MSR_ID(116, "gpio_msr_clk"),
+	CLK_MSR_ID(118, "cts_spicc_0_clk"),
+	CLK_MSR_ID(121, "cts_ts_clk(temp sensor)"),
+	CLK_MSR_ID(130, "o_vad_clk"),
+	CLK_MSR_ID(131, "au_dac_clk_x128"),
+	CLK_MSR_ID(132, "audio_locker_in_clk"),
+	CLK_MSR_ID(133, "audio_locker_out_clk"),
+	CLK_MSR_ID(134, "audio_tdmout_c_sclk"),
+	CLK_MSR_ID(135, "audio_tdmout_b_sclk"),
+	CLK_MSR_ID(136, "audio_tdmout_a_sclk"),
+	CLK_MSR_ID(137, "audio_tdmin_lb_sclk"),
+	CLK_MSR_ID(138, "audio_tdmin_c_sclk"),
+	CLK_MSR_ID(139, "audio_tdmin_b_sclk"),
+	CLK_MSR_ID(140, "audio_tdmin_a_sclk"),
+	CLK_MSR_ID(141, "audio_resamplea_clk"),
+	CLK_MSR_ID(142, "audio_pdm_sysclk"),
+	CLK_MSR_ID(143, "audio_spdifout_b_mst_clk"),
+	CLK_MSR_ID(144, "audio_spdifout_mst_clk"),
+	CLK_MSR_ID(145, "audio_spdifin_mst_clk"),
+	CLK_MSR_ID(147, "audio_resampleb_clk"),
+	CLK_MSR_ID(160, "pwm_j_clk"),
+	CLK_MSR_ID(161, "pwm_i_clk"),
+	CLK_MSR_ID(162, "pwm_h_clk"),
+	CLK_MSR_ID(163, "pwm_g_clk"),
+	CLK_MSR_ID(164, "pwm_f_clk"),
+	CLK_MSR_ID(165, "pwm_e_clk"),
+	CLK_MSR_ID(166, "pwm_d_clk"),
+	CLK_MSR_ID(167, "pwm_c_clk"),
+	CLK_MSR_ID(168, "pwm_b_clk"),
+	CLK_MSR_ID(169, "pwm_a_clk"),
+	CLK_MSR_ID(176, "rng_ring_clk[0]"),
+	CLK_MSR_ID(177, "rng_ring_clk[1]"),
+	CLK_MSR_ID(178, "rng_ring_clk[2]"),
+	CLK_MSR_ID(179, "rng_ring_clk[3]"),
+	CLK_MSR_ID(180, "osc_ring_clk[0](a55 core0 14_slvt)"),
+	CLK_MSR_ID(181, "osc_ring_clk[1](a55 core1 14_slvt)"),
+	CLK_MSR_ID(182, "osc_ring_clk[2](a55 core2 14_slvt)"),
+	CLK_MSR_ID(183, "osc_ring_clk[3](a55 core3 14_slvt)"),
+	CLK_MSR_ID(184, "osc_ring_clk[4](a55_pwr[0] 16_slvt)"),
+	CLK_MSR_ID(185, "osc_ring_clk[5](a55_pwr[1] 14_lvt)"),
+	CLK_MSR_ID(186, "osc_ring_clk[6](a55_pwr[2] 14_rvt)"),
+	CLK_MSR_ID(187, "osc_ring_clk[7](mali[1] 14_lvt)"),
+	CLK_MSR_ID(188, "osc_ring_clk[8](mali[1] 14_rvt)"),
+	CLK_MSR_ID(189, "osc_ring_clk[9](dos[0] 16_lvt)"),
+	CLK_MSR_ID(190, "osc_ring_clk[10](dos[1] 14_rvt)"),
+	CLK_MSR_ID(191, "osc_ring_clk[11](ddr[0] 9t_14_lvt)"),
+	CLK_MSR_ID(192, "osc_ring_clk[12](top[0] 16_rvt)"),
+};
+
+static struct meson_msr_id clk_msr_s7d[] __initdata = {
+	CLK_MSR_ID(0, "cts_sys_clk"),
+	CLK_MSR_ID(1, "cts_axi_clk"),
+	CLK_MSR_ID(2, "cts_rtc_clk"),
+	CLK_MSR_ID(4, "cts_mali_stack_clk"),
+	CLK_MSR_ID(5, "cts_mali_clk"),
+	CLK_MSR_ID(6, "sys_cpu_clk_div16"),
+	CLK_MSR_ID(8, "cts_cecb_clk"),
+	CLK_MSR_ID(9, "cts_mali_ACLKM"),
+	CLK_MSR_ID(10, "fclk_div5"),
+	CLK_MSR_ID(11, "p21_usb2_ckout"),
+	CLK_MSR_ID(12, "p20_usb2_ckout"),
+	CLK_MSR_ID(13, "eth_mpll_test"),
+	CLK_MSR_ID(15, "mpll_clk_50m"),
+	CLK_MSR_ID(18, "gp1_pll_clk"),
+	CLK_MSR_ID(19, "hifi0_pll_clk"),
+	CLK_MSR_ID(20, "gp0_pll_clk"),
+	CLK_MSR_ID(21, "hifi1_pll_clk"),
+	CLK_MSR_ID(22, "eth_mppll_50m_ckout"),
+	CLK_MSR_ID(23, "sys_pll_div16"),
+	CLK_MSR_ID(24, "ddr_dpll_pt_clk"),
+	CLK_MSR_ID(25, "mod_Tsin_A_CLK_IN"),
+	CLK_MSR_ID(26, "mod_Tsin_B_CLK_IN"),
+	CLK_MSR_ID(31, "earcrx_pll_clk_out"),
+	CLK_MSR_ID(32, "cts_eth_clk125Mhz"),
+	CLK_MSR_ID(33, "cts_eth_clk_rmii"),
+	CLK_MSR_ID(34, "co_clkin_to_mac"),
+	CLK_MSR_ID(36, "co_rx_clk"),
+	CLK_MSR_ID(37, "co_tx_clk"),
+	CLK_MSR_ID(38, "eth_phy_rxclk"),
+	CLK_MSR_ID(39, "eth_phy_plltxclk"),
+	CLK_MSR_ID(40, "ephy_test_clk"),
+	CLK_MSR_ID(49, "hdmi_vx1_pix_clk"),
+	CLK_MSR_ID(50, "vid_pll_div_clk_out"),
+	CLK_MSR_ID(51, "cts_enci_clk"),
+	CLK_MSR_ID(52, "cts_encp_clk"),
+	CLK_MSR_ID(53, "cts_encl_clk"),
+	CLK_MSR_ID(54, "cts_vdac_clk"),
+	CLK_MSR_ID(55, "cts_cdac_clk_c"),
+	CLK_MSR_ID(57, "lcd_an_clk_ph2"),
+	CLK_MSR_ID(58, "lcd_an_clk_ph3"),
+	CLK_MSR_ID(59, "cts_hdmi_tx_pixel_clk"),
+	CLK_MSR_ID(60, "cts_vdin_meas_clk"),
+	CLK_MSR_ID(61, "cts_vpu_clk"),
+	CLK_MSR_ID(62, "cts_vpu_clkb"),
+	CLK_MSR_ID(63, "cts_vpu_clkb_tmp"),
+	CLK_MSR_ID(64, "cts_vpu_clkc"),
+	CLK_MSR_ID(65, "cts_vid_lock_clk"),
+	CLK_MSR_ID(66, "cts_vapbclk"),
+	CLK_MSR_ID(67, "cts_ge2d_clk"),
+	CLK_MSR_ID(76, "hdmitx_tmds_clk"),
+	CLK_MSR_ID(77, "cts_hdmitx_sys_clk"),
+	CLK_MSR_ID(78, "cts_hdmitx_fe_clk"),
+	CLK_MSR_ID(80, "cts_hdmitx_prif_clk"),
+	CLK_MSR_ID(81, "cts_hdmitx_200m_clk"),
+	CLK_MSR_ID(82, "cts_hdmitx_aud_clk"),
+	CLK_MSR_ID(84, "audio_tohdmitx_mclk"),
+	CLK_MSR_ID(85, "audio_tohdmitx_bclk"),
+	CLK_MSR_ID(86, "audio_tohdmitx_lrclk"),
+	CLK_MSR_ID(87, "audio_tohdmitx_spdif_clk"),
+	CLK_MSR_ID(88, "htx_aes_clk"),
+	CLK_MSR_ID(89, "cts_amfc_clk"),
+	CLK_MSR_ID(93, "cts_vdec_clk"),
+	CLK_MSR_ID(97, "cts_hcodec_clk"),
+	CLK_MSR_ID(99, "cts_hevcf_clk"),
+	CLK_MSR_ID(106, "deskew_pll_clk_div32_out"),
+	CLK_MSR_ID(110, "cts_sc_clk(smartcard)"),
+	CLK_MSR_ID(111, "cts_aux_adc_clk"),
+	CLK_MSR_ID(113, "cts_sd_emmc_C_clk(nand)"),
+	CLK_MSR_ID(114, "cts_sd_emmc_B_clk"),
+	CLK_MSR_ID(115, "cts_sd_emmc_A_clk"),
+	CLK_MSR_ID(116, "gpio_msr_clk"),
+	CLK_MSR_ID(117, "aux_clk_o"),
+	CLK_MSR_ID(118, "cts_spicc_0_clk"),
+	CLK_MSR_ID(121, "cts_ts_clk(temp sensor)"),
+	CLK_MSR_ID(130, "o_vad_clk"),
+	CLK_MSR_ID(131, "au_dac_clk_x128"),
+	CLK_MSR_ID(132, "audio_locker_in_clk"),
+	CLK_MSR_ID(133, "audio_locker_out_clk"),
+	CLK_MSR_ID(134, "audio_tdmout_c_sclk"),
+	CLK_MSR_ID(135, "audio_tdmout_b_sclk"),
+	CLK_MSR_ID(136, "audio_tdmout_a_sclk"),
+	CLK_MSR_ID(137, "audio_tdmin_lb_sclk"),
+	CLK_MSR_ID(138, "audio_tdmin_c_sclk"),
+	CLK_MSR_ID(139, "audio_tdmin_b_sclk"),
+	CLK_MSR_ID(140, "audio_tdmin_a_sclk"),
+	CLK_MSR_ID(141, "audio_resamplea_clk"),
+	CLK_MSR_ID(142, "audio_pdm_sysclk"),
+	CLK_MSR_ID(143, "audio_spdifout_b_mst_clk"),
+	CLK_MSR_ID(144, "audio_spdifout_mst_clk"),
+	CLK_MSR_ID(145, "audio_spdifin_mst_clk"),
+	CLK_MSR_ID(146, "mod_audio_pdm_dclk_o"),
+	CLK_MSR_ID(147, "audio_resampleb_clk"),
+	CLK_MSR_ID(160, "pwm_j_clk"),
+	CLK_MSR_ID(161, "pwm_i_clk"),
+	CLK_MSR_ID(162, "pwm_h_clk"),
+	CLK_MSR_ID(163, "pwm_g_clk"),
+	CLK_MSR_ID(164, "pwm_f_clk"),
+	CLK_MSR_ID(165, "pwm_e_clk"),
+	CLK_MSR_ID(166, "pwm_d_clk"),
+	CLK_MSR_ID(167, "pwm_c_clk"),
+	CLK_MSR_ID(168, "pwm_b_clk"),
+	CLK_MSR_ID(169, "pwm_a_clk"),
+	CLK_MSR_ID(176, "rng_ring_clk[0]"),
+	CLK_MSR_ID(177, "rng_ring_clk[1]"),
+	CLK_MSR_ID(178, "rng_ring_clk[2]"),
+	CLK_MSR_ID(179, "rng_ring_clk[3]"),
+	CLK_MSR_ID(180, "osc_ring_clk[0](a55 core0 14_slvt)"),
+	CLK_MSR_ID(181, "osc_ring_clk[1](a55 core1 14_slvt)"),
+	CLK_MSR_ID(182, "osc_ring_clk[2](a55 core1 14_slvt)"),
+	CLK_MSR_ID(183, "osc_ring_clk[3](a55 core1 14_slvt)"),
+	CLK_MSR_ID(184, "osc_ring_clk[4](a55_pwr[0] 16_slvt)"),
+	CLK_MSR_ID(185, "osc_ring_clk[5](a55_pwr[1] 14_lvt)"),
+	CLK_MSR_ID(186, "osc_ring_clk[6](a55_pwr[2] 14_rvt)"),
+	CLK_MSR_ID(187, "osc_ring_clk[7](mali[1] 14_lvt)"),
+	CLK_MSR_ID(188, "osc_ring_clk[8](mali[1] 14_rvt)"),
+	CLK_MSR_ID(189, "osc_ring_clk[9](dos[0] 16_lvt)"),
+	CLK_MSR_ID(190, "osc_ring_clk[10](dos[1] 14_rvt)"),
+	CLK_MSR_ID(191, "osc_ring_clk[11](ddr[0] 9t_14_lvt)"),
+	CLK_MSR_ID(192, "osc_ring_clk[12](top[0] 16_rvt)"),
+};
+#endif
 #endif
 
 static int meson_measure_id(struct meson_msr_id *clk_msr_id,
@@ -3371,7 +3614,6 @@ DEFINE_SHOW_ATTRIBUTE(clk_msr);
 
 static int clk_msr_summary_show(struct seq_file *s, void *data)
 {
-	struct meson_msr_id *msr_table = s->private;
 	unsigned int precision = 0;
 	int val, i;
 
@@ -3396,6 +3638,19 @@ static int clk_msr_summary_show(struct seq_file *s, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(clk_msr_summary);
 
+static char *clk_msr_class_devnode(struct device *dev, umode_t *mode)
+{
+	if (mode)
+		*mode = 0444;
+
+	return NULL;
+}
+
+static struct class clk_msr_class = {
+	.name = "measure_summary",
+	.devnode = clk_msr_class_devnode,
+};
+
 static struct regmap_config meson_clk_msr_regmap_config = {
 	.reg_bits = 32,
 	.val_bits = 32,
@@ -3408,7 +3663,7 @@ static int meson_msr_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct dentry *root, *clks;
 	void __iomem *base;
-	int i;
+	int i, ret;
 	struct meson_msr_id *table;
 	struct meson_msr_data *msr_data;
 
@@ -3431,6 +3686,7 @@ static int meson_msr_probe(struct platform_device *pdev)
 	memcpy(table, priv->data->msr_table,
 	       priv->data->table_size * sizeof(*table));
 	priv->data->msr_table = table;
+	msr_table = table;
 	measure_num = priv->data->table_size;
 
 	/* alloc space for measure data, store the platform data */
@@ -3461,6 +3717,13 @@ static int meson_msr_probe(struct platform_device *pdev)
 
 	debugfs_create_file("measure_summary", 0444, root,
 			    priv->data->msr_table, &clk_msr_summary_fops);
+	ret = class_register(&clk_msr_class);
+		if (ret) {
+			dev_err(&pdev->dev, "Creat clk_msr class failed\n");
+			return ret;
+		}
+	ret = register_chrdev(0, "measure_summary", &clk_msr_summary_fops);
+	device_create(&clk_msr_class, &pdev->dev, MKDEV(ret, 0), NULL, "measure_summary");
 
 	glo_meson_msr = priv;
 
@@ -3477,6 +3740,7 @@ static int meson_msr_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
 static struct meson_msr_data meson_gx_data __initdata = {
 	.msr_table = (struct meson_msr_id *)&clk_msr_gx,
@@ -3525,8 +3789,10 @@ static struct meson_msr_data meson_s1a_data __initdata = {
 	.reg1_offset = 0x4,
 	.reg2_offset = 0x8,
 };
+#endif
 
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct meson_msr_data meson_g12a_data __initdata = {
 	.msr_table = (struct meson_msr_id *)&clk_msr_g12a,
 	.table_size = ARRAY_SIZE(clk_msr_g12a),
@@ -3616,6 +3882,7 @@ static struct meson_msr_data meson_c2_data __initdata = {
 	.reg1_offset = 0x4,
 	.reg2_offset = 0x8,
 };
+#endif
 
 static struct meson_msr_data meson_c3_data __initdata = {
 	.msr_table = (struct meson_msr_id *)&clk_msr_c3,
@@ -3626,6 +3893,7 @@ static struct meson_msr_data meson_c3_data __initdata = {
 	.reg2_offset = 0x8,
 };
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct meson_msr_data meson_a1_data __initdata = {
 	.msr_table = (struct meson_msr_id *)&clk_msr_a1,
 	.table_size = ARRAY_SIZE(clk_msr_a1),
@@ -3687,9 +3955,29 @@ static struct meson_msr_data meson_c1_data __initdata = {
 	.reg1_offset = 0x4,
 	.reg2_offset = 0x8,
 };
+
+static struct meson_msr_data meson_s7_data __initdata = {
+	.msr_table = (struct meson_msr_id *)&clk_msr_s7,
+	.table_size = ARRAY_SIZE(clk_msr_s7),
+	.duty_offset = (0x6 * 4),
+	.reg0_offset = 0x0,
+	.reg1_offset = 0x4,
+	.reg2_offset = 0x8,
+};
+
+static struct meson_msr_data meson_s7d_data __initdata = {
+	.msr_table = (struct meson_msr_id *)&clk_msr_s7d,
+	.table_size = ARRAY_SIZE(clk_msr_s7d),
+	.duty_offset = (0x6 * 4),
+	.reg0_offset = 0x0,
+	.reg1_offset = 0x4,
+	.reg2_offset = 0x8,
+};
+#endif
 #endif
 
 static const struct of_device_id meson_msr_match_table[] = {
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
 	{
 		.compatible = "amlogic,meson-gx-clk-measure",
@@ -3718,7 +4006,9 @@ static const struct of_device_id meson_msr_match_table[] = {
 		.compatible = "amlogic,meson-s1a-clk-measure",
 		.data = &meson_s1a_data,
 	},
+#endif
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 	{
 		.compatible = "amlogic,meson-g12a-clk-measure",
 		.data = &meson_g12a_data,
@@ -3767,11 +4057,12 @@ static const struct of_device_id meson_msr_match_table[] = {
 		.compatible = "amlogic,c2-clk-measure",
 		.data = &meson_c2_data,
 	},
-
+#endif
 	{
 		.compatible = "amlogic,c3-clk-measure",
 		.data = &meson_c3_data,
 	},
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 	{
 		.compatible = "amlogic,a1-clk-measure",
 		.data = &meson_a1_data,
@@ -3800,6 +4091,15 @@ static const struct of_device_id meson_msr_match_table[] = {
 		.compatible = "amlogic,meson-c1-clk-measure",
 		.data = &meson_c1_data,
 	},
+	{
+		.compatible = "amlogic,meson-s7-clk-measure",
+		.data = &meson_s7_data,
+	},
+	{
+		.compatible = "amlogic,meson-s7d-clk-measure",
+		.data = &meson_s7d_data,
+	},
+#endif
 #endif
 	{ /* sentinel */ }
 };

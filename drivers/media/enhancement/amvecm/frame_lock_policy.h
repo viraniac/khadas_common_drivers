@@ -11,7 +11,7 @@
 #define VRRLOCK_SUPPORT_HDMI BIT(0)
 #define VRRLOCK_SUPPORT_CVBS BIT(1)
 
-#define FRAME_LOCK_POLICY_VERSION  "20220315-01"
+#define FRAME_LOCK_POLICY_VERSION  "20231218 fix vrr line delay issue"
 
 #define FRAMELOCK_INVALID    0
 #define FRAMELOCK_VLOCK      1
@@ -37,6 +37,29 @@ struct vrr_sig_sts {
 	u32 vrr_frame_in_fps_max;
 	u32 vrr_frame_out_fps_min;
 	u32 vrr_frame_out_fps_max;
+};
+
+struct freesync_vsif_s {
+	u8 pkttype;
+	u8 vsif_version;
+	u8 length;
+	u8 checksum;
+	u8 amd_ieee_oui[3];
+	u8 reserved_pb4_pb5[2];
+	u8 freesync_ctr1;
+	u8 freesync_min_fps;
+	u8 freesync_max_fps;
+	u8 freesync_ctr2;
+	u8 reserved_pb10_pb27[18];
+};
+
+struct freesync_vtem_s {
+	u8 vrr_en;
+	u8 m_const;
+	u8 fva_factor_m1;
+	u8 base_vfront;
+	u8 rb;
+	u16 base_framerate;
 };
 
 extern unsigned int probe_ok;

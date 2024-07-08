@@ -455,6 +455,11 @@ int meson_atomic_commit(struct drm_device *dev,
 	struct meson_drm *priv = dev->dev_private;
 	bool is_parallel = check_parallel_commit(state, &dest_crtc);
 
+	DRM_DEBUG("wait for no shutdown start!\n");
+	wait_event_interruptible(priv->wq_shut_ctrl,
+			!READ_ONCE(priv->shutdown_on));
+	DRM_DEBUG("wait for no shutdown end!\n");
+
 	if (is_parallel && dest_crtc)
 		crtc_index = dest_crtc->index;
 	else
@@ -462,6 +467,7 @@ int meson_atomic_commit(struct drm_device *dev,
 
 	if (state->async_update) {
 		meson_commit_reenter_inc(priv, crtc_index, ASYNC_MODE);
+		priv->pan_async_commit_ran = true;
 		ret = drm_atomic_helper_prepare_planes(dev, state);
 		if (ret)
 			return ret;
@@ -553,6 +559,29 @@ err:
 		kfree(work_item);
 	drm_atomic_helper_cleanup_planes(dev, state);
 	return ret;
+}
+
+void meson_atomic_helper_commit_tail_rpm(struct drm_atomic_state *old_state)
+{
+	struct drm_device *dev = old_state->dev;
+	struct meson_drm *priv = dev->dev_private;
+
+	drm_atomic_helper_commit_modeset_disables(dev, old_state);
+
+	drm_atomic_helper_commit_modeset_enables(dev, old_state);
+
+	drm_atomic_helper_commit_planes(dev, old_state,
+					DRM_PLANE_COMMIT_ACTIVE_ONLY);
+
+	drm_atomic_helper_fake_vblank(old_state);
+
+	drm_atomic_helper_commit_hw_done(old_state);
+
+	if (!priv->disable_video_plane)
+		drm_atomic_helper_wait_for_vblanks(dev, old_state);
+	priv->disable_video_plane = 0;
+
+	drm_atomic_helper_cleanup_planes(dev, old_state);
 }
 
 void meson_atomic_helper_commit_tail(struct drm_atomic_state *old_state)

@@ -144,9 +144,9 @@
 					compatible = "arm,idle-state";
 					arm,psci-suspend-param = <0x0010000>;
 					local-timer-stop;
-					entry-latency-us = <4000>;
-					exit-latency-us = <5000>;
-					min-residency-us = <10000>;
+					entry-latency-us = <500>;
+					exit-latency-us = <1500>;
+					min-residency-us = <6000>;
 			};
 			SYSTEM_SLEEP_0: system-sleep-0 {
 					compatible = "arm,idle-state";
@@ -270,6 +270,15 @@
 		compatible = "linaro,optee-tz";
 		method = "smc";
 	};
+
+	provisionkey {
+		compatible = "amlogic, provisionkey";
+		status = "okay";
+		key-permit-default = "write";
+		//new key not need add dts if started with KEY_PROVISION_
+		KEY_PROVISION_XXX { };
+		//test_my_added_keyname { };
+	};//End provisionkey
 
 	cma_shrinker: cma_shrinker {
 		compatible = "amlogic, cma-shrinker";
@@ -866,6 +875,8 @@
 		      <0x0 0x0 0x0 0x800000>; /*host ddrfw region [offset size]*/
 		clocks = <&clkc CLKID_DSPA_CLK>;
 		clock-names = "dspa_clk";
+		pm-support = <1>;
+		pwrctrl-support = <1>;
 		power-domains = <&pwrdm PDID_SC2_DSP>;
 		mboxes = <&mbox_fifo SC2_REE2DSPA_DSP>;
 		clkfreq-khz = <800000>;
@@ -1130,12 +1141,6 @@
 				reg = <0x0 0x2000 0x0 0x98>;
 				#reset-cells = <1>;
 			};
-
-			cpu_version {
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				reg=<0x0 0x10220 0x0 0x140>;
-				amlogic,has-chip-id;
-			};
 		};
 
 		usb2_phy_v2: usb2phy@fe03a000 {
@@ -1180,7 +1185,7 @@
 		};
 
 		dwc3: dwc3@fde00000 {
-				compatible = "snps,dwc3";
+				compatible = "snps,dwc3-meson";
 				status = "disable";
 				reg = <0x0 0xfde00000 0x0 0x100000>;
 				interrupts = <GIC_SPI 130 IRQ_TYPE_LEVEL_HIGH>;
@@ -1188,6 +1193,7 @@
 				maximum-speed = "super-speed";
 				snps,dis_u2_susphy_quirk;
 				snps,quirk-frame-length-adjustment;
+				snps,usb2-lpm-disable;
 				usb-phy = <&usb2_phy_v2>, <&usb3_phy_v2>;
 				clocks = <&clkc CLKID_USB>;
 				clock-names = "usb_general";
@@ -1623,9 +1629,43 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-sc2";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg = <0 0xfe036000 0 0x100>;
 		reg_base = <0xfe036000>;
 		interrupts = <0 62 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+	cvbsout {
+		compatible = "amlogic, cvbsout-sc2";
+		status = "okay";
+
+		/* clk path */
+		/* 0:vid_pll vid2_clk */
+		/* 1:gp0_pll vid2_clk */
+		/* 2:vid_pll vid1_clk */
+		/* 3:gp0_pll vid1_clk */
+		clk_path = <0>;
+
+		/* performance: reg_address, reg_value */
+		/* sc2 */
+		performance_pal = <0x1bf0  0x3 /* default Matrx625 CTCC value */
+			0x1b12  0x8060
+			0x1b05  0xf9
+			0x1b56  0x333
+			0x1c59  0xf15e
+			0xffff  0x0>; /* ending flag */
+		performance = <0x1bf0  0x3 /* ccitt033 SVA value */
+			0x1b12  0x8080
+			0x1b05  0xfc
+			0x1b56  0x333
+			0x1c59  0xf458
+			0xffff  0x0>; /* ending flag */
+		performance_ntsc = <0x1bf0  0x3 /* Matrx525 TTC value */
+			0x1b12  0x8180
+			0x1b05  0xf0
+			0x1b56  0x333
+			0x1c59  0xed66
+			0xffff  0x0>; /* ending flag */
 	};
 
 	amhdmitx: amhdmitx{
@@ -1861,9 +1901,9 @@
 				"vpu_clk0",
 				"vpu_clk1",
 				"vpu_clk";
-		clk_level = <7>;
-		/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-		/* 4: 333.3M    5: 400.0M    6: 500.0M    7: 666.7M */
+		clk_level = <8>;
+		/* 0: 24M       1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+		/* 5: 333.3M    6: 400.0M    7: 500.0M    8: 666.7M */
 	};
 
 	rdma{
@@ -2341,6 +2381,7 @@
 		compatible = "amlogic,aml_mkl";
 		reg = <0x0 0xfe440200 0x0 0xf0>;
 		kl_type = <1>;
+		kl_vid_type = <0>;
 		kl_offset = <0x80 0x88 0x8c 0x90>;
 		status = "okay";
 	};

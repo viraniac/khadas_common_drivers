@@ -435,6 +435,7 @@ static void viuin_set_wr_bak_ctrl_s5(enum tvin_port_e port)
 
 static void viuin_set_wr_bak_ctrl_t3x(enum tvin_port_e port)
 {
+	bool fixed_din_mode = true;/* vpp or venc may have 1 or 2slice input */
 	const struct vinfo_s *vinfo = NULL;
 
 	vinfo = get_current_vinfo();
@@ -444,28 +445,6 @@ static void viuin_set_wr_bak_ctrl_t3x(enum tvin_port_e port)
 		pr_info("ppc:%d,w:%d,h:%d,dur:%d\n", vinfo->cur_enc_ppc,
 			vinfo->width, vinfo->height, vinfo->std_duration);
 		wr_viu(VPU_VIU2VDIN_HDN_CTRL, vinfo->width);
-	}
-
-	if (vinfo && vinfo->width * vinfo->height * vinfo->std_duration >
-		VDIN_LITE_CORE_MAX_PIXEL_CLOCK) { //need skip
-		/* din_mode,2ppc */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 30, 2);
-		/* vskip:1 */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 24, 1);
-		/* dout_mode:2 */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 2, 21, 2);
-		/* dn_ratio:1 */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 18, 2);
-	} else if (vinfo->cur_enc_ppc == 2) {
-		/* din_mode,2ppc */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 30, 2);
-		/* no dn_ratio and flt_mode */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 3, 21, 2);/* dout_mode 4ppc */
-	} else { //1 slice(not support 4 slices)
-		/* vpp 1 slice:din_mode,1ppc */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 0, 30, 2);
-		/* no dn_ratio and flt_mode */
-		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 3, 21, 2);/* dout_mode 4ppc */
 	}
 
 	switch (port) {
@@ -490,6 +469,7 @@ static void viuin_set_wr_bak_ctrl_t3x(enum tvin_port_e port)
 		wr_bits_viu(VIU_WR_BAK_CTRL, T3X_WRBACK_VPP_POST_OSD3, 0, 4);
 		break;
 	case TVIN_PORT_VIU1_WB0_VPP:
+		fixed_din_mode = false;
 		wr_bits_viu(VIU_WR_BAK_CTRL, T3X_WRBACK_VPP_POST_OUT, 0, 4);
 		break;
 	case TVIN_PORT_VIU1_WB0_POST_BLEND:
@@ -522,12 +502,35 @@ static void viuin_set_wr_bak_ctrl_t3x(enum tvin_port_e port)
 	case TVIN_PORT_VENC0:
 	case TVIN_PORT_VENC1:
 	case TVIN_PORT_VENC2:
+		fixed_din_mode = false;
 		break;
 	default:
 		pr_info("do not support prot = %#x\n", port);
 		wr_bits_viu(VIU_WR_BAK_CTRL, 9, 0, 4);
 		break;
 	}
+
+	if (vinfo && vinfo->width * vinfo->height * vinfo->std_duration >
+		VDIN_LITE_CORE_MAX_PIXEL_CLOCK) { //need skip
+		/* din_mode,2ppc */
+		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 30, 2);
+		/* vskip:1 */
+		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 24, 1);
+		/* dout_mode:2 */
+		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 2, 21, 2);
+		/* dn_ratio:1 */
+		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 18, 2);
+	} else if (!fixed_din_mode) {
+		if (vinfo->cur_enc_ppc == 2)
+			wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 30, 2);/* 2ppc */
+		else
+			wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 0, 30, 2);/* 1ppc */
+		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 3, 21, 2);/* 4ppc */
+	} else { //din_mode fixed 2 slice input
+		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 1, 30, 2);/* 2ppc */
+		wr_bits_viu(VPU_VIU2VDIN_HDN_CTRL, 3, 21, 2);/* 4ppc */
+	}
+
 }
 #endif
 
@@ -663,7 +666,8 @@ static void viuin_set_wr_bak_ctrl(enum tvin_port_e port)
 
 /*g12a/g12b and before: use viu_loop encl/encp*/
 /*tl1: use viu_loop vpp */
-static int viuin_open(struct tvin_frontend_s *fe, enum tvin_port_e port)
+static int viuin_open(struct tvin_frontend_s *fe, enum tvin_port_e port,
+	enum tvin_port_type_e port_type)
 {
 	struct viuin_s *devp = container_of(fe, struct viuin_s, frontend);
 	unsigned int viu_mux = 0;
@@ -728,12 +732,6 @@ static int viuin_open(struct tvin_frontend_s *fe, enum tvin_port_e port)
 	} else if (is_meson_t3x_cpu()) {
 		wr_viu(VPU_VIU2VDIN0_BUF_SIZE_T3X,
 			(devp->parm.v_active << 16) | (devp->parm.h_active << 0));
-		wr_viu(VPP_POST_HOLD_CTRL_T3X,	(1 << 31)    |
-						(1 << 30)    |
-						((devp->parm.h_active - 1) << 16) |
-						(4 << 8)     |
-						(1 << 4)     |
-						(2 << 0));
 	} else
 #endif
 	{
@@ -767,7 +765,7 @@ static int viuin_open(struct tvin_frontend_s *fe, enum tvin_port_e port)
 	return 0;
 }
 
-static void viuin_close(struct tvin_frontend_s *fe)
+static void viuin_close(struct tvin_frontend_s *fe, enum tvin_port_type_e port_type)
 {
 	struct viuin_s *devp = container_of(fe, struct viuin_s, frontend);
 
@@ -790,7 +788,8 @@ static void viuin_close(struct tvin_frontend_s *fe)
 		wr_viu(VPU_VIU2VDIN_HDN_CTRL, 0x0);
 }
 
-static void viuin_start(struct tvin_frontend_s *fe, enum tvin_sig_fmt_e fmt)
+static void viuin_start(struct tvin_frontend_s *fe, enum tvin_sig_fmt_e fmt,
+	enum tvin_port_type_e port_type)
 {
 	/* do something the same as start_amvdec_viu_in */
 	struct viuin_s *devp = container_of(fe, struct viuin_s, frontend);
@@ -804,7 +803,8 @@ static void viuin_start(struct tvin_frontend_s *fe, enum tvin_sig_fmt_e fmt)
 	devp->flag = AMVIUIN_DEC_START;
 }
 
-static void viuin_stop(struct tvin_frontend_s *fe, enum tvin_port_e port)
+static void viuin_stop(struct tvin_frontend_s *fe, enum tvin_port_e port,
+	enum tvin_port_type_e port_type)
 {
 	struct viuin_s *devp = container_of(fe, struct viuin_s, frontend);
 
@@ -821,7 +821,8 @@ static void viuin_stop(struct tvin_frontend_s *fe, enum tvin_port_e port)
 #endif
 }
 
-static int viuin_isr(struct tvin_frontend_s *fe, unsigned int hcnt64)
+static int viuin_isr(struct tvin_frontend_s *fe, unsigned int hcnt64,
+	enum tvin_port_type_e port_type)
 {
 	int curr_port;
 
@@ -853,7 +854,8 @@ static struct tvin_decoder_ops_s viu_dec_ops = {
 };
 
 static void viuin_sig_property(struct tvin_frontend_s *fe,
-			       struct tvin_sig_property_s *prop)
+			       struct tvin_sig_property_s *prop,
+			       enum tvin_port_type_e port_type)
 {
 	static const struct vinfo_s *vinfo;
 	struct viuin_s *devp = container_of(fe, struct viuin_s, frontend);
@@ -979,7 +981,7 @@ static void viuin_sig_property(struct tvin_frontend_s *fe,
 	prop->decimation_ratio = 0;
 }
 
-static bool viu_check_frame_skip(struct tvin_frontend_s *fe)
+static bool viu_check_frame_skip(struct tvin_frontend_s *fe, enum tvin_port_type_e port_type)
 {
 	struct viuin_s *devp = container_of(fe, struct viuin_s, frontend);
 

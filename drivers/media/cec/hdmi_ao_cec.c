@@ -143,18 +143,9 @@ static int cecb_pick_msg(unsigned char *msg, unsigned char *out_len)
 	/* clr CEC lock bit */
 	hdmirx_cec_write(DWC_CEC_LOCK, 0);
 	CEC_PRINT("%s", msg_log_buf);
-
-	#ifdef CEC_FREEZE_WAKE_UP
-	if (is_pm_s2idle_mode())
-		*out_len = len;
-	else
-	#endif
-	{
-		if (cec_message_op(msg, len))
-			*out_len = len;
-		else
-			*out_len = 0;
-	}
+	//driver handle some msg for special case
+	cec_message_op(msg, len);
+	*out_len = len;
 	pin_status = 1;
 	return 0;
 }
@@ -362,6 +353,7 @@ static irqreturn_t ceca_isr(int irq, void *dev_instance)
 /* --------end of AOCEC (CECA)-------- */
 static bool check_physical_addr_valid(int timeout)
 {
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 	while (timeout > 0) {
 		if (cec_dev->dev_type == CEC_TV_ADDR)
 			break;
@@ -377,6 +369,7 @@ static bool check_physical_addr_valid(int timeout)
 			break;
 		}
 	}
+#endif
 	if (timeout <= 0)
 		return false;
 	return true;
@@ -967,6 +960,8 @@ static ssize_t port_seq_store(struct class *cla,
 
 	CEC_ERR("port_seq:%x\n", seq);
 	cec_dev->port_seq = seq;
+	//tv product need to handle special tx
+	cec_spd_info_init();
 	return count;
 }
 
@@ -980,6 +975,7 @@ static ssize_t port_status_show(struct class *cla,
 				struct class_attribute *attr, char *buf)
 {
 	unsigned int tmp;
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 	unsigned int tx_hpd;
 
 	tx_hpd = get_hpd_state();
@@ -987,17 +983,21 @@ static ssize_t port_status_show(struct class *cla,
 		tmp = tx_hpd;
 		return sprintf(buf, "%x\n", tmp);
 	}
+#endif
 	tmp = hdmirx_rd_top(TOP_HPD_PWR5V);
 	CEC_INFO("TOP_HPD_PWR5V:%x\n", tmp);
 	tmp >>= 20;
 	tmp &= 0xf;
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 	tmp |= (tx_hpd << 16);
+#endif
 	return sprintf(buf, "%x\n", tmp);
 }
 
 static ssize_t pin_status_show(struct class *cla,
 			       struct class_attribute *attr, char *buf)
 {
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 	unsigned int tx_hpd;
 	char p;
 
@@ -1019,6 +1019,9 @@ static ssize_t pin_status_show(struct class *cla,
 	} else {
 		return sprintf(buf, "%s\n", pin_status ? "ok" : "fail");
 	}
+#else
+	return sprintf(buf, "%s\n", pin_status ? "ok" : "fail");
+#endif
 }
 
 static ssize_t physical_addr_show(struct class *cla,
@@ -1406,6 +1409,22 @@ static ssize_t dbg_store(struct class *cla, struct class_attribute *attr,
 			return count;
 		cec_dev->cec_log_en = addr;
 		CEC_ERR("cec_log_en: %d\n", cec_dev->cec_log_en);
+	}  else if (token && strncmp(token, "spd_init", 8) == 0) {
+		cec_spd_info_init();
+	}  else if (token && strncmp(token, "spd_add", 7) == 0) {
+		unsigned int handle_type;
+		unsigned int vendor_id;
+
+		token = strsep(&cur, "@");
+		if (!token || kstrtouint(token, 16, &handle_type) < 0)
+			return count;
+		token = strsep(&cur, "@");
+		if (!token || kstrtouint(token, 16, &vendor_id) < 0)
+			return count;
+		CEC_INFO("spd_add:%d 0x%x %s", handle_type, vendor_id, cur);
+		cec_add_spd_info(handle_type, vendor_id, cur);
+	}  else if (token && strncmp(token, "spd_dump", 8) == 0) {
+		cec_dump_spd_info();
 	} else {
 		if (token)
 			CEC_ERR("no cmd:%s, supported list:\n", token);
@@ -1636,6 +1655,7 @@ static long hdmitx_cec_ioctl(struct file *f,
 		 * judgement hpd, the hpd is written as 1 again in the plugin, so the phy addr will
 		 * report a wrong value. Therefore, after judgement hpd, and get the phy addr
 		 */
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 		if (cec_dev->dev_type != CEC_TV_ADDR) {
 			if (get_hpd_state() == 0) {
 				cec_dev->phy_addr = 0xffff;
@@ -1649,6 +1669,9 @@ static long hdmitx_cec_ioctl(struct file *f,
 		} else {
 			cec_dev->phy_addr = 0;
 		}
+#else
+		cec_dev->phy_addr = 0;
+#endif
 
 		/*don't use ioctrl cmd to update phy addr reg,it will be updated when plug in*/
 //		if (!phy_addr_test) {
@@ -1809,7 +1832,11 @@ static long hdmitx_cec_ioctl(struct file *f,
 			else
 				tmp = 0;
 		} else {
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 			tmp = get_hpd_state();
+#else
+			tmp = 0;
+#endif
 		}
 		/*CEC_ERR("port id:%d, sts:%d\n", a, tmp);*/
 		if (copy_to_user(argp, &tmp, _IOC_SIZE(cmd))) {
@@ -2200,7 +2227,6 @@ static const struct cec_platform_data_s cec_t7_data = {
 	.share_io = true,
 	.reg_tab_group = cec_reg_group_a1,
 };
-#endif
 
 static const struct cec_platform_data_s cec_s4_data = {
 	.chip_id = CEC_CHIP_S4,
@@ -2211,6 +2237,31 @@ static const struct cec_platform_data_s cec_s4_data = {
 	.ceca_ver = CECA_VER_1,
 	.cecb_ver = CECB_VER_3,
 	.share_io = true,
+	.reg_tab_group = cec_reg_group_a1,
+};
+
+static const struct cec_platform_data_s cec_s7_data = {
+	.chip_id = CEC_CHIP_S7,
+	.line_reg = 0xff,/*don't check*/
+	.line_bit = 0,
+	.ee_to_ao = 1,
+	.ceca_sts_reg = 0,
+	.ceca_ver = CECA_NONE,
+	.cecb_ver = CECB_VER_3,
+	.share_io = false,
+	.reg_tab_group = cec_reg_group_a1,
+};
+#endif
+
+static const struct cec_platform_data_s cec_s7d_data = {
+	.chip_id = CEC_CHIP_S7D,
+	.line_reg = 0xff,/*don't check*/
+	.line_bit = 0,
+	.ee_to_ao = 1,
+	.ceca_sts_reg = 0,
+	.ceca_ver = CECA_NONE,
+	.cecb_ver = CECB_VER_3,
+	.share_io = false,
 	.reg_tab_group = cec_reg_group_a1,
 };
 
@@ -2360,11 +2411,18 @@ static const struct of_device_id aml_cec_dt_match[] = {
 		.compatible = "amlogic, aocec-t7",
 		.data = &cec_t7_data,
 	},
-#endif
-
 	{
 		.compatible = "amlogic, aocec-s4",
 		.data = &cec_s4_data,
+	},
+	{
+		.compatible = "amlogic, aocec-s7",
+		.data = &cec_s7_data,
+	},
+#endif
+	{
+		.compatible = "amlogic, aocec-s7d",
+		.data = &cec_s7d_data,
 	},
 	{
 		.compatible = "amlogic, aocec-s1a",
@@ -2432,6 +2490,7 @@ static void cec_hdmi_plug_handler(struct work_struct *work)
 		/* struct ao_cec_dev, work_hdmitx_plug); */
 	unsigned int tmp = 0;
 	unsigned int phy_addr = 0xffff;
+	unsigned char port_id = 0;
 #if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 	tmp |= (get_hpd_state() << 4);
 #endif
@@ -2455,6 +2514,17 @@ static void cec_hdmi_plug_handler(struct work_struct *work)
 		}
 	} else {
 		cec_dev->phy_addr = 0;
+		char i;
+
+		for (i = 0; i < 4; i++) {
+			port_id = (cec_dev->port_seq >> i * 4) & 0xF;
+			if (!(tmp & (1 << i))) {
+				//plug out
+				delete_current_spd_info(port_id * 0x1000);
+			} else {
+				update_current_spd_5v(i, true);
+			}
+		}
 	}
 
 	cec_set_uevent(HDMI_PLUG_EVENT, tmp);
@@ -2468,6 +2538,18 @@ static void cec_rx_uevent_handler(struct work_struct *work)
 	cec_set_uevent(CEC_RX_MSG, 1);
 	/* clear notify */
 	cec_set_uevent(CEC_RX_MSG, 0);
+}
+
+static void cec_func_init(unsigned int cec_func_config)
+{
+	unsigned int cec_func = CEC_FUNC_CFG_ALL;
+
+	if (!(cec_func_config & CEC_FUNC_CFG_CEC_ON))
+		cec_func &= ~(CEC_FUNC_CFG_CEC_ON);
+	//default cfg enalbe all function
+//	if (!(cec_func_config & CEC_FUNC_CFG_AUTO_POWER_ON))
+//		cec_func &= ~(CEC_FUNC_CFG_AUTO_POWER_ON);
+	cec_config(cec_func, 1);
 }
 
 static int aml_cec_probe(struct platform_device *pdev)
@@ -2796,8 +2878,8 @@ static int aml_cec_probe(struct platform_device *pdev)
 	cec_set_clk(&pdev->dev);
 	/* irq set */
 	cec_irq_enable(false);
-	/* default enable all function*/
-	cec_config(CEC_FUNC_CFG_ALL, 1);
+	/* Init cec function from register*/
+	cec_func_init(cec_config(0, 0));
 	/* for init */
 	cec_pre_init();
 

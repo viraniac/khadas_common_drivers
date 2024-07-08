@@ -7,6 +7,7 @@
 #include <linux/mm.h>
 #include <linux/printk.h>
 #include <linux/amlogic/media/vout/hdmitx_common/hdmitx_common.h>
+#include <linux/amlogic/media/vout/hdmitx_common/hdmitx_edid.h>
 #include "hdmitx_log.h"
 
 const struct hdmi_timing *hdmitx_mode_match_timing_name(const char *name);
@@ -32,7 +33,7 @@ void hdmi_physical_size_to_vinfo(struct hdmitx_common *tx_comm)
 			info->screen_real_width = width;
 			info->screen_real_height = height;
 		}
-		HDMITX_INFO("update physical size: %d %d\n",
+		HDMITX_DEBUG("update physical size: %d %d\n",
 			info->screen_real_width, info->screen_real_height);
 	}
 }
@@ -63,10 +64,22 @@ void edidinfo_attach_to_vinfo(struct hdmitx_common *tx_comm)
 	struct vinfo_s *info = &tx_comm->hdmitx_vinfo;
 	struct hdmi_format_para *para = &tx_comm->fmt_para;
 	struct vout_device_s *vdev = tx_comm->vdev;
+	struct rx_cap *prxcap = &tx_comm->rxcap;
 
 	hdrinfo_to_vinfo(&info->hdr_info, tx_comm);
-	if (para->cd == COLORDEPTH_24B)
-		memset(&info->hdr_info, 0, sizeof(struct hdr_info));
+
+	/* if currently config_csc_en is true, and EDID
+	 * support 422, Need to switch small mode in output
+	 * hdr10/hlg/hdr10plus, Since hdmitx csc does not support
+	 * 420 conversion, the hdr capability of 420 is blocked.
+	 * Otherwise, the 8-bit output will shield the HDR capability.
+	 */
+	if (para->cd == COLORDEPTH_24B && !tx_comm->hdr_8bit_en) {
+		if (!tx_comm->config_csc_en || !is_support_y422(prxcap) ||
+				para->cs == HDMI_COLORSPACE_YUV420)
+			memset(&info->hdr_info, 0, sizeof(struct hdr_info));
+	}
+
 	rxlatency_to_vinfo(tx_comm);
 	vdev->dv_info = &tx_comm->rxcap.dv_info;
 	hdmi_physical_size_to_vinfo(tx_comm);
@@ -155,13 +168,31 @@ static int hdmitx_common_pre_enable_mode(struct hdmitx_common *tx_comm,
 		HDMITX_ERROR("Should run disable_mode before enable new mode.\n");
 
 	if (tx_comm->hpd_state == 0 || tx_comm->suspend_flag) {
-		HDMITX_ERROR("current hpd_state/suspend (%d,%d), exit %s\n",
+		HDMITX_ERROR("%s current hpd_state/suspend (%d,%d), exit\n",
 			__func__, tx_comm->hpd_state, tx_comm->suspend_flag);
+		hdmitx_tracer_write_event(tx_comm->tx_tracer, HDMITX_KMS_SKIP);
 		return -1;
 	}
 
 	/*TODO: keep for hw module to read formatpara, remove later.*/
 	memcpy(&tx_comm->fmt_para, para, sizeof(struct hdmi_format_para));
+
+	/*check if vic supported by rx*/
+	if (!hdmitx_edid_validate_mode(&tx_comm->rxcap, tx_comm->fmt_para.vic)) {
+		HDMITX_ERROR("edid invalid vic-%d return error\n", tx_comm->fmt_para.vic);
+		return -EINVAL;
+	}
+
+	if (hdmitx_common_validate_vic(tx_comm, tx_comm->fmt_para.vic)) {
+		HDMITX_ERROR("validate vic-%d return error\n", tx_comm->fmt_para.vic);
+		return -EINVAL;
+	}
+
+	if (hdmitx_common_validate_format_para(tx_comm, &tx_comm->fmt_para)) {
+		HDMITX_ERROR("format para check fail.\n");
+		return -EINVAL;
+	}
+
 	/* update fmt_attr: userspace still need this.*/
 	hdmitx_format_para_rebuild_fmtattr_str(&tx_comm->fmt_para, tx_comm->fmt_attr,
 					       sizeof(tx_comm->fmt_attr));
@@ -185,15 +216,17 @@ static int hdmitx_common_post_enable_mode(struct hdmitx_common *tx_comm,
 	if (tx_comm->ctrl_ops->post_enable_mode)
 		tx_comm->ctrl_ops->post_enable_mode(tx_comm, para);
 
-	if (tx_comm->cedst_policy) {
+	if (tx_comm->cedst_en) {
 		cancel_delayed_work(&tx_comm->work_cedst);
 		queue_delayed_work(tx_comm->cedst_wq, &tx_comm->work_cedst, 0);
 	}
-
+	/* attach vinfo, if hdr_cap and dv_cap change, the HDR/DV module will
+	 * call the packet sending function, need to set ready flag to 1 first
+	 */
+	tx_comm->ready = 1;
 	edidinfo_attach_to_vinfo(tx_comm);
 	update_vinfo_from_formatpara(tx_comm);
 
-	tx_comm->ready = 1;
 	return 0;
 }
 
@@ -206,31 +239,129 @@ int hdmitx_common_do_mode_setting(struct hdmitx_common *tx_comm,
 
 	new_para = &new_state->para;
 
-	if (0) {
-		if (new_state->mode & VMODE_INIT_BIT_MASK) {
-			tx_comm->ctrl_ops->init_uboot_mode(new_state->mode);
-			return 0;
-		}
+	if (new_state->mode & VMODE_INIT_BIT_MASK) {
+		HDMITX_INFO("skip real mode setting for uboot init\n");
+		/* note that for bootup, hdmitx_common_post_enable_mode()
+		 * action will be done in hdmitx_set_current_vmode()
+		 * when vout probe, it's earlier than drm to
+		 * call hdmitx_common_do_mode_setting(), and
+		 * thus VPP/DV won't miss dv/hdr cap in vinfo
+		 */
+		return ret;
 	}
 
 	mutex_lock(&tx_comm->hdmimode_mutex);
+	if (new_state->state_sequence_id != tx_comm->tx_hw->hw_sequence_id) {
+		HDMITX_ERROR("state_sequence_id failed %lld\n", new_state->state_sequence_id);
+		goto fail;
+	}
 	ret = hdmitx_common_pre_enable_mode(tx_comm, new_para);
 	if (ret < 0) {
 		HDMITX_ERROR("pre mode enable fail\n");
 		goto fail;
 	}
 
-	if (new_state->mode & VMODE_INIT_BIT_MASK) {
-		HDMITX_INFO("skip real mode setting for uboot init\n");
-	} else {
-		ret = hdmitx_common_enable_mode(tx_comm, new_para);
-		if (ret < 0) {
-			HDMITX_ERROR("mode enable fail\n");
-			goto fail;
-		}
+	ret = hdmitx_common_enable_mode(tx_comm, new_para);
+	if (ret < 0) {
+		HDMITX_ERROR("mode enable fail\n");
+		goto fail;
 	}
 
 	ret = hdmitx_common_post_enable_mode(tx_comm, new_para);
+	if (ret < 0) {
+		HDMITX_ERROR("post mode enable fail\n");
+		goto fail;
+	}
+
+	hdmitx_tracer_write_event(tx_comm->tx_tracer, HDMITX_KMS_ENABLE_OUTPUT);
+
+fail:
+	if (ret < 0)
+		hdmitx_tracer_write_event(tx_comm->tx_tracer, HDMITX_KMS_ERROR);
+
+	mutex_unlock(&tx_comm->hdmimode_mutex);
+	return ret;
+}
+EXPORT_SYMBOL(hdmitx_common_do_mode_setting);
+
+/* below for pxp mode set test */
+static void convert_attr_str(char *attr_str, enum hdmi_colorspace *cs, int *cd)
+{
+	if (!attr_str || !cs || !cd)
+		return;
+
+	if (strstr(attr_str, "420")) {
+		*cs = HDMI_COLORSPACE_YUV420;
+	} else if (strstr(attr_str, "422")) {
+		*cs = HDMI_COLORSPACE_YUV422;
+	} else if (strstr(attr_str, "444")) {
+		*cs = HDMI_COLORSPACE_YUV444;
+	} else if (strstr(attr_str, "rgb")) {
+		*cs = HDMI_COLORSPACE_RGB;
+	} else {
+		*cs = HDMI_COLORSPACE_RGB;
+		HDMITX_ERROR("%s wrong color format, fallback to default rgb\n");
+	}
+
+	/*parse colorspace success*/
+	if (strstr(attr_str, "12bit")) {
+		*cd = COLORDEPTH_36B;
+	} else if (strstr(attr_str, "10bit")) {
+		*cd = COLORDEPTH_30B;
+	} else if (strstr(attr_str, "8bit")) {
+		*cd = COLORDEPTH_24B;
+	} else {
+		*cd = COLORDEPTH_24B;
+		HDMITX_ERROR("%s wrong color depth, fallback to default 8bit\n");
+	}
+}
+
+static int hdmitx_setup_fmt_para(struct hdmitx_common *tx_comm, struct hdmi_format_para *fmt_para,
+	enum hdmi_vic vic, char *attr_str)
+{
+	int ret = 0;
+	enum hdmi_colorspace cs = HDMI_COLORSPACE_RGB;
+	int cd = 8;
+
+	if (!tx_comm || !fmt_para || !attr_str)
+		return -1;
+
+	convert_attr_str(attr_str, &cs, &cd);
+
+	ret = hdmitx_common_build_format_para(tx_comm, fmt_para,
+					      vic, tx_comm->frac_rate_policy,
+					      cs, cd, HDMI_QUANTIZATION_RANGE_FULL);
+	return ret;
+}
+
+/* sync with hdmitx_common_do_mode_setting() */
+static int hdmitx_common_do_mode_setting_test(struct hdmitx_common *tx_comm,
+				  enum hdmi_vic vic, char *attr_str)
+{
+	int ret = 0;
+	struct hdmi_format_para new_para;
+
+	if (!tx_comm || !attr_str)
+		return -1;
+
+	mutex_lock(&tx_comm->hdmimode_mutex);
+	memset(&new_para, 0, sizeof(new_para));
+	ret = hdmitx_setup_fmt_para(tx_comm, &new_para, vic, attr_str);
+	if (ret < 0) {
+		HDMITX_ERROR("%s format para build fail\n", __func__);
+		goto fail;
+	}
+	ret = hdmitx_common_pre_enable_mode(tx_comm, &new_para);
+	if (ret < 0) {
+		HDMITX_ERROR("pre mode enable fail\n");
+		goto fail;
+	}
+	ret = hdmitx_common_enable_mode(tx_comm, &new_para);
+	if (ret < 0) {
+		HDMITX_ERROR("mode enable fail\n");
+		goto fail;
+	}
+	ret = hdmitx_common_post_enable_mode(tx_comm, &new_para);
 	if (ret < 0) {
 		HDMITX_ERROR("post mode enable fail\n");
 		goto fail;
@@ -240,7 +371,45 @@ fail:
 	mutex_unlock(&tx_comm->hdmimode_mutex);
 	return ret;
 }
-EXPORT_SYMBOL(hdmitx_common_do_mode_setting);
+
+static void hdmitx_common_disable_mode_test(void)
+{
+	hdmitx_module_disable(VMODE_HDMI, NULL);
+}
+
+int set_disp_mode(struct hdmitx_common *tx_comm, const char *mode)
+{
+	int ret = 0;
+	enum hdmi_vic vic;
+	const struct hdmi_timing *timing = NULL;
+
+	if (!tx_comm || !mode)
+		return -1;
+
+	if (!strncmp(mode, "off", strlen("off")) ||
+		!strncmp(mode, "null", strlen("null")) ||
+		!strncmp(mode, "invalid", strlen("invalid"))) {
+		hdmitx_common_disable_mode_test();
+		HDMITX_INFO("%s: disable hdmi mode\n", __func__);
+		return 0;
+	}
+	/* function for debug, only get vic and check if ip can support, skip rx cap check. */
+	timing = hdmitx_mode_match_timing_name(mode);
+	if (!timing || timing->vic == HDMI_0_UNKNOWN) {
+		HDMITX_ERROR("unknown mode %s\n", mode);
+		return -EINVAL;
+	}
+
+	vic = timing->vic;
+	/* force set mode for test purpose, not check HW support or not */
+	/* if (hdmitx_common_validate_vic(tx_comm, timing->vic) != 0) { */
+	/* HDMITX_ERROR("ip cannot support mode %s. %d\n", mode, timing->vic); */
+	/* return -EINVAL; */
+	/* } */
+	ret = hdmitx_common_do_mode_setting_test(tx_comm,
+					  vic, tx_comm->tst_fmt_attr);
+	return ret;
+}
 
 /* below for pxp mode set test */
 static void convert_attr_str(char *attr_str, enum hdmi_colorspace *cs, int *cd)
@@ -374,28 +543,39 @@ void hdmitx_common_output_disable(struct hdmitx_common *tx_comm,
 {
 	struct hdmitx_hw_common *tx_hw_base = tx_comm->tx_hw;
 
-	/* step1: HW: disable hdmitx phy, SW: clear status */
+	/* step1 detach vinfo
+	 * detach vinfo is common operate for plugout and suspend and switch resolution.
+	 * After setting the mode, you need to set ready to 1 first, and then attach
+	 * vinfo to notify HDR/DV to send the package to ensure that pkt can be sent
+	 * normally. In disable mode, first detach vinfo, notify HDR/DV to no longer
+	 * send packets, and then set ready to 0
+	 */
+	edidinfo_detach_to_vinfo(tx_comm);
+
+	/* step2: HW: disable hdmitx phy, SW: clear status */
 	if (phy_dis) {
 		tx_comm->ready = 0;
 		hdmitx_hw_cntl_misc(tx_hw_base, MISC_TMDS_PHY_OP, TMDS_PHY_DISABLE);
+		hdmitx_tracer_write_event(tx_comm->tx_tracer, HDMITX_KMS_DISABLE_OUTPUT);
 	}
+
 	/* disable frl/dsc/vrr */
 	if (tx_comm->ctrl_ops->disable_21_work)
 		tx_comm->ctrl_ops->disable_21_work();
 
-	/* step2: clear edid vinfo */
+	/* step3: clear edid */
 	if (edid_clear)
 		hdmitx_common_edid_clear(tx_comm);
 
-	/* step3: HW: clear packets */
+	/* step4: HW: clear packets */
 	if (pkt_clear)
 		tx_comm->ctrl_ops->clear_pkt(tx_hw_base);
 
-	/* step4: reset hdcp */
+	/* step5: reset hdcp */
 	if (hdcp_reset)
-		tx_comm->ctrl_ops->reset_hdcp(tx_comm);
+		tx_comm->ctrl_ops->disable_hdcp(tx_comm);
 
-	/* step5: SW: cancel ced work */
+	/* step6: SW: cancel ced work */
 	if (tx_comm->cedst_en)
 		cancel_delayed_work(&tx_comm->work_cedst);
 }
@@ -406,9 +586,9 @@ int hdmitx_common_disable_mode(struct hdmitx_common *tx_comm,
 	struct hdmi_format_para *para;
 
 	HDMITX_DEBUG("%s to disable ready state\n", __func__);
-	/* TODO: clear pkt */
+	mutex_lock(&tx_comm->hdmimode_mutex);
 	hdmitx_common_output_disable(tx_comm,
-		true, true, false, false);
+		true, true, true, false);
 
 	hdmitx_format_para_reset(&tx_comm->fmt_para);
 	reset_vinfo(&tx_comm->hdmitx_vinfo);
@@ -420,6 +600,7 @@ int hdmitx_common_disable_mode(struct hdmitx_common *tx_comm,
 
 	if (tx_comm->ctrl_ops->disable_mode)
 		tx_comm->ctrl_ops->disable_mode(tx_comm, para);
+	mutex_unlock(&tx_comm->hdmimode_mutex);
 
 	return 0;
 }
@@ -433,10 +614,16 @@ struct vinfo_s *hdmitx_get_current_vinfo(void *data)
 
 static int hdmitx_set_current_vmode(enum vmode_e mode, void *data)
 {
-	if (!(mode & VMODE_INIT_BIT_MASK))
+	if (!(mode & VMODE_INIT_BIT_MASK)) {
 		HDMITX_INFO("warning, echo /sys/class/display/mode is disabled\n");
-	else
-		HDMITX_INFO("already display in uboot\n");
+	} else {
+		/* During the kernel startup process, the HDR/DV module will use
+		 * vinfo information, it needs to attach vinfo after the EDID is
+		 * parsed and before the HDR/DV module is enabled.
+		 * so do as hdmitx_common_post_enable_mode()
+		 */
+		global_tx_common->ctrl_ops->init_uboot_mode(mode);
+	}
 
 	return 0;
 }
@@ -636,11 +823,14 @@ void hdmitx_vout_uninit(void)
 #endif
 }
 
-/* common work for plugin/resume, witch is done in lock */
+/* common work for plugin/resume, which is done in lock */
 void hdmitx_plugin_common_work(struct hdmitx_common *tx_comm)
 {
 	/* trace event */
 	hdmitx_tracer_write_event(tx_comm->tx_tracer, HDMITX_HPD_PLUGIN);
+
+	tx_comm->tx_hw->hw_sequence_id = get_jiffies_64();
+	HDMITX_INFO("plugin sequence id: %lld\n", tx_comm->tx_hw->hw_sequence_id);
 
 	/* SW: start rxsense check */
 	if (tx_comm->rxsense_policy) {
@@ -665,7 +855,7 @@ void hdmitx_plugin_common_work(struct hdmitx_common *tx_comm)
 	if (tx_comm->hdcp_mode != 0) {
 		HDMITX_INFO("hdcp: %d should not be enabled before signal ready\n",
 			tx_comm->hdcp_mode);
-		tx_comm->ctrl_ops->reset_hdcp(tx_comm);
+		tx_comm->ctrl_ops->disable_hdcp(tx_comm);
 	}
 
 	/*read edid*/
@@ -685,56 +875,44 @@ void hdmitx_plugin_common_work(struct hdmitx_common *tx_comm)
 	tx_comm->last_hpd_handle_done_stat = HDMI_TX_HPD_PLUGIN;
 }
 
+/* common work for plugout flow, witch should be done in lock */
+void hdmitx_plugout_common_work(struct hdmitx_common *tx_comm)
+{
+	HDMITX_INFO(SYS "plugout\n");
+	/* trace event */
+	hdmitx_tracer_write_event(tx_comm->tx_tracer, HDMITX_HPD_PLUGOUT);
+
+	tx_comm->tx_hw->hw_sequence_id = 0;
+	HDMITX_INFO("plug out sequence id: %lld\n", tx_comm->tx_hw->hw_sequence_id);
+
+	/* step1: disable output */
+	hdmitx_common_output_disable(tx_comm, true, true, true, true);
+	/* as this function may be called in deep suspend/resume
+	 * (hot plugout when resume), not update topo info
+	 * here, update in plugout handler instead
+	 */
+	//hdmitx_hw_cntl_ddc(tx_hw_base, DDC_HDCP_SET_TOPO_INFO, 0);
+
+	/* step2: SW: status update */
+	tx_comm->hpd_state = 0;
+	tx_comm->last_hpd_handle_done_stat = HDMI_TX_HPD_PLUGOUT;
+}
+
 void hdmitx_common_late_resume(struct hdmitx_common *tx_comm)
 {
 	struct hdmitx_hw_common *tx_hw_base = tx_comm->tx_hw;
 
 	tx_hw_base->debug_hpd_lock = 0;
 
-	/* TODO: special for RDK */
-	/* for RDK userspace, after receive plug change uevent,
-	 * it will check connector state before enable encoder.
-	 * so should not change hpd_state other than in plug handler
-	 */
-	/* if (tx_comm->hdcp_ctl_lvl != 0x1) */
-		/* tx_comm->hpd_state = hpd_state; */
-
-	/* step1: SW: force HPD/EDID update, as there may be
-	 * no hpd event during suspend/resume stage but edid
-	 * have been cleared when suspend
-	 */
-	tx_comm->hpd_state = !!(hdmitx_hw_cntl_misc(tx_hw_base, MISC_HPD_GPI_ST, 0));
-	if (tx_comm->hpd_state)
-		tx_comm->already_used = 1;
-
-	HDMITX_INFO("hdmitx hpd state: %d\n", tx_comm->hpd_state);
-
-	if (tx_comm->hpd_state) {
-		/* if there's hpd plugin event during early suspend,
-		 * then hdmitx_plugin_common_work() have been done,
-		 * no need to call again except edid abnormal
-		 */
-		if (tx_comm->rxcap.edid_parsing == 0)
-			hdmitx_plugin_common_work(tx_comm);
-	} else {
-		/* Note: if plugout event and resume come together
-		 * here clear edid info, as later will post
-		 * plugout uevent and system may check edid/cap
-		 * and find it not in clear state.
-		 */
-		hdmitx_common_edid_clear(tx_comm);
-		/* other work will be done in plugout handler */
-	}
-
-	/* step2: SW: status update */
+	/* step1: SW: status update */
 	tx_comm->suspend_flag = false;
 	hdmitx_hw_cntl_misc(tx_hw_base, MISC_SUSFLAG, 0);
 
-	/* step3: HW: reset HW */
+	/* step2: HW: reset HW */
 	hdmitx_hw_cntl(tx_hw_base, HDMITX_EARLY_SUSPEND_RESUME_CNTL,
 		HDMITX_LATE_RESUME);
 
-	/* step4: SW: post uevent to system */
+	/* step3: SW: post uevent to system */
 	hdmitx_common_notify_hpd_status(tx_comm, true);
 	hdmitx_event_mgr_send_uevent(tx_comm->event_mgr,
 		HDMITX_HDCPPWR_EVENT, HDMI_WAKEUP, false);

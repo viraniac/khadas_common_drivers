@@ -44,11 +44,19 @@ struct am_hdmi_tx {
 	int hdcp_mode;
 	/*hdcp auth result, HDCP_AUTH_UNKNOWN means havenot finished auth.*/
 	int hdcp_state;
+	int hdcp_rx_type;
 
 	int hdmitx_on;
 
+	int min_vfreq;
+	int max_vfreq;
+
+	/* save sequence_id for drm connecter get raw edid */
+	u64 sequence_id;
+
 	/*TODO: android compatible, remove later*/
 	bool android_path;
+	bool recovery_mode;
 
 	/*amlogic property: force hdmitx update
 	 *colorspace/colordepth from sysfs.
@@ -107,6 +115,8 @@ int meson_hdmitx_dev_unbind(struct drm_device *drm,
 void convert_attrstr(char *attr_str, struct hdmitx_color_attr *attr_param);
 
 int am_meson_mode_testattr_ioctl(struct drm_device *dev, void *data,
+	struct drm_file *file_priv);
+int am_meson_get_vrr_range_ioctl(struct drm_device *dev, void *data,
 	struct drm_file *file_priv);
 
 #endif

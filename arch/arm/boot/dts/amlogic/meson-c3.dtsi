@@ -308,6 +308,7 @@
 			tx_delay = <16>;
 			resets = <&reset RESET_SD_EMMC_C>;
 			nwr_cnt = <0>;
+			cali_blk_cnt = <40>;
 			no-sd;
 			no-sdio;
 		};
@@ -395,12 +396,6 @@
 				compatible = "amlogic,meson-sc2-reset";
 				reg = <0x2000 0x98>;
 				#reset-cells = <1>;
-			};
-
-			cpu_version {
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				reg=<0x10220 0x140>;
-				amlogic,has-chip-id;
 			};
 
 			meson_clk_msr@3400 {
@@ -1636,6 +1631,7 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-c3";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg_base = <0xfe037000>;
 		reg = <0xfe036000 0x400>;
 		interrupts = <0 62 IRQ_TYPE_LEVEL_HIGH>;
@@ -1926,9 +1922,9 @@
 		       0xfe350000 0xb00>; /* vcbus */
 		clocks = <&clkc CLKID_VOUT_MCLK>;
 		clock-names = "vpu_clk";
-		clk_level = <4>;
-		/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-		/* 4: 333.3M */
+		clk_level = <5>;
+		/* 0: 24M       1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+		/* 5: 333.3M */
 	};
 
 	vclk_serve: vclk_serve {
@@ -2087,6 +2083,7 @@
 		compatible = "amlogic,aml_mkl";
 		reg = <0xfe440200 0xf0>;
 		kl_type = <1>;
+		kl_vid_type = <0>;
 		kl_offset = <0x80 0x88 0x8c 0x90>;
 		status = "okay";
 	};

@@ -212,7 +212,7 @@ int is_low_amplitude_sig_tm2(void)
 	bool ret = false;
 	u8 port = rx_info.main_port;
 
-	if (!rx_info.open_fg || (hdmirx_rd_top(TOP_MISC_STAT0, port) & 0x1))
+	if (!rx_info.main_port_open || (hdmirx_rd_top(TOP_MISC_STAT0, port) & 0x1))
 		return ret;
 	if (rx[port].phy.phy_bw <= PHY_BW_2) {
 		wr_reg_hhi_bits(TM2_HHI_HDMIRX_PHY_DCHD_CNTL2,
@@ -588,7 +588,6 @@ void aml_phy_cfg_tm2(void)
 	data32 &= (~(1 << 10));
 	data32 &= (~(0x7 << 7));
 	data32 |= term_value;
-	data32 &= ~(disable_port_num & 0x07);
 	/* terminal en */
 	wr_reg_hhi(TM2_HHI_HDMIRX_PHY_MISC_CNTL0, data32);
 	usleep_range(5, 10);
@@ -1014,7 +1013,7 @@ void aml_phy_short_bist_tm2(void)
 	else
 		rx_pr("bist_test FAIL\n");
 	rx_pr("bist done\n");
-	if (rx_info.open_fg)
+	if (rx_info.main_port_open)
 		rx_info.aml_phy.pre_int = 1;
 }
 

@@ -190,6 +190,8 @@ static int vt_debug_instance_show(struct seq_file *s, void *unused)
 		   instance->state.dequeue_count,
 		   instance->state.dequeue_invalid);
 	seq_puts(s, "-----------------------------------------------\n");
+	seq_printf(s, "need refresh: %d\n", instance->need_refresh);
+	seq_puts(s, "-----------------------------------------------\n");
 
 	mutex_unlock(&instance->lock);
 	mutex_unlock(&debugfs_mutex);
@@ -445,6 +447,7 @@ static struct vt_instance *vt_instance_create_lock(struct vt_dev *dev)
 
 	memset(&instance->backup_sourcecrop, -1, sizeof(instance->backup_sourcecrop));
 	memset(&instance->backup_displayframe, -1, sizeof(instance->backup_displayframe));
+	instance->last_cmd.cmd = VT_VIDEO_CMD_INVALID;
 	instance->dev = dev;
 	instance->fcount = 0;
 	instance->mode = VT_MODE_NONE_BLOCK;
@@ -640,6 +643,9 @@ static void vt_session_trim_lock(struct vt_session *session,
 	}
 
 	if (instance->consumer && instance->consumer == session) {
+		if (instance->need_refresh)
+			return;
+
 		while (kfifo_get(&instance->fifo_to_consumer, &buffer)) {
 			if (buffer->file_buffer) {
 				fput(buffer->file_buffer);
@@ -829,28 +835,8 @@ static int vt_alloc_id_process(struct vt_alloc_id_data *data,
 	struct rb_node *n = NULL;
 
 	mutex_lock(&dev->instance_lock);
-	/* find an unused vt instance */
-	for (n = rb_first(&dev->instances); n; n = rb_next(n)) {
-		instance = rb_entry(n, struct vt_instance, node);
-		mutex_lock(&instance->lock);
-		/* no consumer and producer, not new alloced */
-		if (!instance->consumer &&
-		    !instance->producer &&
-		    instance->used &&
-		    instance->id >= MIN_VIDEO_TUNNEL_ID) {
-			data->tunnel_id = instance->id;
-			instance->used = false;
-			vt_debug(VT_DEBUG_USER, "vt alloc find instance [%d], ref %d\n",
-				 instance->id,
-				 atomic_read(&instance->ref.refcount.refs));
-			mutex_unlock(&instance->lock);
-			mutex_unlock(&dev->instance_lock);
-			return 0;
-		}
-		mutex_unlock(&instance->lock);
-	}
 
-	/* not find, create one */
+	/* create new one */
 	instance = vt_instance_create_lock(session->dev);
 	if (IS_ERR(instance)) {
 		mutex_unlock(&dev->instance_lock);
@@ -872,6 +858,29 @@ static int vt_alloc_id_process(struct vt_alloc_id_data *data,
 		vt_debug(VT_DEBUG_USER, "vt alloc instance [%d] idr alloc failed ret %d\n",
 			instance->id, ret);
 		vt_instance_put(instance);
+
+		mutex_lock(&dev->instance_lock);
+		/* find an unused vt instance */
+		for (n = rb_first(&dev->instances); n; n = rb_next(n)) {
+			instance = rb_entry(n, struct vt_instance, node);
+			mutex_lock(&instance->lock);
+			/* no consumer and producer, not new alloced */
+			if (!instance->consumer &&
+			    !instance->producer &&
+			    instance->used &&
+			    instance->id >= MIN_VIDEO_TUNNEL_ID) {
+				data->tunnel_id = instance->id;
+				instance->used = false;
+				vt_debug(VT_DEBUG_USER, "vt alloc find instance [%d], ref %d\n",
+					instance->id,
+					atomic_read(&instance->ref.refcount.refs));
+				mutex_unlock(&instance->lock);
+				mutex_unlock(&dev->instance_lock);
+				return 0;
+			}
+			mutex_unlock(&instance->lock);
+		}
+		mutex_unlock(&dev->instance_lock);
 		return ret;
 	}
 
@@ -915,15 +924,108 @@ static int vt_free_id_process(struct vt_alloc_id_data *data,
 	return ret;
 }
 
+static int vt_resend_rect_process_locked(struct vt_instance *instance,
+					 enum vt_video_cmd_e type)
+{
+	struct vt_krect *rect = NULL;
+	struct vt_cmd *cmd_rect;
+
+	if (!instance)
+		return -EINVAL;
+
+	if (type == VT_VIDEO_SET_SOURCE_CROP)
+		rect = &instance->backup_sourcecrop;
+	else if (type == VT_VIDEO_SET_DISPLAY_FRAME)
+		rect = &instance->backup_displayframe;
+	else
+		return -EINVAL;
+
+	if (rect->left >= 0 || rect->top >= 0 ||
+		rect->right >= 0 || rect->bottom >= 0) {
+		cmd_rect = kzalloc(sizeof(*cmd_rect), GFP_KERNEL);
+		if (!cmd_rect)
+			return -ENOMEM;
+
+		cmd_rect->cmd = type;
+		cmd_rect->rect = *rect;
+
+		mutex_lock(&instance->cmd_lock);
+		kfifo_put(&instance->fifo_cmd, cmd_rect);
+		vt_debug(VT_DEBUG_CMD, "restore %s rect (%d %d %d %d)\n",
+			type == VT_VIDEO_SET_SOURCE_CROP ? "source crop" : "disp frame",
+			cmd_rect->rect.left, cmd_rect->rect.top,
+			cmd_rect->rect.right, cmd_rect->rect.bottom);
+		mutex_unlock(&instance->cmd_lock);
+	}
+
+	return 0;
+}
+
+static int vt_resend_cmd_process_locked(struct vt_instance *instance,
+					struct vt_session *session)
+{
+	int ret = 0;
+	struct vt_cmd *cmd = NULL;
+
+	if (!instance || !session)
+		return -EINVAL;
+
+	/* consumer connect, send game mode cmd if needed */
+	if (instance->mode == VT_MODE_GAME) {
+		cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
+		if (!cmd)
+			return -ENOMEM;
+
+		cmd->cmd = VT_VIDEO_SET_GAME_MODE;
+		cmd->cmd_data = 1;
+
+		mutex_lock(&instance->cmd_lock);
+		kfifo_put(&instance->fifo_cmd, cmd);
+
+		session->cmd_status++;
+		vt_debug(VT_DEBUG_CMD, "vt [%d] resend cmd:%d data:%d\n",
+			instance->id, cmd->cmd, cmd->cmd_data);
+		mutex_unlock(&instance->cmd_lock);
+	}
+
+	if (instance->last_cmd.cmd == VT_VIDEO_SET_STATUS) {
+		if (instance->last_cmd.cmd_data == VT_VIDEO_STATUS_HIDE ||
+			instance->last_cmd.cmd_data == VT_VIDEO_STATUS_COLOR_ALWAYS ||
+			instance->last_cmd.cmd_data == VT_VIDEO_STATUS_HOLD_FRAME) {
+			cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
+			if (!cmd)
+				return -ENOMEM;
+
+			cmd->cmd = instance->last_cmd.cmd;
+			cmd->cmd_data = instance->last_cmd.cmd_data;
+
+			mutex_lock(&instance->cmd_lock);
+			kfifo_put(&instance->fifo_cmd, cmd);
+
+			session->cmd_status++;
+			vt_debug(VT_DEBUG_CMD, "vt [%d] resend cmd:%d data:%d\n",
+				instance->id, cmd->cmd, cmd->cmd_data);
+			mutex_unlock(&instance->cmd_lock);
+		}
+	}
+
+	ret = vt_resend_rect_process_locked(instance, VT_VIDEO_SET_SOURCE_CROP);
+	if (ret != 0)
+		return ret;
+
+	ret = vt_resend_rect_process_locked(instance, VT_VIDEO_SET_DISPLAY_FRAME);
+	if (ret != 0)
+		return ret;
+
+	return 0;
+}
+
 static int vt_connect_process(struct vt_ctrl_data *data,
 			      struct vt_session *session)
 {
 	struct vt_dev *dev = session->dev;
 	struct vt_instance *instance;
 	struct vt_instance *replace;
-	struct vt_cmd *cmd;
-	struct vt_cmd *cmd_sourcecrop;
-	struct vt_cmd *cmd_displayframe;
 	int id = data->tunnel_id;
 	int ret = 0;
 	char name[64];
@@ -990,6 +1092,7 @@ static int vt_connect_process(struct vt_ctrl_data *data,
 		instance->producer = session;
 		memset(&instance->backup_sourcecrop, -1, sizeof(instance->backup_sourcecrop));
 		memset(&instance->backup_displayframe, -1, sizeof(instance->backup_displayframe));
+		instance->last_cmd.cmd = VT_VIDEO_CMD_INVALID;
 	} else if (data->role == VT_ROLE_CONSUMER) {
 		if (instance->consumer &&
 		    instance->consumer != session) {
@@ -1000,81 +1103,17 @@ static int vt_connect_process(struct vt_ctrl_data *data,
 			return -EINVAL;
 		}
 
-		/* consumer connect, send game mode cmd if needed */
-		if (instance->mode == VT_MODE_GAME) {
-			cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
-			if (!cmd) {
-				mutex_unlock(&instance->lock);
-				vt_instance_put(instance);
-				pr_err("Connect to vt [%d] err, resend cmd fail\n",
-				    id);
-				return -ENOMEM;
-			}
-
-			cmd->cmd = VT_VIDEO_SET_GAME_MODE;
-			cmd->cmd_data = 1;
-
-			mutex_lock(&instance->cmd_lock);
-			kfifo_put(&instance->fifo_cmd, cmd);
-
-			session->cmd_status++;
-			vt_debug(VT_DEBUG_CMD, "vt [%d] resend cmd:%d data:%d\n",
-				instance->id, cmd->cmd, cmd->cmd_data);
-			mutex_unlock(&instance->cmd_lock);
+		ret = vt_resend_cmd_process_locked(instance, session);
+		if (ret != 0) {
+			mutex_unlock(&instance->lock);
+			vt_instance_put(instance);
+			pr_err("Connect to vt [%d], resend cmd fail\n", id);
+			return ret;
 		}
-
-		if (instance->backup_sourcecrop.left >= 0 ||
-			instance->backup_sourcecrop.top >= 0 ||
-			instance->backup_sourcecrop.right >= 0 ||
-			instance->backup_sourcecrop.bottom >= 0) {
-			cmd_sourcecrop = kzalloc(sizeof(*cmd_sourcecrop), GFP_KERNEL);
-			if (!cmd_sourcecrop) {
-				mutex_unlock(&instance->lock);
-				vt_instance_put(instance);
-				pr_err("Connect to vt [%d] err, resend cmd fail\n",
-				    id);
-				return -ENOMEM;
-			}
-
-			cmd_sourcecrop->cmd = VT_VIDEO_SET_SOURCE_CROP;
-			cmd_sourcecrop->rect = instance->backup_sourcecrop;
-
-			mutex_lock(&instance->cmd_lock);
-			kfifo_put(&instance->fifo_cmd, cmd_sourcecrop);
-			session->cmd_status++;
-			vt_debug(VT_DEBUG_CMD, "restore source crop rect (%d %d %d %d)\n",
-				cmd_sourcecrop->rect.left, cmd_sourcecrop->rect.top,
-				cmd_sourcecrop->rect.right, cmd_sourcecrop->rect.bottom);
-			mutex_unlock(&instance->cmd_lock);
-		}
-
-		if (instance->backup_displayframe.left >= 0 ||
-			instance->backup_displayframe.top >= 0 ||
-			instance->backup_displayframe.right >= 0 ||
-			instance->backup_displayframe.bottom >= 0) {
-			cmd_displayframe = kzalloc(sizeof(*cmd_displayframe), GFP_KERNEL);
-			if (!cmd_displayframe) {
-				mutex_unlock(&instance->lock);
-				vt_instance_put(instance);
-				pr_err("Connect to vt [%d] err, resend cmd fail\n",
-				    id);
-				return -ENOMEM;
-			}
-
-			cmd_displayframe->cmd = VT_VIDEO_SET_DISPLAY_FRAME;
-			cmd_displayframe->rect = instance->backup_displayframe;
-
-			mutex_lock(&instance->cmd_lock);
-			kfifo_put(&instance->fifo_cmd, cmd_displayframe);
-			session->cmd_status++;
-			vt_debug(VT_DEBUG_CMD, "restore display frame rect (%d %d %d %d)\n",
-				cmd_displayframe->rect.left, cmd_displayframe->rect.top,
-				cmd_displayframe->rect.right, cmd_displayframe->rect.bottom);
-			mutex_unlock(&instance->cmd_lock);
-		}
-
 		instance->consumer = session;
+		instance->need_refresh = false;
 	}
+
 	session->cid = vt_get_connected_id();
 	session->role = data->role;
 	instance->used = true;
@@ -1114,6 +1153,7 @@ static int vt_disconnect_process(struct vt_ctrl_data *data,
 		instance->mode = VT_MODE_NONE_BLOCK;
 		memset(&instance->backup_sourcecrop, -1, sizeof(instance->backup_sourcecrop));
 		memset(&instance->backup_displayframe, -1, sizeof(instance->backup_displayframe));
+		instance->last_cmd.cmd = VT_VIDEO_CMD_INVALID;
 	} else if (data->role == VT_ROLE_CONSUMER) {
 		if (!instance->consumer)
 			goto disconnect_fail;
@@ -1122,6 +1162,7 @@ static int vt_disconnect_process(struct vt_ctrl_data *data,
 
 		vt_session_trim_lock(session, instance);
 		instance->consumer = NULL;
+		instance->need_refresh = false;
 	}
 
 	vt_debug(VT_DEBUG_USER, "vt [%d] %s-%d disconnect, instance ref %d, fcount %d\n",
@@ -1151,6 +1192,7 @@ static int vt_send_cmd_process(struct vt_ctrl_data *data,
 	struct vt_cmd *cmd;
 	int id = data->tunnel_id;
 
+	mutex_lock(&dev->instance_lock);
 	instance = idr_find(&dev->instance_idr, id);
 
 	if (data->video_cmd == VT_VIDEO_SET_COLOR_BLACK ||
@@ -1162,19 +1204,24 @@ static int vt_send_cmd_process(struct vt_ctrl_data *data,
 		/* no instance or instance has no consumer */
 		if (!instance || !instance->consumer) {
 			vt_debug(VT_DEBUG_CMD, "vt [%d] set solid color, no consumer", id);
+			mutex_unlock(&dev->instance_lock);
 			return -ENOTCONN;
 		}
 	} else {
 		if (data->video_cmd != VT_VIDEO_SET_SOURCE_CROP &&
 				data->video_cmd != VT_VIDEO_SET_DISPLAY_FRAME) {
-			if (!instance || session->role != VT_ROLE_PRODUCER)
+			if (!instance || session->role != VT_ROLE_PRODUCER) {
+				mutex_unlock(&dev->instance_lock);
 				return -EINVAL;
+			}
 		}
 	}
 
 	cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
-	if (!cmd)
+	if (!cmd) {
+		mutex_unlock(&dev->instance_lock);
 		return -ENOMEM;
+	}
 
 	mutex_lock(&instance->cmd_lock);
 	cmd->cmd = data->video_cmd;
@@ -1200,6 +1247,7 @@ static int vt_send_cmd_process(struct vt_ctrl_data *data,
 			 cmd->rect.right, cmd->rect.bottom);
 	else
 		vt_debug(VT_DEBUG_CMD, "data:%d\n", cmd->cmd_data);
+	instance->last_cmd = *cmd;
 	mutex_unlock(&instance->cmd_lock);
 
 	mutex_lock(&instance->lock);
@@ -1209,6 +1257,7 @@ static int vt_send_cmd_process(struct vt_ctrl_data *data,
 		wake_up_interruptible(&instance->consumer->wait_cmd);
 	}
 	mutex_unlock(&instance->lock);
+	mutex_unlock(&dev->instance_lock);
 
 	return 0;
 }
@@ -1376,6 +1425,30 @@ static int vt_cancel_buffer_process(struct vt_ctrl_data *data,
 	return 0;
 }
 
+static int vt_refresh_process(struct vt_ctrl_data *data, struct vt_session *session)
+{
+	struct vt_dev *dev = session->dev;
+	struct vt_instance *instance = NULL;
+	int id = data->tunnel_id;
+
+	instance = idr_find(&dev->instance_idr, id);
+
+	if (!instance)
+		return -EINVAL;
+	if (instance->consumer && instance->consumer != session)
+		return -EINVAL;
+
+	mutex_lock(&instance->lock);
+	if (data->video_cmd_data == 0)
+		instance->need_refresh = false;
+	else
+		instance->need_refresh = true;
+	vt_debug(VT_DEBUG_CMD, "vt [%d] ask refresh\n", instance->id);
+	mutex_unlock(&instance->lock);
+
+	return 0;
+}
+
 static int vt_ctrl_process(struct vt_ctrl_data *data,
 			   struct vt_session *session)
 {
@@ -1420,6 +1493,11 @@ static int vt_ctrl_process(struct vt_ctrl_data *data,
 		ret = vt_cancel_buffer_process(data, session);
 		break;
 	}
+	case VT_CTRL_REFRESH: {
+		ret = vt_refresh_process(data, session);
+		break;
+	}
+
 	default:
 		pr_err("unknown videotunnel cmd:%d\n", data->ctrl_cmd);
 		return -EINVAL;
@@ -1848,7 +1926,29 @@ static int vt_release_buffer_process(struct vt_buffer_data *data,
 			"vt [%d] releasebuffer fence file(%px) fence fd(%d)\n",
 			instance->id, buffer->file_fence, data->fence_fd);
 
-	kfifo_put(&instance->fifo_to_producer, buffer);
+	if (instance->need_refresh && kfifo_is_empty(&instance->fifo_to_consumer)) {
+		if (buffer->file_fence) {
+			fput(buffer->file_fence);
+			dev->state.fence_put++;
+			instance->state.fence_put++;
+			buffer->file_fence = NULL;
+		}
+		/* need add ref of buffer file */
+		get_file(buffer->file_buffer);
+		buffer->buffer_fd_con = -1;
+		buffer->item.buffer_status = VT_BUFFER_QUEUE;
+		kfifo_put(&instance->fifo_to_consumer, buffer);
+		dev->state.queue_count++;
+		instance->state.queue_count++;
+
+		vt_debug(VT_DEBUG_BUFFERS,
+			 "vt [%d] refresh once pfd: %d, buffer(%p) buffer file(%px) timestamp(%lld)\n",
+			 instance->id, buffer->buffer_fd_pro, buffer,
+			 buffer->file_buffer, buffer->item.time_stamp);
+	} else {
+		kfifo_put(&instance->fifo_to_producer, buffer);
+	}
+
 	mutex_unlock(&instance->lock);
 
 	if (instance->producer)
@@ -2108,6 +2208,182 @@ int vt_send_cmd(struct vt_session *session, int tunnel_id,
 }
 EXPORT_SYMBOL(vt_send_cmd);
 
+/* add class sysfs debug node */
+static ssize_t instance_show_locked(struct vt_instance *instance, char *buf)
+{
+	int i = 0;
+	int pos = 0;
+	int size_to_con = kfifo_len(&instance->fifo_to_consumer);
+	int size_to_pro = kfifo_len(&instance->fifo_to_producer);
+	int size_cmd = kfifo_len(&instance->fifo_cmd);
+	int ref_count = atomic_read(&instance->ref.refcount.refs);
+
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"tunnel (%p) id=%d, ref=%d, fcount=%d, mode=%s\n",
+			instance, instance->id,
+			ref_count, instance->fcount,
+			vt_debug_mode_status_to_string(instance->mode));
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"backup_sourcecrop (%d %d %d %d)\n",
+			instance->backup_sourcecrop.left,
+			instance->backup_sourcecrop.top,
+			instance->backup_sourcecrop.right,
+			instance->backup_sourcecrop.bottom);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"backup_displayframe(%d %d %d %d)\n",
+			instance->backup_displayframe.left,
+			instance->backup_displayframe.top,
+			instance->backup_displayframe.right,
+			instance->backup_displayframe.bottom);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"-----------------------------------------------\n");
+	if (instance->consumer)
+		pos += snprintf(buf + pos, PAGE_SIZE - pos,
+				"consumer session (%s) %p\n",
+				instance->consumer->display_name,
+				instance->consumer);
+	if (instance->producer)
+		pos += snprintf(buf + pos, PAGE_SIZE - pos,
+				"producer session (%s) %p\n",
+				instance->producer->display_name,
+				instance->producer);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"-----------------------------------------------\n");
+
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"to consumer fifo size:%d\n", size_to_con);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"to producer fifo size:%d\n", size_to_pro);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"cmd fifo size:%d\n", size_cmd);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"-----------------------------------------------\n");
+
+	pos += snprintf(buf + pos, PAGE_SIZE - pos, "buffers:\n");
+
+	for (i = 0; i < VT_POOL_SIZE; i++) {
+		struct vt_buffer *buffer = &instance->vt_buffers[i];
+		int status = buffer->item.buffer_status;
+
+		if (status == VT_BUFFER_QUEUE || status == VT_BUFFER_ACQUIRE ||
+				status == VT_BUFFER_RELEASE)
+			pos += snprintf(buf + pos, PAGE_SIZE - pos,
+					"    buffer produce_fd(%d) status(%s) timestamp(%lld)\n",
+					buffer->buffer_fd_pro,
+					vt_debug_buffer_status_to_string(status),
+					buffer->item.time_stamp);
+	}
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"-----------------------------------------------\n");
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total acquire: %ld\n", instance->state.acquire_count);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total release: %ld (%ld+%ld(prev))\n",
+			instance->state.release_count + instance->state.release_invalid,
+			instance->state.release_count,
+			instance->state.release_invalid);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total queue: %ld\n", instance->state.queue_count);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total dequeue: %ld (%ld+%ld(prev))\n",
+			instance->state.dequeue_count + instance->state.dequeue_invalid,
+			instance->state.dequeue_count,
+			instance->state.dequeue_invalid);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"-----------------------------------------------\n");
+
+	return pos;
+}
+
+static ssize_t instance_show(struct class *class,
+			     struct class_attribute *attr, char *buf)
+{
+	struct vt_dev *dev = vdev;
+	struct vt_instance *instance = NULL;
+	struct rb_node *n = NULL;
+	ssize_t count = 0;
+
+	mutex_lock(&debugfs_mutex);
+	mutex_lock(&dev->instance_lock);
+	for (n = rb_first(&dev->instances); n; n = rb_next(n)) {
+		instance = rb_entry(n, struct vt_instance, node);
+		mutex_lock(&instance->lock);
+		if (instance->producer || instance->consumer)
+			count += instance_show_locked(instance, buf + count);
+		mutex_unlock(&instance->lock);
+	}
+	mutex_unlock(&dev->instance_lock);
+	mutex_unlock(&debugfs_mutex);
+
+	if (count == 0)
+		sprintf(buf, "no videotunnel instances\n");
+
+	return count;
+}
+
+static ssize_t state_show(struct class *class,
+			  struct class_attribute *attr, char *buf)
+{
+	ssize_t pos = 0;
+	struct vt_state *state = &vdev->state;
+
+	mutex_lock(&debugfs_mutex);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"---------------------------------------------\n");
+	pos += snprintf(buf + pos, PAGE_SIZE - pos, "fence status:\n");
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total fence fget: %ld\n", state->fence_get);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total fence fput: %ld (%ld(dequeue)-%ld(null)+%ld(fput))\n",
+			state->dequeue_count - state->null_fence + state->fence_put,
+			state->dequeue_count, state->null_fence, state->fence_put);
+
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"---------------------------------------------\n");
+	pos += snprintf(buf + pos, PAGE_SIZE - pos, "buffer status:\n");
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total acquire: %ld\n", state->acquire_count);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total release: %ld (%ld+%ld(prev))\n",
+			state->release_count + state->release_invalid,
+			state->release_count, state->release_invalid);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total queue: %ld\n", state->queue_count);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total dequeue: %ld (%ld+%ld(prev))\n",
+			state->dequeue_count + state->dequeue_invalid,
+			state->dequeue_count, state->dequeue_invalid);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"-----------------------------------------------\n");
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total buffer fget: %ld\n", state->buffer_get);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"total buffer fput: %ld (%ld(fput)+%ld(close))\n",
+			state->buffer_put + state->buffer_close,
+			state->buffer_put, state->buffer_close);
+	pos += snprintf(buf + pos, PAGE_SIZE - pos,
+			"---------------------------------------------\n");
+	mutex_unlock(&debugfs_mutex);
+
+	return pos;
+}
+
+static CLASS_ATTR_RO(instance);
+static CLASS_ATTR_RO(state);
+
+static struct attribute *video_tunnel_class_attrs[] = {
+	&class_attr_instance.attr,
+	&class_attr_state.attr,
+	NULL
+};
+
+ATTRIBUTE_GROUPS(video_tunnel_class);
+
+static struct class video_tunnel_class = {
+	.name = "videotunnel",
+	.class_groups = video_tunnel_class_groups,
+};
+
 static const struct file_operations vt_fops = {
 	.owner = THIS_MODULE,
 	.open = vt_open,
@@ -2138,6 +2414,13 @@ static int vt_probe(struct platform_device *pdev)
 		goto failed_alloc_dev;
 	}
 
+	/* regist class sysfs */
+	ret = class_register(&video_tunnel_class);
+	if (ret) {
+		pr_err("videotunnel: failed to register class sysfs.\n");
+		goto unregister_misc;
+	}
+
 	mutex_init(&vdev->instance_lock);
 	mutex_init(&vdev->vsync_lock);
 	idr_init(&vdev->instance_idr);
@@ -2163,6 +2446,9 @@ static int vt_probe(struct platform_device *pdev)
 
 	return 0;
 
+unregister_misc:
+	misc_deregister(&vdev->mdev);
+
 failed_alloc_dev:
 	kfree(vdev);
 
@@ -2171,6 +2457,7 @@ failed_alloc_dev:
 
 static int vt_remove(struct platform_device *pdev)
 {
+	class_unregister(&video_tunnel_class);
 	idr_destroy(&vdev->instance_idr);
 	debugfs_remove_recursive(vdev->debug_root);
 	misc_deregister(&vdev->mdev);

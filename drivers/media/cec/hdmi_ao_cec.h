@@ -9,7 +9,7 @@
 #include <linux/clk.h>
 #include "hdmi_tx_cec_20.h"
 
-#define CEC_DRIVER_VERSION     "2023/10/18: Handle mailbox wakeup data by thread"
+#define CEC_DRIVER_VERSION     "2023/11/17: Init cec function from register"
 
 #define CEC_DEV_NAME		"cec"
 
@@ -51,6 +51,8 @@ enum cec_chip_ver {
 	CEC_CHIP_T3X, /* base on T3, only have cec_b */
 	CEC_CHIP_TXHD2, /* base on T5M, only have cec_b */
 	CEC_CHIP_S1A,
+	CEC_CHIP_S7,
+	CEC_CHIP_S7D,
 };
 
 enum cecaver {

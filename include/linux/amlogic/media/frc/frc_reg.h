@@ -1861,6 +1861,11 @@
 #define FRC_NR_MISC                                0x0800
 //Bit 31: 0        reg_nr_misc               // unsigned ,    RW, default = 0  register
 
+#define FRC_ARB_UGT_RD_BASIC                       0x0974
+//Bit 7: 0         module_urg+arb_ugt_basic  // unsigned ,    RW, default = 0x55
+#define FRC_ARB_UGT_WR_BASIC                       0x0994
+//Bit 3: 0         module_urg+arb_ugt_basic  // unsigned ,    RW, default = 5
+
 #define FRC_MEVP_CTRL0                             0x1080
 //Bit 31            reg_mevp_clr_me_undone_flag  //unsigned  , RW, default = 0 ,me_process undone flag clear, write pulse
 //Bit 30:4          reserved
@@ -2166,6 +2171,15 @@
  //Bit	7: 6	    reserved
  //Bit	5: 0	    reg_mc_7_flag_line_width  // unsigned ,    RW, default = 4	7 flag line width
 
+#define FRC_MC_MVRD_CTRL                           0x3901
+//Bit 31:9       reserved
+//Bit 8          reg_mc_mv_in_sel    // unsigned,RW,default = 1,1:mv from ddr 0:mv from mevp ports
+//Bit 7 :1       reserved
+//Bit 0          reg_mvrd_mode          // unsigned,RW, default = 0,
+					//only active when reg_mc_mv_in_sel == 1,
+					//1:always read mv from ddr
+					//0:ead mv when mvwr_cnt > mvrd_cnt
+
 #define FRC_MC_SW_RESETS                           0x3904
 //Bit 31:16      reserved
 //Bit 15: 0      reg_mc_sw_resets                 // unsigned ,    RW, default = 0,
@@ -2291,7 +2305,7 @@
 //                                      1=ABH read request burst size 24;
 //                                      2=ABH read request burst size 32;
 //                                      3=ABH read request burst size 48.
-// Bit     1 RW ctrl_sw_reset. 1=Reset RDMA logics except register.
+// Bit     1 RW ctrl_sw_reset. 1=Reset RDMA logic except register.
 // Bit     0 RW ctrl_free_clk_enable. 0=Default, Enable clock gating. 1=No clock gating, enable free clock.
 #define FRC_RDMA_CTRL                              0x3b14
 // Read only.
@@ -2930,6 +2944,9 @@ extern int fw_idx;
 /******************************************************************************/
 inline void WRITE_FRC_REG(unsigned int reg, unsigned int val);
 inline void WRITE_FRC_REG_BY_CPU(unsigned int reg, unsigned int val);
+inline void FRC_RDMA_WR_REG_IN(unsigned int reg, unsigned int val);
+inline void FRC_RDMA_WR_REG_OUT(unsigned int reg, unsigned int val);
+inline int READ_FRC_RDMA_REG(unsigned int reg);
 
 inline void WRITE_FRC_BITS(unsigned int reg, unsigned int value,
     unsigned int start, unsigned int len);

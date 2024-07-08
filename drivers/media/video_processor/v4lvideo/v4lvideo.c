@@ -65,7 +65,11 @@ static u32 alloc_sei = 1;
 #define V4L2_CID_USER_AMLOGIC_V4LVIDEO_BASE  (V4L2_CID_USER_BASE + 0x1100)
 
 static unsigned int video_nr_base = 30;
+#ifdef CONFIG_AMLOGIC_LOWMEM
+static unsigned int n_devs = 1;
+#else
 static unsigned int n_devs = 9;
+#endif
 #define N_DEVS 9
 static unsigned int debug;
 static unsigned int get_count[N_DEVS];
@@ -545,14 +549,16 @@ void v4lvideo_keep_vf(struct file *file)
 	int keep_id_1 = 0;
 	int keep_head_id = 0;
 	int keep_dw_id = 0;
+	int inst_id;
 	struct file_private_data *file_private_data;
 
 	file_private_data = v4lvideo_get_file_private_data(file, false);
-
 	if (!file_private_data) {
 		V4LVID_ERR("vf_keep error: file_private_data is NULL");
 		return;
 	}
+
+	inst_id = file_private_data->v4l_inst_id;
 
 	file_private_data->vf.flag |= VFRAME_FLAG_KEEPED;
 	file_private_data->vf_ext.flag |= VFRAME_FLAG_KEEPED;
@@ -562,7 +568,7 @@ void v4lvideo_keep_vf(struct file *file)
 	if (file_private_data->flag & V4LVIDEO_FLAG_DI_NR) {
 		vf_ext_p = file_private_data->vf_ext_p;
 		if (!vf_ext_p) {
-			V4LVID_ERR("file_vf_keep error: vf_ext is NULL");
+			v4l_print(inst_id, PRINT_ERROR, "file_vf_keep error: vf_ext is NULL");
 			return;
 		}
 		vf_p = vf_ext_p;
@@ -584,6 +590,10 @@ void v4lvideo_keep_vf(struct file *file)
 		MEM_TYPE_CODEC_MM, &keep_head_id);
 	video_keeper_keep_mem(vf_p->mem_dw_handle, MEM_TYPE_CODEC_MM,
 		&keep_dw_id);
+
+	v4l_print(inst_id, PRINT_OTHER,
+		"%s: type=%x, flag=%d, omx_index=%d\n",
+		__func__, vf_p->type, file_private_data->flag, vf_p->omx_index);
 
 	file_private_data->keep_id = keep_id;
 	file_private_data->keep_id_1 = keep_id_1;
@@ -644,6 +654,19 @@ static void vf_free(struct file_private_data *file_private_data)
 			total_get_count[inst_id], total_put_count[inst_id],
 			total_release_count[inst_id]);
 	}
+}
+
+void v4lvideo_free_vf(struct file *file)
+{
+	struct file_private_data *file_private_data;
+
+	file_private_data = v4lvideo_get_file_private_data(file, false);
+	if (!file_private_data) {
+		V4LVID_ERR("vf_keep error: file_private_data is NULL");
+		return;
+	}
+
+	vf_free(file_private_data);
 }
 
 static void vf_free_force(struct v4lvideo_file_s *v4lvideo_file)
@@ -971,6 +994,7 @@ static void do_vframe_afbc_soft_decode(struct v4l_data_t *v4l_data,
 	u8 *y_dst, *vu_dst;
 	short *y_dst_10, *vu_dst_10;
 	int bit_10;
+	int convert_to_8bit = 0;
 	struct timeval start, end;
 	struct fbc_decoder_param param;
 	unsigned long time_use = 0;
@@ -985,7 +1009,8 @@ static void do_vframe_afbc_soft_decode(struct v4l_data_t *v4l_data,
 		 vf->width, vf->height, vf->compWidth, vf->compHeight, bit_10);
 	if (v4l_data->byte_stride == v4l_data->width && bit_10 == 1) {
 		bit_10 = 0;
-		pr_info("memory not enough,force to 8bit.\n");
+		convert_to_8bit  = 1;
+		pr_info("memory not enough,convert 10bit to 8bit.\n");
 	}
 	for (i = 0; i < 4; i++) {
 		planes[i] = vmalloc(y_size);
@@ -1034,6 +1059,8 @@ static void do_vframe_afbc_soft_decode(struct v4l_data_t *v4l_data,
 			tmp = (u8 *)(s2c);
 			if (bit_10)
 				*(y_dst_10 + j) = *s2c << 6 & convert_mask;
+			else if (convert_to_8bit)
+				*(y_dst + j) = (*s2c >> 2) & 0xff;
 			else
 				*(y_dst + j) = tmp[0];
 		}
@@ -1052,6 +1079,9 @@ static void do_vframe_afbc_soft_decode(struct v4l_data_t *v4l_data,
 			if (bit_10) {
 				*(vu_dst_10 + j) = *s2c1 << 6 & convert_mask;
 				*(vu_dst_10 + j + 1) = *s2c << 6 & convert_mask;
+			} else if (convert_to_8bit) {
+				*(vu_dst + j) = *s2c >> 2 & 0xff;
+				*(vu_dst + j + 1) = *s2c1 >> 2 & 0xff;
 			} else {
 				*(vu_dst + j) = tmp[0];
 				*(vu_dst + j + 1) = tmp1[0];
@@ -1514,6 +1544,7 @@ struct file_private_data *v4lvideo_get_file_private_data(struct file *file_vf,
 	if (!file_private_data)
 		return NULL;
 
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	file_private_data->md.p_md  = vmalloc(MD_BUF_SIZE);
 	if (!file_private_data->md.p_md) {
 		kfree((u8 *)file_private_data);
@@ -1529,6 +1560,7 @@ struct file_private_data *v4lvideo_get_file_private_data(struct file *file_vf,
 		kfree((u8 *)file_private_data);
 		return NULL;
 	}
+#endif
 
 	file_private_data->p_ud_param = vmalloc(VF_UD_MAX_SIZE);
 	if (!file_private_data->p_ud_param) {
@@ -2145,7 +2177,7 @@ void v4lvideo_recycle_vf(void *caller_data, struct file *file, int instance_id)
 	if (vf_p) {
 		if (!v4lvideo_file) {
 			pr_err("%s: vf_p && v4lvideo_file is NULL\n", __func__);
-			mutex_unlock(&v4lvideo_buf_mgr_mutex);
+			mutex_unlock(&dev->mutex_input);
 			return;
 		}
 		if (file_private_data->is_keep) {
@@ -2821,6 +2853,7 @@ struct file *v4lvideo_alloc_file(void)
 		return NULL;
 	}
 
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	private_data->md.p_md  = vmalloc(MD_BUF_SIZE);
 	if (!private_data->md.p_md) {
 		kfree((u8 *)private_data);
@@ -2836,6 +2869,7 @@ struct file *v4lvideo_alloc_file(void)
 		kfree((u8 *)private_data);
 		return NULL;
 	}
+#endif
 
 	private_data->p_ud_param = vmalloc(VF_UD_MAX_SIZE);
 	if (!private_data->p_ud_param) {
@@ -2883,6 +2917,7 @@ int v4lvideo_alloc_fd(int *fd)
 		return -ENODEV;
 	}
 
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	private_data->md.p_md  = vmalloc(MD_BUF_SIZE);
 	if (!private_data->md.p_md) {
 		kfree((u8 *)private_data);
@@ -2900,6 +2935,7 @@ int v4lvideo_alloc_fd(int *fd)
 		put_unused_fd(file_fd);
 		return -ENOMEM;
 	}
+#endif
 
 	private_data->p_ud_param = vmalloc(VF_UD_MAX_SIZE);
 	if (!private_data->p_ud_param) {

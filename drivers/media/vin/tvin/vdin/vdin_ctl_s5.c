@@ -30,7 +30,7 @@
 #include "vdin_vf.h"
 #include "vdin_canvas.h"
 #include "vdin_afbce.h"
-#include "vdin_dv.h"
+#include "vdin_hdr.h"
 #include "vdin_hw.h"
 
 #define VDIN_V_SHRINK_H_LIMIT 1280
@@ -2138,7 +2138,7 @@ void vdin_set_frame_mif_write_addr_s5(struct vdin_dev_s *devp,
 				       VDIN_WRMIF_STRIDE_CHROMA + devp->addr_offset,
 				       stride_chroma);
 		}
-		if (devp->pause_dec || devp->msct_top.sct_pause_dec)
+		if (devp->pause_dec)
 			rdma_write_reg_bits(devp->rdma_handle,
 				VDIN_WRMIF_CTRL + devp->addr_offset,
 				0, WR_REQ_EN_BIT, WR_REQ_EN_WID);
@@ -2156,7 +2156,7 @@ void vdin_set_frame_mif_write_addr_s5(struct vdin_dev_s *devp,
 			wr(devp->addr_offset, VDIN_WRMIF_STRIDE_CHROMA,
 			   stride_chroma);
 		}
-		if (devp->pause_dec || devp->msct_top.sct_pause_dec)
+		if (devp->pause_dec)
 			wr_bits(devp->addr_offset, VDIN_WRMIF_CTRL,
 				0, WR_REQ_EN_BIT, WR_REQ_EN_WID);
 		else
@@ -2217,7 +2217,7 @@ void vdin_set_canvas_id_s5(struct vdin_dev_s *devp, unsigned int rdma_enable,
 				    VDIN_WRMIF_CTRL + devp->addr_offset,
 				    canvas_id, WR_CANVAS_BIT, WR_CANVAS_WID);
 
-		if (devp->pause_dec || devp->msct_top.sct_pause_dec)
+		if (devp->pause_dec)
 			rdma_write_reg_bits(devp->rdma_handle, VDIN_WRMIF_CTRL + devp->addr_offset,
 					    0, WR_REQ_EN_BIT, WR_REQ_EN_WID);
 		else
@@ -2228,7 +2228,7 @@ void vdin_set_canvas_id_s5(struct vdin_dev_s *devp, unsigned int rdma_enable,
 		wr_bits(devp->addr_offset, VDIN_WRMIF_CTRL, canvas_id,
 			WR_CANVAS_BIT, WR_CANVAS_WID);
 
-		if (devp->pause_dec || devp->msct_top.sct_pause_dec)
+		if (devp->pause_dec)
 			wr_bits(devp->addr_offset, VDIN_WRMIF_CTRL, 0,
 				WR_REQ_EN_BIT, WR_REQ_EN_WID);
 		else
@@ -3899,20 +3899,6 @@ void vdin_dv_pr_meta_data_s5(void *addr, unsigned int size, unsigned int index)
 	}
 }
 
-static void vdin_dv_pr_event_meta_data_s5(void *addr, unsigned int size, unsigned int index)
-{
-	unsigned int i;
-	char *c = addr;
-
-	for (i = 0; i < size; i += 16) {
-		pr_info("meta1:%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-			c[i], c[i + 1], c[i + 2], c[i + 3],
-			c[i + 4], c[i + 5], c[i + 6], c[i + 7],
-			c[i + 8], c[i + 9], c[i + 10], c[i + 11],
-			c[i + 12], c[i + 13], c[i + 14], c[i + 15]);
-	}
-}
-
 void vdin_pr_vsif_data_s5(struct vdin_dev_s *devp, struct vframe_s *vf)
 {
 	if (dv_dbg_log & DV_DEBUG_RAW_DATA)
@@ -4421,130 +4407,6 @@ void vdin_dv_tunnel_set_s5(struct vdin_dev_s *devp)
 //	}
 }
 
-static int vdin_get_max_buf_s5(struct vdin_dev_s *devp)
-{
-	if (!devp) {
-		pr_err("devp is NULL\n");
-		return -1;
-	}
-
-	return devp->frame_buff_num;
-}
-
-int vdin_event_cb_s5(int type, void *data, void *op_arg)
-{
-	unsigned long flags;
-	struct vf_pool *p;
-	struct vdin_dev_s *devp = vdin_get_dev(0);
-
-	if (!op_arg) {
-		if (vdin_ctl_dbg & CTL_DEBUG_EVENT_OP_ARG)
-			pr_info("%s:op_arg is NULL!\n", __func__);
-		return -1;
-	}
-	if (!data) {
-		if (vdin_ctl_dbg & CTL_DEBUG_EVENT_DATA)
-			pr_info("%s:data is NULL!\n", __func__);
-		return -1;
-	}
-	p = (struct vf_pool *)op_arg;
-	if (type & VFRAME_EVENT_RECEIVER_GET_AUX_DATA) {
-		struct provider_aux_req_s *req =
-			(struct provider_aux_req_s *)data;
-		unsigned char index;
-
-		if (!req->vf) {
-			pr_info("%s:req->vf is NULL!\n", __func__);
-			return -1;
-		}
-		spin_lock_irqsave(&p->dv_lock, flags);
-		index = req->vf->index & 0xff;
-		req->aux_buf = NULL;
-		req->aux_size = 0;
-		req->dv_enhance_exist = 0;
-		/* TODO: need change the low latency flag when LL mode */
-		req->low_latency = p->low_latency;
-		memcpy(&req->dv_vsif,
-			&p->dv_vsif, sizeof(struct tvin_dv_vsif_s));
-		if (req->bot_flag)
-			index = (req->vf->index >> 8) & 0xff;
-		if (index != 0xff && index < p->size && p->dv_buf[index]) {
-			req->aux_buf = p->dv_buf[index];
-			req->aux_size = p->dv_buf_size[index];
-		}
-		spin_unlock_irqrestore(&p->dv_lock, flags);
-
-		if (dv_dbg_log & DV_DEBUG_EVENT_META_DATA) {
-			pr_info("%s(type 0x%x vf index 0x%x)=>size 0x%x\n",
-				__func__, type, index, req->aux_size);
-			vdin_dv_pr_event_meta_data_s5(req->aux_buf,
-					req->aux_size, index);
-		}
-	} else if (type & VFRAME_EVENT_RECEIVER_DISP_MODE) {
-		struct provider_disp_mode_req_s *req =
-			(struct provider_disp_mode_req_s *)data;
-		unsigned int index_disp;
-
-		if (!req->vf) {
-			pr_info("%s:req->vf is NULL!\n", __func__);
-			return -1;
-		}
-		index_disp = req->vf->index_disp & 0xff;
-		if (index_disp >= VFRAME_DISP_MAX_NUM) {
-			if (vdin_ctl_dbg & CTL_DEBUG_EVENT_INDEX)
-				pr_info("%s:req->vf->index_disp(%d) is overflow!\n",
-					__func__, index_disp);
-			return -1;
-		}
-		if (devp->game_mode || devp->skip_disp_md_check)
-			req->disp_mode = VFRAME_DISP_MODE_NULL;
-		else
-			req->disp_mode = p->disp_mode[index_disp];
-		if (req->req_mode == 1 && p->skip_vf_num)
-			p->disp_mode[index_disp] = VFRAME_DISP_MODE_UNKNOWN;
-		if (vdin_ctl_dbg & CTL_DEBUG_EVENT_DISP_MODE)
-			pr_info("%s(type 0x%x vf index 0x%x)=>disp_mode %d,req_mode:%d;[%d]=%d,[%d]=%d\n",
-				__func__, type, index_disp, req->disp_mode, req->req_mode,
-				p->disp_index[0], p->disp_mode[p->disp_index[0]],
-				p->disp_index[1], p->disp_mode[p->disp_index[1]]);
-	} else if (type & VFRAME_EVENT_RECEIVER_NEED_NO_COMP) {
-		unsigned int *cnt;
-
-		/* use for debug */
-//		if (vdin0_afbce_debug_force)
-//			return 0;
-
-		cnt = (unsigned int *)data;
-		if (*cnt) {
-			devp->afbce_mode = 0;
-		} else {
-			if (devp->afbce_valid)
-				devp->afbce_mode = 1;
-		}
-
-		if (vdin_ctl_dbg & CTL_DEBUG_EVENT_NO_COMP)
-			pr_info("%s(type 0x%x vdin%d) afbce_mode: %d, vpp_cnt: %d\n",
-				__func__, type, devp->index,
-				devp->afbce_mode, *cnt);
-	} else if (type & VFRAME_EVENT_RECEIVER_BUF_COUNT) {
-		*(int *)data = vdin_get_max_buf_s5(devp);
-	} else if (type & VFRAME_EVENT_RECEIVER_REQ_STATE) {
-		struct provider_state_req_s *req =
-			(struct provider_state_req_s *)data;
-
-		#ifdef CONFIG_AMLOGIC_TEE
-		if (devp->secure_en && devp->mem_protected)
-			req->req_result[0] = 1;
-		else
-			req->req_result[0] = 0;
-		#else
-			req->req_result[0] = 0;
-		#endif
-	}
-
-	return 0;
-}
-
 void set_invert_top_bot_s5(bool invert_flag)
 {
 	invert_top_bot = invert_flag;
@@ -4810,7 +4672,12 @@ void vdin_vs_proc_monitor_s5(struct vdin_dev_s *devp)
 		else
 			devp->prop.hdr_info.hdr_check_cnt = 0;
 
-		if (devp->prop.latency.allm_mode != devp->pre_prop.latency.allm_mode ||
+		if (devp->prop.hdr10p_info.hdr10p_on != devp->pre_prop.hdr10p_info.hdr10p_on)
+			devp->prop.hdr10p_info.hdr10p_check_cnt++;
+		else
+			devp->prop.hdr10p_info.hdr10p_check_cnt = 0;
+
+		if (!!devp->prop.latency.allm_mode != !!devp->pre_prop.latency.allm_mode ||
 		    devp->prop.latency.it_content != devp->pre_prop.latency.it_content ||
 		    devp->prop.latency.cn_type != devp->pre_prop.latency.cn_type)
 			devp->dv.allm_chg_cnt++;
@@ -4824,11 +4691,15 @@ void vdin_vs_proc_monitor_s5(struct vdin_dev_s *devp)
 		else
 			devp->sg_chg_afd_cnt = 0;
 
-		if (devp->vrr_data.vdin_vrr_en_flag != devp->prop.vtem_data.vrr_en ||
-			vdin_check_spd_data_chg(devp))
+		if (vdin_is_vrr_state_chg(devp))
 			devp->vrr_data.vrr_chg_cnt++;
 		else
 			devp->vrr_data.vrr_chg_cnt = 0;
+
+		if (vdin_check_freesync_state_chg(devp))
+			devp->vrr_data.freesync_chg_cnt++;
+		else
+			devp->vrr_data.freesync_chg_cnt = 0;
 
 		if (vdin_isr_monitor & VDIN_ISR_MONITOR_FLAG)
 			pr_info("dv:%d, LL:%d hdr st:%d eotf:%d fg:%d allm:%d sty:0x%x spd:0x%x 0x%x\n",

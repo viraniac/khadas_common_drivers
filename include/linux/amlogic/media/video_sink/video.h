@@ -342,6 +342,8 @@ enum mediasync_parameter_e {
 #define HDMI_RX_MUTE_SET       1
 #define USER_MUTE_SET          2
 #define AML_DOLBY_MUTE_SET     3
+#define DRM_MUTE_SET           4
+#define VPP_INTERNAL           5
 
 struct mediasync_parameter {
 	u32 vsync_period;
@@ -356,7 +358,7 @@ struct mediasync_ptr {
 	int (*reserved2)(void);
 };
 
-#define MAX_VIDEO_MUTE_OWNER 5
+#define MAX_VIDEO_MUTE_OWNER 6
 #define AMVIDEO_UPDATE_OSD_MODE	0x00000001
 #define AMVIDEO_UPDATE_PREBLEND_MODE	0x00000002
 #define AMVIDEO_UPDATE_SIGNAL_MODE      0x00000003
@@ -383,9 +385,13 @@ static inline int amvideo_notifier_call_chain(unsigned long val, void *v)
 #define POST_SLICE_NUM 4
 #define VD_SLICE_NUM   4
 struct slice_info {
+	u32 hsize_amdv; /* slice hsize input for amdv */
 	u32 hsize;     /*slice hsize*/
 	u32 vsize;     /*slice vsize*/
 	u32 scaler_in_hsize;
+	u32 vd1_slice_in_hsize;
+	u32 vd1_slice_in_vsize;
+	u32 vd1_overlap;
 };
 
 struct vppx_post_info_t {
@@ -403,8 +409,12 @@ struct vpp_post_info_t {
 
 struct vd_proc_info_t {
 	bool vd2_prebld_4k120_en;
+	bool no_compress;
 	u8 slice_num;
+	u32 overlap_size_amdvin;
 	u32 overlap_size;
+	u32 vd1_in_hsize;
+	u32 vd1_in_vsize;
 	struct slice_info slice[VD_SLICE_NUM];
 };
 
@@ -520,7 +530,7 @@ void clear_vsync_2to1_info(void);
 void set_vsync_2to1_mode(u8 enable);
 void set_pre_vsync_mode(u8 enable);
 void get_vdx_axis(u32 index, int *buf);
-
+void get_vdx_real_axis(u32 index, int *buf);
 void vpu_module_clk_enable(u32 vpp_index, u32 module, bool async);
 void vpu_module_clk_disable(u32 vpp_index, u32 module, bool async);
 
@@ -561,4 +571,5 @@ int register_vpp_postblend_info_func(void (*get_vpp_osd1_scope)
 #ifndef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 int get_amdv_mode(void);
 #endif
+u32 get_vpp_vsync_index(u32 layerid);
 #endif /* VIDEO_H */

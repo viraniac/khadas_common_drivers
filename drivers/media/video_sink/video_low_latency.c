@@ -129,6 +129,9 @@ static int lowlatency_vsync(u8 instance_id)
 	u32 next_afbc_request = atomic_read(&gafbc_request);
 	struct path_id_s path_id;
 	int i;
+#if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
+	u16 line = glayer_info[0].layer_top;
+#endif
 
 	vinfo = get_current_vinfo();
 #ifdef CONFIG_AMLOGIC_MEDIA_VSYNC_RDMA
@@ -288,12 +291,12 @@ static int lowlatency_vsync(u8 instance_id)
 			/*need call every vsync*/
 			if (path3_new_frame)
 				frame_lock_process(path3_new_frame,
-					cur_frame_par[0]);
+					cur_frame_par[0], line);
 			else if (vd_layer[0].dispbuf)
 				frame_lock_process(vd_layer[0].dispbuf,
-					cur_frame_par[0]);
+					cur_frame_par[0], line);
 			else
-				frame_lock_process(NULL, cur_frame_par[0]);
+				frame_lock_process(NULL, cur_frame_par[0], line);
 		}
 
 		if (vd1_path_id == gvideo_recv[0]->path_id) {
@@ -895,7 +898,7 @@ static int lowlatency_vsync(u8 instance_id)
 	else
 		frame_par = vd_layer[0].cur_frame_par;
 
-	refresh_on_vs(new_frame, vd_layer[0].dispbuf);
+	refresh_on_vs(new_frame, vd_layer[0].dispbuf, VPP_TOP0);
 
 	amvecm_on_vs
 		(!is_local_vf(vd_layer[0].dispbuf)
@@ -978,6 +981,7 @@ static int lowlatency_vsync(u8 instance_id)
 			atomic_set(&cur_primary_src_fmt, fmt);
 			atomic_set(&primary_src_fmt, fmt);
 			video_prop_status |= VIDEO_PROP_CHANGE_FMT;
+			update_primary_fmt_event();
 		}
 	}
 
@@ -1653,7 +1657,8 @@ static int lowlatency_vsync(u8 instance_id)
 #ifdef CONFIG_AMLOGIC_VDETECT
 		vdetect_get_frame_nn_info(vd_layer[0].dispbuf);
 #endif
-		vf_pq_process(vd_layer[0].dispbuf, vpp_scenes, pq_process_debug);
+		vf_pq_process(vd_layer[0].dispbuf, vpp_scenes, pq_process_debug,
+						new_frame ? 1 : 0);
 		if (ai_pq_debug > 0x10) {
 			ai_pq_debug--;
 			if (ai_pq_debug == 0x10)

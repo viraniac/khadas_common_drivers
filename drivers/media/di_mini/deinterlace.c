@@ -11653,6 +11653,8 @@ void dim_set_di_flag(void)
 	else
 		get_datal()->fg_bypass_en = true;
 	dbg_reg("%s:fg_bypass_en:%d\n", __func__, get_datal()->fg_bypass_en);
+	if ((IS_IC(dil_get_cpuver_flag(), S4) && cfgg(SUB_V)))
+		dimp_set(edi_mp_pre_enable_mask, 1);
 }
 
 #ifdef MARK_HIS	/*move to di_sys.c*/

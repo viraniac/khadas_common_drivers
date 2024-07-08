@@ -46,25 +46,40 @@
 #define VSVDB_HDR10P_TAG ((USE_EXTENDED_TAG << 8) + VSVDB_TAG + VSVDB_OFFSET)
 #define VDDDB_TAG 2 /* VESA Display Device Data Block */
 #define VVTBE_TAG 3 /* VESA Video Timing Block Extension */
+#define EXTENDED_VCDB_TAG ((USE_EXTENDED_TAG << 8) + VCDB_TAG)
+#define EXTENDED_VSVDB_TAG ((USE_EXTENDED_TAG << 8) + VSVDB_TAG)
+#define EXTENDED_VDDDB_TAG ((USE_EXTENDED_TAG << 8) + VDDDB_TAG)
+#define EXTENDED_VVTBE_TAG ((USE_EXTENDED_TAG << 8) + VVTBE_TAG)
 /* extend tag code 0x4: Reserved for HDMI Video Data Block */
 #define CDB_TAG 0x5 /* Colorimetry Data Block */
 #define HDR_STATIC_TAG 6 /* HDR Static Metadata Data Block */
 #define HDR_DYNAMIC_TAG 7 /* HDR Dynamic Metadata Data Block */
+#define EXTENDED_CDB_TAG ((USE_EXTENDED_TAG << 8) + CDB_TAG)
+#define EXTENDED_HDR_STATIC_TAG ((USE_EXTENDED_TAG << 8) + HDR_STATIC_TAG)
+#define EXTENDED_HDR_DYNAMIC_TAG ((USE_EXTENDED_TAG << 8) + HDR_DYNAMIC_TAG)
 /* extend tag code 8-12: reserved */
 #define VFPDB_TAG 13 /* Video Format Preference Data Block */
 #define Y420VDB_TAG 14 /* YCBCR 4:2:0 Video Data Block */
 #define Y420CMDB_TAG 15 /* YCBCR 4:2:0 Capability Map Data Block */
+#define EXTENDED_VFPDB_TAG ((USE_EXTENDED_TAG << 8) + VFPDB_TAG)
+#define EXTENDED_Y420VDB_TAG ((USE_EXTENDED_TAG << 8) + Y420VDB_TAG)
+#define EXTENDED_Y420CMDB_TAG ((USE_EXTENDED_TAG << 8) + Y420CMDB_TAG)
 /* extend tag code 16: Reserved for CTA Miscellaneous Audio Fields */
 #define VSADB_TAG 17 /* Vendor-Specific Audio Data Block */
 /* extend tag code 18: Reserved for HDMI Audio Data Block */
 #define RCDB_TAG 19 /* Room Configuration Data Block */
 #define SLDB_TAG 20	/* Speaker Location Data Block */
+#define EXTENDED_VSADB_TAG ((USE_EXTENDED_TAG << 8) + VSADB_TAG)
+#define EXTENDED_RCDB_TAG ((USE_EXTENDED_TAG << 8) + RCDB_TAG)
+#define EXTENDED_SLDB_TAG ((USE_EXTENDED_TAG << 8) + SLDB_TAG)
 /* extend tag code 21~31: Reserved */
 #define IFDB_TAG 32 /* infoframe data block */
 #define HF_EEODB 0x78 /* HDMI forum EDID extension override data block */
 #define HDMI_VIC420_OFFSET 0x100
 #define HDMI_3D_OFFSET 0x180
 #define HDMI_VESA_OFFSET 0x200
+#define EXTENDED_IFDB_TAG ((USE_EXTENDED_TAG << 8) + IFDB_TAG)
+#define EXTENDED_HF_EEODB ((USE_EXTENDED_TAG << 8) + HF_EEODB)
 
 /* eARC Rx Capabilities Data Structure version */
 #define CAP_DS_VER 0x1
@@ -92,6 +107,7 @@
 #define EDID_TYPE_256_PLUS_256 0
 #define EDID_TYPE_512_PLUS_512 1
 #define EDID_TYPE_256_PLUS_512 2
+#define END_OF_BLK(x) (((x) + 1) * EDID_BLK_SIZE - 1)
 
 enum edid_audio_format_e {
 	AUDIO_FORMAT_HEADER,
@@ -181,9 +197,10 @@ enum edid_list_e {
 };
 
 enum edid_ver_e {
-	EDID_V14,
-	EDID_V20,
-	EDID_AUTO
+	EDID_V14 = 0x0,
+	EDID_V20 = 0x1,
+	EDID_AUTO20 = 0x2,
+	EDID_AUTO14 = 0x4
 };
 
 enum edid_support_e {
@@ -742,7 +759,14 @@ enum hdmi_vic_e {
 	HDMI_5120x2880 = 113,
 	HDMI_2560x2880 = 114,
 	HDMI_720X240 = 115,
-	HDMI_RESERVED = 116,
+	HDMI_360x480i = 116,
+	HDMI_360x576i = 117,
+	HDMI_360x480p = 118,
+	HDMI_360x576p = 119,
+	HDMI_1440x480i60 = 120,
+	HDMI_1440x576i50 = 121,
+	HDMI_3840x1080p60 = 122,
+	HDMI_RESERVED = 123,
 	/* VIC 111~255: Reserved for the Future */
 
 	/* the following VICs are for y420 mode,
@@ -814,6 +838,19 @@ enum earc_cap_block_id {
 	EARC_CAP_BLOCK_ID_3 = 3
 };
 
+enum rx_edid_selection {
+	//rx default edid,product:tv+tx+none_cec
+	use_edid_def = 1,
+	//edid extraction,product:standard repeater
+	use_edid_repeater = 2,
+	//edid extraction,product:repeater+audio block passthrough
+	use_edid_repeater_sad_passthrough = 3,
+	//product:rx edid+audio block passthrough+secondary phyaddr
+	use_edid_def_sad_passthrough_secondary_phyaddr = 4,
+	//product:rx edid+secondary phyaddr
+	use_edid_def_secondary_phyaddr = 5,
+};
+
 extern u8 port_hpd_rst_flag;
 extern int edid_mode;
 extern int port_map;
@@ -827,7 +864,11 @@ extern unsigned int edid_reset_max;
 #ifdef CONFIG_AMLOGIC_HDMITX
 extern u32 tx_hdr_priority;
 #endif
-
+//edid auto start
+void rx_clr_edid_type(unsigned char port);
+void edid_type_init(void);
+void edid_type_update(u8 port);
+//edid auto end
 int rx_set_hdr_lumi(unsigned char *data, int len);
 void rx_edid_physical_addr(int a, int b, int c, int d);
 unsigned char rx_parse_arc_aud_type(const unsigned char *buff);
@@ -863,6 +904,7 @@ void rx_modify_edid(unsigned char *buffer,
 void rx_edid_update_audio_info(unsigned char *p_edid,
 			       unsigned int len);
 bool is_ddc_idle(unsigned char port_id);
+void rx_edid_reset(u8 port);
 bool is_edid_buff_normal(unsigned char port_id);
 bool need_update_edid(u8 port);
 enum edid_ver_e get_edid_selection(u8 port);
@@ -889,8 +931,8 @@ void rpt_edid_colorimetry_db_extraction(unsigned char *p_edid);
 void rpt_edid_420_vdb_extraction(unsigned char *p_edid);
 void rpt_edid_hdr_static_db_extraction(unsigned char *p_edid);
 void rpt_edid_extraction(unsigned char *p_edid);
-void rx_get_edid_support(u8 port);
-void rx_pirnt_edid_support(void);
-bool is_valid_edid_data(unsigned char *p_edid);
 #endif
+void rx_get_edid_support(u8 port);
+void rx_print_edid_support(void);
+bool is_valid_edid_data(unsigned char *p_edid);
 #endif

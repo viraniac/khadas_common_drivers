@@ -18,14 +18,9 @@ void aml_spdif_enable(struct aml_audio_controller *actrl,
 	int index,
 	bool is_enable);
 
-void aml_spdif_mute(struct aml_audio_controller *actrl,
-	int stream,
-	int index,
-	bool is_mute);
+void aml_spdifout_mute_without_actrl(int index, bool start, bool is_mute);
 
-void aml_spdifout_mute_without_actrl(int index,
-	bool is_mute);
-
+int aml_spdif_out_get_mute(struct aml_audio_controller *actrl, int index);
 void aml_spdif_out_mute(struct aml_audio_controller *actrl,
 	int index, bool is_mute);
 
@@ -62,6 +57,8 @@ void aml_spdifout_get_aed_info(int spdifout_id,
 			       int *bitwidth,
 			       int *frddrtype);
 
+void enable_spdif_to_hdmitx_clk(bool enable);
+void enable_spdif_to_hdmitx_dat(bool enable);
 void enable_spdifout_to_hdmitx(int separated);
 
 void spdifout_samesource_set(int spdif_index,

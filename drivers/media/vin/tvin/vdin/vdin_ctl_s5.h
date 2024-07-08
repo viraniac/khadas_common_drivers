@@ -91,7 +91,6 @@ void vdin_dolby_buffer_update(struct vdin_dev_s *devp,
 void vdin_dolby_addr_update(struct vdin_dev_s *devp, unsigned int index);
 void vdin_dolby_addr_alloc(struct vdin_dev_s *devp, unsigned int size);
 void vdin_dolby_addr_release(struct vdin_dev_s *devp, unsigned int size);
-int vdin_event_cb(int type, void *data, void *op_arg);
 void vdin_hdmiin_patch(struct vdin_dev_s *devp);
 void vdin_set_top_s5(struct vdin_dev_s *devp, enum tvin_port_e port,
 		  enum tvin_color_fmt_e input_cfmt, enum bt_path_e bt_path);
@@ -185,7 +184,7 @@ void vdin_set_to_vpp_parm(struct vdin_dev_s *devp);
 void vdin_dmc_ctrl(struct vdin_dev_s *devp, bool on_off);
 void vdin_pause_mif_write(struct vdin_dev_s *devp, unsigned int rdma_enable);
 bool vdin_check_is_spd_data(struct vdin_dev_s *devp);
-bool vdin_check_spd_data_chg(struct vdin_dev_s *devp);
+bool vdin_check_freesync_state_chg(struct vdin_dev_s *devp);
 void vdin_sw_reset_s5(struct vdin_dev_s *devp);
 void vdin_bist_s5(struct vdin_dev_s *devp, unsigned int mode);
 #endif

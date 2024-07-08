@@ -9,6 +9,7 @@
 #include "mesonsm1_ac200-panel.dtsi"
 #include "mesonsm1_drm_dual_disp.dtsi"
 #include "partition_normal_linux.dtsi"
+#include "meson-ir-map-linux.dtsi"
 
 / {
 	amlogic-dt-id = "sm1_ac200_2g";
@@ -51,6 +52,11 @@
 			console-size = <0x40000>;
 			ftrace-size = <0x80000>;
 			pmsg-size = <0x20000>;
+		};
+
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
 		};
 
 		debug_reserved:linux,iotrace {
@@ -189,47 +195,6 @@
 			gpios=<&gpio_ao GPIOAO_11 GPIO_ACTIVE_HIGH>;
 			default-state ="on";
 		};
-	};
-
-	cvbsout {
-		compatible = "amlogic, cvbsout-sm1";
-		dev_name = "cvbsout";
-		status = "okay";
-		//clocks = <&clkc CLKID_VCLK2_ENCI
-		//	&clkc CLKID_VCLK2_VENCI0
-		//	&clkc CLKID_VCLK2_VENCI1
-		//	&clkc CLKID_DAC_CLK>;
-		//clock-names = "venci_top_gate",
-		//	"venci_0_gate",
-		//	"venci_1_gate",
-		//	"vdac_clk_gate";
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* sm1 */
-		performance = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x8080
-			0x1b05  0xfd
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
-		performance_sarft = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x0
-			0x1b05  0x9
-			0x1c59  0xfc48
-			0xffff  0x0>; /* ending flag */
-		performance_revB_telecom = <0x1bf0  0x9
-			0x1b56  0x546
-			0x1b12  0x8080
-			0x1b05  0x9
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
 	};
 
 	bt-dev{
@@ -780,7 +745,7 @@
 				sound-dai = <&dummy_codec>;
 			};
 		};
-
+/*
 		aml-audio-card,dai-link@6 {
 			mclk-fs = <256>;
 			suffix-name = "alsaPORT-earc";
@@ -792,7 +757,7 @@
 				sound-dai = <&dummy_codec>;
 			};
 		};
-
+*/
 		aml-audio-card,dai-link@7 {
 			mclk-fs = <256>;
 			continuous-clock;
@@ -1702,7 +1667,7 @@
 }; /* end of audiobus */
 
 &earc {
-	status = "okay";
+	status = "disabled";
 };
 
 &pinctrl_periphs {
@@ -1911,9 +1876,9 @@
 	max-frequency = <200000000>;
 	non-removable;
 	disable-wp;
-	//mmc-ddr-1_8v;
-	//mmc-hs200-1_8v;
-	//mmc-hs400-1_8v;
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
 	//mmc-pwrseq = <&emmc_pwrseq>;
 	//vmmc-supply = <&vcc_3v3>;
 	//vqmmc-supply = <&vddio_boot>;
@@ -2060,6 +2025,8 @@
 	status = "okay";
 	pinctrl-0 = <&remote_pins>;
 	pinctrl-names = "default";
+	/*For linux platforms, use custom_maps_linux to override the default custom_maps in the IR*/
+	map = <&custom_maps_linux>;
 };
 
 &vddcpu0 {

@@ -9,6 +9,7 @@
 #include "mesons4_drm.dtsi"
 #include "partition_normal_linux.dtsi"
 #include <dt-bindings/input/input.h>
+#include "meson-ir-map-linux.dtsi"
 
 / {
 	amlogic-dt-id = "s4_s905y4_ap222";
@@ -57,6 +58,11 @@
 			ftrace-size = <0x80000>;
 			pmsg-size = <0x10000>;
 			bconsole-size = <0x10000>;
+		};
+
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
 		};
 
 		debug_reserved:linux,iotrace {
@@ -169,10 +175,10 @@
 		vdin1_cma_reserved:linux,vdin1_cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			/* up to 1920x1080 yuv422 8bit and 5 buffers
-			 * 1920x1080x2x5 = 20 M
+			/* up to 1920x1080 yuv420 8bit and 5 buffers
+			 * 1920x1080x1.5x4 = 12 M
 			 */
-			size = <0x0 0x01400000>;
+			size = <0x0 0x00c00000>;
 			alignment = <0x0 0x400000>;
 		};
 
@@ -196,41 +202,6 @@
 		dev_name = "aml_amdolby_vision_driver";
 		status = "disabled";
 		tv_mode = <0>;/*1:enable ;0:disable*/
-	};
-	cvbsout {
-		compatible = "amlogic, cvbsout-s4";
-		status = "okay";
-
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* s4 */
-		performance_pal = <0x1bf0  0x9 /* default Matrx625 CTCC value*/
-			0x1b12  0x80c0
-			0x1b05  0xf7
-			0x1b56  0x333
-			0x1c59  0xf25c
-			0xffff  0x0>; /* ending flag */
-		performance = <0x1bf0  0x9 /* ccitt033 SVA value */
-			0x1b12  0x8040
-			0x1b05  0xfd
-			0x1b56  0x333
-			0x1c59  0xf654
-			0xffff  0x0>; /* ending flag */
-		performance_ntsc = <0x1bf0  0x9
-			0x1b12  0x8020
-			0x1b03  0x0
-			0x1b04  0x0
-			0x1b05  0x0
-			0x1b06  0x0
-			0x1b56  0x333
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
 	};
 
 	dvb-extern {
@@ -416,15 +387,6 @@
 		spectrum = <1>;
 		cma_mem_size = <0>; // MB
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -1517,6 +1479,8 @@
 	status = "okay";
 	pinctrl-0 = <&remote_pins>;
 	pinctrl-names = "default";
+	/*For linux platforms, use custom_maps_linux to override the default custom_maps in the IR*/
+	map = <&custom_maps_linux>;
 };
 
 &spicc0 {
@@ -1572,7 +1536,7 @@
 };
 
 &vpu {
-	clk_level = <7>;
+	clk_level = <8>;
 };
 
 /*if you want to use vdin just modify status to "ok"*/

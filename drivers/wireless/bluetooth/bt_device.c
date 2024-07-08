@@ -36,6 +36,10 @@
 
 #include <linux/input.h>
 
+#ifdef CONFIG_AMLOGIC_MODIFY
+#include <linux/async.h>
+#endif
+
 #if defined(CONFIG_AMLOGIC_LEGACY_EARLY_SUSPEND) && defined(CONFIG_AMLOGIC_GX_SUSPEND)
 #include <linux/amlogic/pm.h>
 static struct early_suspend bt_early_suspend;
@@ -67,9 +71,6 @@ static int distinguish_module(void)
 
 	vendor_id = sdio_get_vendor();
 	pr_info("vendor_id = 0x%x\n", vendor_id);
-
-	if (vendor_id == QCA_ID)
-		return 1;
 
 	return 0;
 }
@@ -134,9 +135,6 @@ static void off_def_power(struct bt_dev_data *pdata, unsigned long down_time)
 			gpio_direction_output(pdata->gpio_reset,
 				pdata->power_low_level);
 		}
-
-		if (down_time)
-			msleep(down_time);
 	}
 
 #ifndef CONTROL_POWER_EN_LINUX
@@ -146,6 +144,9 @@ static void off_def_power(struct bt_dev_data *pdata, unsigned long down_time)
 	} else {
 		set_usb_bt_power(0);
 	}
+#else
+	if (down_time)
+		msleep(down_time);
 #endif
 }
 
@@ -162,9 +163,6 @@ static void on_def_power(struct bt_dev_data *pdata, unsigned long up_time)
 			gpio_direction_output(pdata->gpio_reset,
 				!pdata->power_low_level);
 		}
-
-		if (up_time)
-			msleep(up_time);
 	}
 
 #ifndef CONTROL_POWER_EN_LINUX
@@ -174,6 +172,9 @@ static void on_def_power(struct bt_dev_data *pdata, unsigned long up_time)
 	} else {
 		set_usb_bt_power(1);
 	}
+#else
+	if (up_time)
+		msleep(up_time);
 #endif
 }
 
@@ -364,6 +365,17 @@ static int bt_set_block(void *data, bool blocked)
 {
 	struct bt_dev_data *pdata = data;
 
+#if IS_ENABLED(CONFIG_AMLOGIC_RFKILL_INIT_SW_UNBLOCK)
+	static bool rfkill_state = true;
+
+	if (rfkill_state == blocked) {
+		pr_info("%s:rfkill already %s\n", __func__, blocked ? "off" : "on");
+		return 0;
+	}
+
+	rfkill_state = blocked;
+#endif
+
 	pr_info("BT_RADIO going: %s\n", blocked ? "off" : "on");
 
 	if (!blocked) {
@@ -387,6 +399,8 @@ static void bt_earlysuspend(struct early_suspend *h)
 
 static void bt_lateresume(struct early_suspend *h)
 {
+	pr_debug("%s,btwake_event=%d\n", __func__, btwake_evt);
+	btwake_evt = 2;
 }
 #endif
 
@@ -397,7 +411,7 @@ static int bt_suspend(struct platform_device *pdev,
 
 	btwake_evt = 0;
 
-	pr_info("bt suspend\n");
+	pr_debug("bt suspend\n");
 	disable_irq(prdata->pdata->irqno_wakeup);
 
 	return 0;
@@ -407,7 +421,7 @@ static int bt_resume(struct platform_device *pdev)
 {
 	struct bt_dev_runtime_data *prdata = platform_get_drvdata(pdev);
 
-	pr_info("bt resume\n");
+	pr_debug("bt resume\n");
 	enable_irq(prdata->pdata->irqno_wakeup);
 	btwake_evt = 0;
 
@@ -420,6 +434,7 @@ static int bt_resume(struct platform_device *pdev)
 		cnt = 0;
 	}
 	if (!distinguish_module() && get_resume_method() == BT_WAKEUP) {
+		pr_debug("%s:simulate report key\r", __func__);
 		input_event(prdata->pdata->input_dev,
 			EV_KEY, KEY_POWER, 1);
 		input_sync(prdata->pdata->input_dev);
@@ -430,6 +445,18 @@ static int bt_resume(struct platform_device *pdev)
 
 	return 0;
 }
+
+#ifdef CONFIG_AMLOGIC_MODIFY
+static void do_bt_device_on_async(void *data, async_cookie_t cookie)
+{
+	struct bt_dev_data *temp;
+
+	temp = data;
+	temp->power_down_disable = 0;
+	bt_device_on(temp, 100, 0);
+	temp->power_down_disable = 1;
+}
+#endif
 
 static int bt_probe(struct platform_device *pdev)
 {
@@ -540,12 +567,6 @@ static int bt_probe(struct platform_device *pdev)
 
 	bt_device_init(pdata);
 
-	if (pdata->power_down_disable == 1) {
-		pdata->power_down_disable = 0;
-		bt_device_on(pdata, 100, 0);
-		pdata->power_down_disable = 1;
-	}
-
 	/* default to bluetooth off */
 	/* rfkill_switch_all(RFKILL_TYPE_BLUETOOTH, 1); */
 	/* bt_device_off(pdata); */
@@ -560,7 +581,14 @@ static int bt_probe(struct platform_device *pdev)
 		goto err_rfk_alloc;
 	}
 
-	rfkill_init_sw_state(bt_rfk, true);
+#if IS_ENABLED(CONFIG_AMLOGIC_RFKILL_INIT_SW_UNBLOCK)
+	pr_debug("%s:linux default power on\n", __func__);
+	rfkill_init_sw_state(bt_rfk, false);  // default power on
+#else
+	pr_debug("%s:default power off\n", __func__);
+	rfkill_init_sw_state(bt_rfk, true);  // default power off
+#endif
+
 	ret = rfkill_register(bt_rfk);
 	if (ret) {
 		pr_err("rfkill_register fail\n");
@@ -574,6 +602,17 @@ static int bt_probe(struct platform_device *pdev)
 	prdata->bt_rfk = bt_rfk;
 	prdata->pdata = pdata;
 	platform_set_drvdata(pdev, prdata);
+
+	if (pdata->power_down_disable == 1) {
+#ifdef CONFIG_AMLOGIC_MODIFY
+		async_schedule(do_bt_device_on_async, (void *)pdata);
+#else
+		pdata->power_down_disable = 0;
+		bt_device_on(pdata, 100, 0);
+		pdata->power_down_disable = 1;
+#endif
+	}
+
 #if defined(CONFIG_AMLOGIC_LEGACY_EARLY_SUSPEND) && defined(CONFIG_AMLOGIC_GX_SUSPEND)
 	bt_early_suspend.level =
 		EARLY_SUSPEND_LEVEL_DISABLE_FB;
@@ -689,6 +728,7 @@ static struct platform_driver bt_driver = {
 	.driver		= {
 		.name	= "aml_bt",
 		.of_match_table = bt_dev_dt_match,
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 	.probe		= bt_probe,
 	.remove		= bt_remove,

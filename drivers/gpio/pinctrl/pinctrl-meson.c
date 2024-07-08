@@ -54,6 +54,7 @@
 
 #include <pinctrl/core.h>
 #include <pinctrl/pinctrl-utils.h>
+#include <linux/amlogic/gpiolib.h>
 #include "pinctrl-meson.h"
 
 #ifdef CONFIG_AMLOGIC_MODIFY
@@ -380,6 +381,11 @@ static int meson_pinconf_set_drive_strength(struct meson_pinctrl *pc,
 			      "pin %u: invalid drive-strength : %d , default to 4mA\n",
 			      pin, drive_strength_ua);
 		ds_val = MESON_PINCONF_DRV_4000UA;
+	}
+
+	if (BIT(ds_val) & pc->data->ds_mask) {
+		dev_err(pc->dev, "unsupported drive strength: ds%u\n", ds_val);
+		return -EOPNOTSUPP;
 	}
 
 	ret = regmap_update_bits(pc->reg_ds, reg, 0x3 << bit, ds_val << bit);
@@ -787,6 +793,10 @@ static int meson_gpiolib_register(struct meson_pinctrl *pc)
 			pc->data->name);
 		return ret;
 	}
+
+#if IS_ENABLED(CONFIG_AMLOGIC_GPIOLIB_SYSFS)
+	gpiochip_sysfs_register(pc->chip.gpiodev);
+#endif
 
 	return 0;
 }

@@ -265,7 +265,8 @@ void vframe_canvas_set(struct canvas_config_s *config,
 bool is_layer_aisr_supported(struct video_layer_s *layer)
 {
 	/* only vd1 has aisr for t3 */
-	if (!layer || layer->layer_id != 0)
+	if (!cur_dev->aisr_support ||
+		!layer || layer->layer_id != 0)
 		return false;
 	else
 		return true;
@@ -510,6 +511,12 @@ static void dump_pps_reg(void)
 	u32 reg_addr, reg_val = 0;
 
 	for (i = 0; i < cur_dev->max_vd_layers; i++) {
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+		if (cur_dev->vd1_vsr_safa_support && i == 0) {
+			dump_vd_vsr_safa_reg();
+			continue;
+		}
+#endif
 		pr_info("vd%d pps regs:\n", i);
 		reg_addr = vd_layer[i].pps_reg.vd_vsc_region12_startp;
 		reg_val = READ_VCBUS_REG(reg_addr);
@@ -725,6 +732,9 @@ static void dump_fgrain_reg(void)
 static void dump_aisr_reg(void)
 {
 	u32 reg_addr, reg_val = 0;
+
+	if (cur_dev->vd1_vsr_safa_support)
+		return;
 
 	pr_info("aisr reshape regs:\n");
 	reg_addr = aisr_reshape_reg.aisr_reshape_ctrl0;
@@ -1374,16 +1384,8 @@ bool check_aisr_need_disable(struct video_layer_s *layer)
 	struct disp_info_s *disp_layer = &glayer_info[layer->layer_id];
 	const struct vinfo_s *info = NULL;
 
-	//n2m :not check slice num
-	if ((frc_get_n2m_setting() != 2) &&
-		layer->slice_num >= 2) {
-		if (debug_common_flag & DEBUG_FLAG_COMMON_AISR)
-			pr_info("%s:n2m=%d slice_num(%d)\n",
-				__func__,
-				frc_get_n2m_setting(),
-				layer->slice_num);
-		return false;
-	}
+	if (layer->slice_num >= 2)
+		return true;
 	info = get_current_vinfo();
 	if (info) {
 		layer_width = disp_layer->layer_width;
@@ -1391,9 +1393,9 @@ bool check_aisr_need_disable(struct video_layer_s *layer)
 		/* 1/4 full screen aisr disabled */
 		if (layer_width < info->width * aisr_size_threshold / 100 &&
 			layer_height < info->height * aisr_size_threshold / 100)
-			ret = false;
-		else
 			ret = true;
+		else
+			ret = false;
 		if (debug_common_flag & DEBUG_FLAG_COMMON_AISR)
 			pr_info("%s:ret=%d width(%d, %d), height(%d,%d)\n",
 				__func__,

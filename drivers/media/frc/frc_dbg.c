@@ -257,15 +257,18 @@ void frc_status(struct frc_dev_s *devp)
 			devp->vs_duration, (ulong)devp->vs_timestamp);
 	pr_frc(0, "frc_in vs_duration= %dus timestamp= %ld\n",
 	       devp->in_sts.vs_duration, (ulong)devp->in_sts.vs_timestamp);
-	pr_frc(0, "frc_in isr vs_cnt= %d, vs_tsk_cnt:%d, inp_err cnt:%d vd_mute cnt:%d\n",
+	pr_frc(0, "frc_in isr vs_cnt= %d, vs_tsk_cnt:%d, vd_mute cnt:%d\n",
 		devp->in_sts.vs_cnt, devp->in_sts.vs_tsk_cnt,
-		devp->frc_sts.inp_undone_cnt, devp->frc_sts.video_mute_cnt);
+		 devp->frc_sts.video_mute_cnt);
+	pr_frc(0, "frc_in isr lost tsk_cnt:%d, inp_err cnt:%d\n",
+		devp->in_sts.lost_tsk_cnt, devp->frc_sts.inp_undone_cnt);
 	pr_frc(0, "frc_out vs_duration= %dus timestamp= %ld\n",
-	       devp->out_sts.vs_duration, (ulong)devp->out_sts.vs_timestamp);
-	pr_frc(0, "frc_out isr vs_cnt= %d, vs_tsk_cnt= %d, err_cnt= (me:%d,mc:%d,vp:%d)\n",
-		devp->out_sts.vs_cnt, devp->out_sts.vs_tsk_cnt,
-		devp->frc_sts.me_undone_cnt, devp->frc_sts.mc_undone_cnt,
-		devp->frc_sts.vp_undone_cnt);
+		devp->out_sts.vs_duration, (ulong)devp->out_sts.vs_timestamp);
+	pr_frc(0, "frc_out isr vs_cnt= %d, vs_tsk_cnt= %d\n",
+		devp->out_sts.vs_cnt, devp->out_sts.vs_tsk_cnt);
+	pr_frc(0, "frc_out isr lost tsk_cnt:%d, err_cnt= (me:%d,mc:%d,vp:%d)\n",
+		devp->out_sts.lost_tsk_cnt, devp->frc_sts.me_undone_cnt,
+		devp->frc_sts.mc_undone_cnt, devp->frc_sts.vp_undone_cnt);
 	pr_frc(0, "frc_st vs_cnt:%d vf_repeat_cnt:%d vf_null_cnt:%d\n", devp->frc_sts.vs_cnt,
 				devp->in_sts.vf_repeat_cnt, devp->in_sts.vf_null_cnt);
 	pr_frc(0, "vout sync_duration_num= %d sync_duration_den= %d out_hz= %d\n",
@@ -321,6 +324,7 @@ ssize_t frc_debug_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "set_n2m\t\t=%d\n", devp->in_out_ratio);
 	len += sprintf(buf + len, "auto_n2m\t=%d\n", devp->auto_n2m);
 	len += sprintf(buf + len, "set_mcdw\t=(read reg check)\n");
+	len += sprintf(buf + len, "test2\t\t=%d\n", devp->test2);
 
 	return len;
 }
@@ -490,6 +494,11 @@ void frc_debug_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			frc_set_h2v2(val1);
+	} else if (!strcmp(parm[0], "test2")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->test2 = (u8)val1;
 	}
 exit:
 	kfree(buf_orig);
@@ -504,8 +513,7 @@ ssize_t frc_debug_buf_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "dump_fixed_reg\t: dump fixed table\n");
 	len += sprintf(buf + len, "dump_buf_reg\t: dump buffer register\n");
 	len += sprintf(buf + len, "dump_data addr size\t: dump cma buf data\n");
-	len += sprintf(buf + len,
-		"buf_num val\t: val(1 - 16) frc and logo frame buffer number\n");
+	len += sprintf(buf + len, "buf_num\t\t:%d\n", devp->buf.frm_buf_num);
 	len += sprintf(buf + len,
 		"dc_set\t: x x x(me:mc_y:mc_c) set frc me,mc_y and mc_c comprate\n");
 	len += sprintf(buf + len,
@@ -600,27 +608,34 @@ ssize_t frc_debug_rdma_if_help(struct frc_dev_s *devp, char *buf)
 {
 	ssize_t len = 0;
 	struct frc_fw_data_s *fw_data;
+	struct frc_rdma_s *frc_rdma = get_frc_rdma();
 
 	if (!devp)
 		return len;
+
 	fw_data = (struct frc_fw_data_s *)devp->fw_data;
-	len += sprintf(buf + len, "frc_rdma\t=ctrl or debug frc rdma\n");
+	len += sprintf(buf + len, "status\t=show frc rdma status\n");
+	// len += sprintf(buf + len, "frc_rdma\t=ctrl or debug frc rdma\n");
 	len += sprintf(buf + len, "addr_val\t=addr val(set reg value to rdma table)\n");
-	len += sprintf(buf + len, "rdma_en\t\t=%d\n", fw_data->frc_top_type.rdma_en);
+	len += sprintf(buf + len, "rdma_en\t\t=%d drv, %d alg\n",
+		frc_rdma->rdma_en, fw_data->frc_top_type.rdma_en);
+	len += sprintf(buf + len, "rdma_table\t=show frc rdma table\n");
+	len += sprintf(buf + len, "trace_en\t=echo 1 > rdma_trace_enable\n");
+	len += sprintf(buf + len, "trace_reg\t=echo 0x60 0x61 xx > rdma_trace_reg\n");
+
 	return len;
 }
 
 void frc_debug_rdma_if(struct frc_dev_s *devp, const char *buf, size_t count)
 {
+	u32 val1;
+	u32 val2;
 	char *buf_orig, *parm[47] = {NULL};
 	struct frc_fw_data_s *fw_data;
-	int val1;
-	int val2;
+	struct frc_rdma_s *frc_rdma = get_frc_rdma();
 
-	if (!devp)
-		return;
 
-	if (!buf)
+	if (!devp || !buf || !frc_rdma)
 		return;
 
 	buf_orig = kstrdup(buf, GFP_KERNEL);
@@ -630,13 +645,8 @@ void frc_debug_rdma_if(struct frc_dev_s *devp, const char *buf, size_t count)
 	fw_data = (struct frc_fw_data_s *)devp->fw_data;
 	frc_debug_parse_param(buf_orig, (char **)&parm);
 
-	if (!strcmp(parm[0], "frc_rdma")) {
-		if (!parm[1])
-			goto exit;
-		if (kstrtoint(parm[1], 10, &val1) == 0) {
-			pr_frc(0, "frc rdma test start, val1:%d\n", val1);
-			frc_rdma_process(val1);
-		}
+	if (!strcmp(parm[0], "status")) {
+		frc_rdma_status();
 	} else if (!strcmp(parm[0], "addr_val")) {
 		if (!parm[2])
 			goto exit;
@@ -649,8 +659,17 @@ void frc_debug_rdma_if(struct frc_dev_s *devp, const char *buf, size_t count)
 	} else if (!strcmp(parm[0], "rdma_en")) {
 		if (!parm[1])
 			goto exit;
-		if (kstrtoint(parm[1], 10, &val1) == 0)
-			fw_data->frc_top_type.rdma_en = val1;
+		if (kstrtoint(parm[1], 10, &val1) == 0) {
+			// fw_data->frc_top_type.rdma_en = val1;
+			pr_frc(2, "input rdma status:%d\n", val1);
+			frc_rdma->rdma_en = val1;
+			if (val1)
+				frc_rdma_init();
+			else
+				frc_rdma_exit();
+		}
+	} else if (!strcmp(parm[0], "rdma_table")) {
+		frc_read_table(frc_rdma);
 	}
 
 exit:
@@ -704,6 +723,7 @@ void frc_debug_param_if(struct frc_dev_s *devp, const char *buf, size_t count)
 	char *buf_orig, *parm[47] = {NULL};
 	int val1;
 	int val2;
+	int val3;
 
 	if (!devp)
 		return;
@@ -903,11 +923,12 @@ void frc_debug_param_if(struct frc_dev_s *devp, const char *buf, size_t count)
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->prot_mode = val1;
 	} else if (!strcmp(parm[0], "set_urgent")) {
-		if (!parm[1] || !parm[2])
+		if (!parm[1] || !parm[2] || !parm[3])
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0) {
-			if (kstrtoint(parm[2], 16, &val2) == 0)
-				frc_set_urgent_cfg(val1, val2);
+			if (kstrtoint(parm[2], 10, &val2) == 0)
+				if (kstrtoint(parm[3], 10, &val3) == 0)
+					frc_set_arb_ugt_cfg(val1, val2, val3);
 		}
 	} else if (!strcmp(parm[0], "no_ko_mode")) {
 		if (!parm[1])
@@ -931,7 +952,14 @@ exit:
 
 ssize_t frc_debug_other_if_help(struct frc_dev_s *devp, char *buf)
 {
+	int i;
 	ssize_t len = 0;
+	struct frc_fw_data_s *fw_data;
+
+	if (!devp)
+		return len;
+
+	fw_data = (struct frc_fw_data_s *)devp->fw_data;
 
 	len += sprintf(buf + len, "crc_read\t=%d\n", devp->frc_crc_data.frc_crc_read);
 	len += sprintf(buf + len, "crc_en\t\t=%d %d %d %d\n",
@@ -943,6 +971,22 @@ ssize_t frc_debug_other_if_help(struct frc_dev_s *devp, char *buf)
 	len += sprintf(buf + len, "del_120_pth\t=%d\n", devp->ud_dbg.res2_dbg_en);
 	len += sprintf(buf + len, "pr_dbg\t\t=%d\n", devp->ud_dbg.pr_dbg);
 	len += sprintf(buf + len, "pre_vsync\t=%d\n", devp->use_pre_vsync);
+	len += sprintf(buf + len, "mute_en\t\t=%d\t%d\n",
+		devp->in_sts.enable_mute_flag, devp->in_sts.mute_vsync_cnt);
+	len += sprintf(buf + len, "task_hi_en\t=%d\t%d\n",
+		devp->in_sts.hi_en, devp->out_sts.hi_en);
+	len += sprintf(buf + len, "timer_ctrl\t=en:%d level:%d interval:%d\n",
+			devp->timer_dbg.timer_en, devp->timer_dbg.timer_level,
+			devp->timer_dbg.time_interval);
+	len += sprintf(buf + len, "frm_seg_en\t=%d\n", devp->in_sts.frm_en);
+	len += sprintf(buf + len, "motion_ctrl\t=%d\n",
+			fw_data->frc_top_type.motion_ctrl);
+	for (i = 0; i < RD_REG_MAX; i++) {
+		if (fw_data->reg_val[i].addr == 0x0)
+			break;
+		len += sprintf(buf + len, "trace reg addr[%d]:%04x\n",
+			i, fw_data->reg_val[i].addr);
+	}
 	return len;
 }
 
@@ -950,6 +994,7 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 {
 	char *buf_orig, *parm[47] = {NULL};
 	int val1;
+	struct frc_fw_data_s *fw_data;
 
 	if (!devp)
 		return;
@@ -957,6 +1002,7 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 	if (!buf)
 		return;
 
+	fw_data = (struct frc_fw_data_s *)devp->fw_data;
 	buf_orig = kstrdup(buf, GFP_KERNEL);
 	if (!buf_orig)
 		return;
@@ -1021,6 +1067,81 @@ void frc_debug_other_if(struct frc_dev_s *devp, const char *buf, size_t count)
 			goto exit;
 		if (kstrtoint(parm[1], 10, &val1) == 0)
 			devp->use_pre_vsync = val1;
+	} else if (!strcmp(parm[0], "mvrd_mode")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->dbg_mvrd_mode = val1;
+	} else if (!strcmp(parm[0], "mute_dis")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->dbg_mute_disable = val1;
+	} else if (!strcmp(parm[0], "frc_sus")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0) {
+			if (val1 == 0) {
+				devp->frc_sts.auto_ctrl = false;
+				PR_FRC("call %s\n", __func__);
+				frc_power_domain_ctrl(devp, 0);
+				if (devp->power_on_flag)
+					devp->power_on_flag = false;
+			} else {
+				PR_FRC("call %s\n", __func__);
+				frc_power_domain_ctrl(devp, 1);
+				if (!devp->power_on_flag)
+					devp->power_on_flag = true;
+				set_frc_bypass(ON);
+				devp->frc_sts.auto_ctrl = true;
+				devp->frc_sts.re_config = true;
+			}
+		}
+	} else if (!strcmp(parm[0], "mute_en")) {
+		if (!parm[2])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0) {
+			devp->in_sts.enable_mute_flag = val1;
+			if (val1)
+				devp->pat_dbg.pat_en = 1;
+			else
+				devp->pat_dbg.pat_en = 0;
+		}
+		if (kstrtoint(parm[2], 10, &val1) == 0)
+			devp->in_sts.mute_vsync_cnt = val1;
+	} else if (!strcmp(parm[0], "align_dbg")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->ud_dbg.align_dbg_en = val1;
+	} else if (!strcmp(parm[0], "task_hi_en")) {
+		if (!parm[2])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->in_sts.hi_en = val1;
+		if (kstrtoint(parm[2], 10, &val1) == 0)
+			devp->out_sts.hi_en = val1;
+	} else if (!strcmp(parm[0], "timer_ctrl")) {
+		if (!parm[3])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->timer_dbg.timer_en = (u8)val1;
+		if (kstrtoint(parm[2], 10, &val1) == 0)
+			devp->timer_dbg.timer_level = (u16)val1;
+		if (kstrtoint(parm[3], 10, &val1) == 0)
+			devp->timer_dbg.time_interval =
+				(u8)(val1 > 16 ? 16 : val1);
+		frc_timer_proc(devp);
+	} else if (!strcmp(parm[0], "frm_seg_en")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			devp->in_sts.frm_en = val1;
+	} else if (!strcmp(parm[0], "motion_ctrl")) {
+		if (!parm[1])
+			goto exit;
+		if (kstrtoint(parm[1], 10, &val1) == 0)
+			fw_data->frc_top_type.motion_ctrl = val1;
 	}
 exit:
 	kfree(buf_orig);
@@ -1086,12 +1207,14 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 	int debug_flag = 32;
 	unsigned int reg;
 	unsigned int regvalue;
-	struct frc_rdma_info *frc_rdma2 = frc_get_rdma_info_2();
+	struct frc_rdma_info *rdma_info;
+	struct frc_rdma_s *frc_rdma = get_frc_rdma();
 
 	buf_orig = kstrdup(buf, GFP_KERNEL);
 	if (!buf_orig)
 		return;
 	frc_debug_parse_param(buf_orig, (char **)&parm);
+	rdma_info = (struct frc_rdma_info *)frc_rdma->rdma_info[3];
 
 	if (!strcmp(parm[0], "r")) {
 		if (!parm[1])
@@ -1103,12 +1226,12 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 		devp->tool_dbg.reg_read = reg;
 
 		if (is_rdma_enable()) {
-			if (frc_rdma2->rdma_item_count) {
-				count = frc_rdma2->rdma_item_count;
+			if (rdma_info->rdma_item_count) {
+				count = rdma_info->rdma_item_count;
 				for (i = 0; i < count; i++) {
-					if (frc_rdma2->rdma_table_addr[i * 2] == reg) {
+					if (rdma_info->rdma_table_addr[i * 2] == reg) {
 						devp->tool_dbg.reg_read_val =
-							frc_rdma2->rdma_table_addr[i * 2 + 1];
+							rdma_info->rdma_table_addr[i * 2 + 1];
 						flag = 1;
 						break;
 					}
@@ -1133,13 +1256,13 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 
 		if (is_rdma_enable()) {
 			// debug
-			i = frc_rdma2->rdma_item_count;
-			frc_rdma2->rdma_table_addr[i * 2] = reg;
-			frc_rdma2->rdma_table_addr[i * 2 + 1] = regvalue;
-			frc_rdma2->rdma_item_count++;
+			i = rdma_info->rdma_item_count;
+			rdma_info->rdma_table_addr[i * 2] = reg;
+			rdma_info->rdma_table_addr[i * 2 + 1] = regvalue;
+			rdma_info->rdma_item_count++;
 			pr_frc(debug_flag, "addr:0x%04x, value:0x%08x\n",
-				frc_rdma2->rdma_table_addr[i * 2],
-				frc_rdma2->rdma_table_addr[i * 2 + 1]);
+				rdma_info->rdma_table_addr[i * 2],
+				rdma_info->rdma_table_addr[i * 2 + 1]);
 		} else {
 			WRITE_FRC_REG_BY_CPU(reg, regvalue);
 		}
@@ -1148,3 +1271,336 @@ void frc_tool_dbg_store(struct frc_dev_s *devp, const char *buf)
 free_buf:
 	kfree(buf_orig);
 }
+
+// timer
+static enum hrtimer_restart frc_timer_callback(struct hrtimer *timer)
+{
+	u8 i, time;
+	u16 log;
+	u32 reg_val;
+	struct frc_dev_s *devp = get_frc_devp();
+
+	log = devp->timer_dbg.timer_level;
+	time = devp->timer_dbg.time_interval;
+
+	for (i = 0; i < rdma_trace_num; i++) {
+		reg_val = READ_FRC_REG(rdma_trace_reg[i]);
+		pr_frc(log, "reg[%04x]=0x%08x %9d\n", rdma_trace_reg[i], reg_val, reg_val);
+	}
+
+	hrtimer_forward(&frc_hi_timer,
+		hrtimer_cb_get_time(timer), ktime_set(0, time * 1000000)); // unit: ns
+
+	return HRTIMER_RESTART;
+}
+
+void frc_timer_proc(struct frc_dev_s *devp)
+{
+	u8 timer_en, time;
+
+	timer_en = devp->timer_dbg.timer_en;
+	time = devp->timer_dbg.time_interval;
+	frc_hi_timer.function = frc_timer_callback;
+
+	if (time > 16)
+		time = 16;
+	else if (time < 1)
+		time = 1;
+
+	if (timer_en)
+		hrtimer_start(&frc_hi_timer,
+			ktime_set(0, time * 1000000), HRTIMER_MODE_REL); // unit: ns
+	else
+		hrtimer_cancel(&frc_hi_timer);
+}
+
+/* column: 1~8, color: 0~7, number: 0~15 */
+static void update_seg_7_show(u8 enable, u8 column, u8 color, u8 number)
+{
+	u8 value;
+
+	value = ((enable & 0x01) << 7) + ((color & 0x07) << 4) + (number & 0x0F);
+
+	// enable flag_number 2_1 ~ 2_8
+	if (column == 1)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM17_NUM18_NUM21_NUM22,
+			value << 8, 0xFF00);
+	else if (column == 2)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM17_NUM18_NUM21_NUM22,
+			value, 0xFF);
+	else if (column == 3)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value << 24, 0xFF000000);
+	else if (column == 4)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value << 16, 0xFF0000);
+	else if (column == 5)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value << 8, 0xFF00);
+	else if (column == 6)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM23_NUM24_NUM25_NUM26,
+			value, 0xFF);
+	else if (column == 7)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM27_NUM28,
+			value << 24, 0xFF000000);
+	else if (column == 8)
+		UPDATE_FRC_REG_BITS(FRC_MC_SEVEN_FLAG_NUM27_NUM28,
+			value << 16, 0xFF0000);
+}
+
+void frc_dbg_frame_show(struct frc_dev_s *devp)
+{
+	u8 i, enable, tmp_cnt;
+	static u8 pre_flag;
+
+	if (!devp)
+		return;
+
+	enable = devp->in_sts.frm_en;
+
+	if (enable) {
+		// in cnt
+		tmp_cnt = (devp->in_sts.vs_cnt / 100) % 10;
+		update_seg_7_show(1, 1, 1, tmp_cnt);
+		tmp_cnt = (devp->in_sts.vs_cnt / 10) % 10;
+		update_seg_7_show(1, 2, 1, tmp_cnt);
+		tmp_cnt = devp->in_sts.vs_cnt % 10;
+		update_seg_7_show(1, 3, 1, tmp_cnt);
+		// out cnt
+		tmp_cnt = (devp->out_sts.vs_cnt / 100) % 10;
+		update_seg_7_show(1, 6, 2, tmp_cnt);
+		tmp_cnt = (devp->out_sts.vs_cnt / 10) % 10;
+		update_seg_7_show(1, 7, 2, tmp_cnt);
+		tmp_cnt = devp->out_sts.vs_cnt % 10;
+		update_seg_7_show(1, 8, 2, tmp_cnt);
+	} else if (enable == 0 && enable != pre_flag) {
+		for (i = 1; i < 9; i++)
+			update_seg_7_show(0, i, 0, 0);  // clear
+	}
+
+	pre_flag = enable;
+}
+
+static void debug_level_func(const char *module, const char *debug_flags)
+{
+	int value;
+
+	if (kstrtoint(debug_flags, 10, &value) == 0) {
+		frc_dbg_en = value;
+		PR_FRC("debug_level = %d\n", frc_dbg_en);
+	}
+}
+
+static void debug_status_func(const char *module, const char *debug_flags)
+{
+	struct frc_dev_s *devp = get_frc_devp();
+
+	if (strcmp(debug_flags, "status") == 0)
+		frc_status(devp);
+}
+
+static void debug_ctrl_func(const char *module, const char *debug_flags)
+{
+	int value;
+
+	if (kstrtoint(debug_flags, 10, &value) == 0)
+		frc_dbg_ctrl = value;
+}
+
+static void auto_ctrl_func(const char *module, const char *debug_flags)
+{
+	int value;
+	struct frc_dev_s *devp = get_frc_devp();
+
+	if (kstrtoint(debug_flags, 10, &value) == 0) {
+		if (frc_dbg_ctrl) {
+			if (value < 100) { //for debug:forbid user-layer call
+				pr_frc(0, "ctrl test..\n");
+				return;
+			}
+			value = value - 100;
+		}
+		devp->frc_sts.auto_ctrl = value;
+	}
+}
+
+static void debug_mode_func(const char *module, const char *debug_flags)
+{
+	int value;
+
+	if (kstrtoint(debug_flags, 10, &value) == 0) {
+		if (frc_dbg_ctrl) {
+			if (value < 100) { //for debug:forbid user-layer call
+				pr_frc(0, "ctrl test..\n");
+				return;
+			}
+			value = value - 100;
+		}
+		if (value < FRC_STATE_NULL)
+			frc_set_mode(value);
+	}
+}
+
+static void debug_pattern_func(const char *module, const char *debug_flags)
+{
+	struct frc_dev_s *devp = get_frc_devp();
+
+	if (!strcmp(debug_flags, "enable"))
+		devp->frc_test_ptn = 1;
+	else if (!strcmp(debug_flags, "disable"))
+		devp->frc_test_ptn = 0;
+	frc_pattern_on(devp->frc_test_ptn);
+}
+
+static struct module_debug_node debug_nodes[] = {
+	{
+		.name = "debug_level",
+		.set_debug_func_notify = debug_level_func,
+	},
+	{
+		.name = "status",
+		.set_debug_func_notify = debug_status_func,
+	},
+	{
+		.name = "debug_ctrl",
+		.set_debug_func_notify = debug_ctrl_func,
+	},
+	{
+		.name = "auto_ctrl",
+		.set_debug_func_notify = auto_ctrl_func,
+	},
+	{
+		.name = "debug_mode",
+		.set_debug_func_notify = debug_mode_func,
+	},
+	{
+		.name = "test_pattern",
+		.set_debug_func_notify = debug_pattern_func,
+	},
+};
+
+static bool get_module_config(const char *configs, const char *title, char *cmd)
+{
+	char *module_str;
+	char *str_end;
+	u8 cmd_len;
+
+	if (!configs || !title)
+		return false;
+
+	module_str = strstr(configs, title);
+
+	if (module_str) {
+		if (module_str > configs && module_str[-1] != ';')
+			return false;
+
+		module_str += strlen(title);
+		if (module_str[0] != ':' ||  module_str[1] == '\0')
+			return false;
+
+		module_str += 1;
+		str_end = strchr(module_str, ';');
+		if (str_end) {
+			cmd_len = str_end - module_str;
+			if (cmd_len > MODULE_LEN - 1) {
+				pr_frc(dbg_frc, "module_len is too long\n");
+				return false;
+			}
+			strncpy(cmd, module_str, cmd_len);
+			cmd[str_end - module_str] = '\0';
+		} else {
+			return false;
+		}
+
+	} else {
+		return false;
+	}
+	return true;
+}
+
+static void set_frc_debug_flag(char *module_str, char *cmd_str)
+{
+	char *node_str;
+	char *str_end;
+	u8 node;
+	u8 cmd_len;
+
+	for (node = 0; node < DEBUG_NODES; node++) {
+		node_str = strstr(module_str, debug_nodes[node].name);
+		if (!node_str)
+			continue;
+
+		if (node_str > module_str && node_str[-1] != ',')
+			break;
+
+		node_str += strlen(debug_nodes[node].name);
+		if (node_str[0] != ':' || node_str[1] == '\0')
+			break;
+
+		node_str += 1;
+		str_end = strstr(node_str, ",");
+		if (str_end)
+			cmd_len = str_end - node_str;
+		else
+			cmd_len = strlen(node_str);
+		if (cmd_len > CMD_LEN - 1) {
+			pr_frc(dbg_frc, "cmd len is too long\n");
+			break;
+		}
+
+		strncpy(cmd_str, node_str, cmd_len);
+		cmd_str[cmd_len] = '\0';
+		pr_frc(dbg_frc + 2, "%s ok\n", __func__);
+		debug_nodes[node].set_debug_func_notify(debug_nodes[node].name, cmd_str);
+	}
+}
+
+static void set_default_debug_flag(char *default_str, char *cmd_str)
+{
+	char *node_str;
+	u8 cmd_len;
+
+	node_str = strstr(default_str, DEBUG_LEVEL);
+	if (!node_str)
+		return;
+	if (node_str > default_str && node_str[-1] != ',')
+		return;
+
+	node_str += strlen(DEBUG_LEVEL);
+	if (node_str[0] != ':' || node_str[1] == '\0')
+		return;
+
+	node_str += 1;
+	cmd_len = strlen(node_str);
+	if (cmd_len > CMD_LEN - 1) {
+		pr_frc(dbg_frc, "cmd len is too long\n");
+		return;
+	}
+
+	strncpy(cmd_str, node_str, cmd_len);
+	cmd_str[cmd_len] = '\0';
+	pr_frc(dbg_frc + 2, "%s ok\n", __func__);
+	if (strcmp(cmd_str, "0") == 0)
+		debug_level_func(NULL, cmd_str);
+	else
+		debug_level_func(NULL, "2");
+}
+
+void set_frc_config(const char *module, const char *debug, int len)
+{
+	char *default_str = kzalloc(sizeof(char) * 128, GFP_KERNEL);
+	char *module_str = kzalloc(sizeof(char) * 128, GFP_KERNEL);
+	char *cmd_str = kzalloc(sizeof(char) * 32, GFP_KERNEL);
+
+	if (get_module_config(debug, FRC_TITLE, module_str)) {
+		pr_frc(dbg_frc, "%s: Display_FRC:%s\n", __func__, module_str);
+		set_frc_debug_flag(module_str, cmd_str);
+	} else if (get_module_config(debug, DEFAULT_TITLE, default_str)) {
+		set_default_debug_flag(default_str, cmd_str);
+	}
+
+	kfree(default_str);
+	kfree(module_str);
+	kfree(cmd_str);
+}
+

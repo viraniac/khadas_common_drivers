@@ -256,7 +256,7 @@
 //Bit 13:12     cntl_burst_len1                 //unsigned, RW, default=2
 //Bit 11:10     cntl_dbg_mode                   //unsigned, RW, default=0
 //Bit 9:8       cntl_bits_mode                  //unsigned, RW, default=0
-//Bit 7         reserved
+//Bit 7         cntl_bit16_mode                 //1:420 p010, default=0
 //Bit 6:4       cntl_blk_len                    //unsigned, RW, default=3
 //Bit 3         reserved
 //Bit 2:1       cntl_burst_len0                 //unsigned, RW, default=2
@@ -377,8 +377,8 @@
 //Bit 15:0  reg_rdma_size11      //unsigned, RW, default=0, rdma lut11 size
 
 #define DOLBY_TOP2_PYRD_CTRL    0x0c08
-//Bit 31    reg_pyrdmif_sw_rst  //unsigned, RW, default=0, sw rst for pyramif rdmif
-//Bit 30    reg_mmu_sw_rst  //unsigned, RW, default=0, sw rst for pyramif rdmif
+//Bit 31    reg_pyrdmif_sw_rst  //unsigned, RW, default=0, sw rst for pyramid rdmif
+//Bit 30    reg_mmu_sw_rst  //unsigned, RW, default=0, sw rst for pyramid mmu
 //Bit 29:20 reserved
 //Bit 19:4  reg_gclk_ctrl       //unsigned, RW, default=0, clk gating ctrl
 //Bit 3     reserved
@@ -755,5 +755,8 @@
 #define VPU_TOP_MISC               0x2709
 #define T3X_VD1_BLEND_SRC_CTRL     0x1d0d
 #define T3X_VENC_CRC               0x278c /*venc CRC*/
+#define VPU_RDARB_UGT_L2C1         0x27c2
+/* VPU_WRARB_UGT_L2C1 0x27c3 bit[1:0]vdin urgent, bit[9:8]di urgent, bit[17:16]dv urgent*/
+#define VPU_WRARB_UGT_L2C1         0x27c3
 
 #endif

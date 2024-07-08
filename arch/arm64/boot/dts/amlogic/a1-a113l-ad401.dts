@@ -36,6 +36,11 @@
 		#size-cells = <2>;
 		ranges;
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x0>;
+		};
+
 		dsp_fw_reserved0:linux,dsp_fw0 {
 			compatible = "amlogic, dsp";
 			size = <0x0 0x1000000>;
@@ -196,6 +201,9 @@
 		aml-audio-card,dai-link@4 {
 			mclk-fs = <256>;
 			continuous-clock;
+			format = "i2s";
+			bitclock-master = <&loopback>;
+			frame-master = <&loopback>;
 			suffix-name = "alsaPORT-loopback";
 			cpu {
 				sound-dai = <&loopback>;

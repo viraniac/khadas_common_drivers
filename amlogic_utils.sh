@@ -87,6 +87,15 @@ function pre_defconfig_cmds() {
 	if [[ ${UPGRADE_PROJECT} == r || ${UPGRADE_PROJECT} == R ]] && [[ "${CONFIG_BOOTIMAGE}" == "user" ]]; then
 		KCONFIG_CONFIG=${ROOT_DIR}/${KCONFIG_DEFCONFIG} ${ROOT_DIR}/${KERNEL_DIR}/scripts/kconfig/merge_config.sh -m -r ${ROOT_DIR}/${KCONFIG_DEFCONFIG} ${AMLOGIC_R_USER_DIFFCONFIG}
 	fi
+
+	if [[ -n ${KASAN} ]]; then
+		local temp_file=`mktemp /tmp/config.XXXXXXXXXXXX`
+		cat ${ROOT_DIR}/${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/arch/${ARCH}/configs/amlogic_kasan.defconfig > ${temp_file}
+		KCONFIG_CONFIG=${ROOT_DIR}/${KCONFIG_DEFCONFIG} ${ROOT_DIR}/${KERNEL_DIR}/scripts/kconfig/merge_config.sh -m -r \
+				${ROOT_DIR}/${KCONFIG_DEFCONFIG} \
+				${temp_file}
+		rm ${temp_file}
+	fi
 }
 export -f pre_defconfig_cmds
 
@@ -107,7 +116,7 @@ function read_ext_module_config() {
 	echo "${ALL_LINE}"
 }
 
-function autotest(){
+function copy_pre_commit(){
 	if [[ -d ${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/.git/hooks/ ]]; then
 		if [[ ! -f ${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/.git/hooks/pre-commit ]]; then
 			cp ${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/scripts/amlogic/pre-commit ${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/.git/hooks/pre-commit
@@ -365,7 +374,7 @@ function mod_probe() {
 	local install_sh=$3
 	local loop
 	for loop in `grep "^${ko}:" ${dep_file} | sed 's/.*://'`; do
-		[[ `grep ${loop} ${install_sh}` ]] && continue
+		[[ `grep "^${loop}" ${install_sh}` ]] && continue
 		mod_probe ${dep_file} ${loop} ${install_sh}
 		echo insmod ${loop} >> ${install_sh}
 	done
@@ -388,7 +397,7 @@ function create_install_and_order_filles() {
 
 	for loop in `cat ${modules_dep_file} | sed 's/:.*//'`; do
 		echo ${loop} >> ${modules_order_file}.tmp
-		[[ `grep ${loop} ${install_file}.tmp` ]] && continue
+		[[ `grep "^${loop}" ${install_file}.tmp` ]] && continue
 		mod_probe ${modules_dep_file} ${loop} ${install_file}.tmp
 		echo insmod ${loop} >> ${install_file}.tmp
 	done
@@ -510,13 +519,20 @@ function adjust_sequence_modules_loading() {
 		rm -r temp_dir
 	fi
 
-	black_modules=()
 	mkdir service_module
 	echo  MODULES_SERVICE_LOAD_LIST=${MODULES_SERVICE_LOAD_LIST[@]}
-	BLACK_AND_SERVICE_LIST=(${MODULES_LOAD_BLACK_LIST[@]} ${MODULES_SERVICE_LOAD_LIST[@]})
-	echo ${BLACK_AND_SERVICE_LIST[@]}
-	for module in ${BLACK_AND_SERVICE_LIST[@]}; do
-		modules=`ls ${module}*`
+	mkdir extra_closed_source_modules
+	echo  EXTRA_CLOSED_SOURCE_MODULE_LIST=${EXTRA_CLOSED_SOURCE_MODULE_LIST[@]}
+
+	BLACK_LIST=(${MODULES_LOAD_BLACK_LIST[@]} ${MODULES_SERVICE_LOAD_LIST[@]} ${EXTRA_CLOSED_SOURCE_MODULE_LIST[@]})
+	echo BLACK_LIST=${BLACK_LIST[@]}
+	black_modules=()
+	for module in ${BLACK_LIST[@]}; do
+		if [[ `ls ${module}* 2>/dev/null` ]]; then
+			modules=`ls ${module}*`
+		else
+			continue
+		fi
 		black_modules=(${black_modules[@]} ${modules[@]})
 	done
 	if [[ ${#black_modules[@]} == 0 ]]; then
@@ -555,8 +571,8 @@ function adjust_sequence_modules_loading() {
 
 		for module in ${GKI_MODULES_LOAD_BLACK_LIST[@]}; do
 			echo Delete module: ${module}
-			sed -n "/${module}:/p" modules.dep.temp
-			sed -i "/${module}:/d" modules.dep.temp
+			sed -n "/^${module}:/p" modules.dep.temp
+			sed -i "/^${module}:/d" modules.dep.temp
 		done
 	fi
 
@@ -577,11 +593,16 @@ function adjust_sequence_modules_loading() {
 		fi
 		if [[ -n ${ANDROID_PROJECT} ]]; then
 			for service_module_temp in ${MODULES_SERVICE_LOAD_LIST[@]}; do
-				if [[ ${module} = ${service_module_temp} ]]; then
+				if [[ ${module} =~ ${service_module_temp} ]]; then
 					mv ${module} service_module
 				fi
 			done
 		fi
+		for extra_closed_source_module in ${EXTRA_CLOSED_SOURCE_MODULE_LIST[@]}; do
+			if [[ ${module} =~ ${extra_closed_source_module} ]]; then
+				mv ${module} extra_closed_source_modules
+			fi
+		done
 		rm -f ${module}
 	done
 	rm -f modules.dep.temp1
@@ -737,6 +758,11 @@ function modules_install() {
 		MODULES_SEQUENCE_LIST=${ROOT_DIR}/${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/scripts/amlogic/modules_sequence_list
 	fi
 	source ${MODULES_SEQUENCE_LIST}
+
+	if [[ ! -f ${EXTRA_MODULES_LIST} ]]; then
+		EXTRA_MODULES_LIST=${ROOT_DIR}/${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/scripts/amlogic/ext_modules_list
+	fi
+	source ${EXTRA_MODULES_LIST}
 
 	export OUT_AMLOGIC_DIR=${OUT_AMLOGIC_DIR:-$(readlink -m ${COMMON_OUT_DIR}/amlogic)}
 	echo $OUT_AMLOGIC_DIR
@@ -1567,38 +1593,6 @@ function auto_patch_to_common_dir () {
 }
 export -f auto_patch_to_common_dir
 
-function build_kernel_for_different_cpu_architecture () {
-	set -x
-	if [[ $ARCH == arm64 ]]; then
-		make ARCH=arm64 -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} ${DEFCONFIG}
-		make ARCH=arm64 -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} headers_install &&
-		make ARCH=arm64 -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} Image -j12 &&
-		make ARCH=arm64 -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} modules -j12 &&
-		make ARCH=arm64 -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} INSTALL_MOD_PATH=${MODULES_STAGING_DIR} INSTALL_MOD_STRIP=1 modules_install -j12 &&
-		make ARCH=arm64 -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} dtbs -j12 || exit
-	elif [[ $ARCH == arm ]]; then
-		make ARCH=arm -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} ${DEFCONFIG}
-		make ARCH=arm -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} headers_install &&
-		make ARCH=arm -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} uImage -j12 &&
-		make ARCH=arm -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} modules -j12 &&
-		make ARCH=arm -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} INSTALL_MOD_PATH=${MODULES_STAGING_DIR} INSTALL_MOD_STRIP=1 modules_install -j12 &&
-		make ARCH=arm -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} dtbs -j12 || exit
-	elif [[ $ARCH == riscv ]]; then
-		make ARCH=riscv -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} ${DEFCONFIG}
-		make ARCH=riscv -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} headers_install &&
-		make ARCH=riscv -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} Image -j12 &&
-		make ARCH=riscv -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} modules -j12 &&
-		make ARCH=riscv -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} INSTALL_MOD_PATH=${MODULES_STAGING_DIR} modules_install -j12 &&
-		make ARCH=riscv -C ${ROOT_DIR}/${KERNEL_DIR} O=${OUT_DIR} ${TOOL_ARGS} dtbs -j12 || exit
-	fi
-	cp ${OUT_DIR}/arch/${ARCH}/boot/Image* ${DIST_DIR}
-	cp ${OUT_DIR}/arch/${ARCH}/boot/uImage* ${DIST_DIR}
-	cp ${OUT_DIR}/${COMMON_DRIVERS_DIR}/arch/${ARCH}/boot/dts/amlogic/*.dtb ${DIST_DIR}
-	cp ${OUT_DIR}/vmlinux ${DIST_DIR}
-	set +x
-}
-export -f build_kernel_for_different_cpu_architecture
-
 function build_ext_modules() {
 	for EXT_MOD in ${EXT_MODULES}; do
 		EXT_MOD_REL=$(real_path ${ROOT_DIR}/${EXT_MOD} ${KERNEL_DIR})
@@ -1889,9 +1883,11 @@ export -f setting_up_for_build
 
 function build_kernel_for_32bit () {
 	set -x
+	pre_defconfig_cmds
 	if [ "${SKIP_DEFCONFIG}" != "1" ] ; then
   		(cd ${KERNEL_DIR} && make ARCH=arm ${TOOL_ARGS} O=${OUT_DIR} "${MAKE_ARGS[@]}" ${DEFCONFIG})
 	fi
+	post_defconfig_cmds
 
 	echo "========================================================"
 	echo " Building kernel"
@@ -1923,8 +1919,6 @@ function build_android_32bit () {
 
 	source ${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/build.config.amlogic32
 
-	pre_defconfig_cmds
-
 	CC_CLANG=1
 
 	set_default_parameters_for_32bit
@@ -1938,8 +1932,6 @@ function build_android_32bit () {
 	mkdir -p ${DIST_DIR} ${MODULES_STAGING_DIR}
 
 	build_kernel_for_32bit
-
-	post_defconfig_cmds
 
 	eval ${POST_KERNEL_BUILD_CMDS}
 
@@ -1963,3 +1955,23 @@ function build_android_32bit () {
 
 }
 export -f build_android_32bit
+
+function clear_files_compressed_with_lzma_in_last_build () {
+	file_lzma="Image.lzma boot-lzma.img boot.img.lzma"
+	for remove_file in ${file_lzma}
+	do
+		file_path=`find -name $remove_file`
+		if [[ -n ${file_path} ]]; then
+			rm ${file_path}
+		fi
+	done
+}
+export -f clear_files_compressed_with_lzma_in_last_build
+
+function generate_lzma_format_image () {
+	pushd ${DIST_DIR}
+	lzma -z -k -f -9 Image
+	lzma -z -k -f -9 boot.img
+	popd
+}
+export -f generate_lzma_format_image

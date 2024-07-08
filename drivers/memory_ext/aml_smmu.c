@@ -297,13 +297,6 @@ pgprot_t (*aml_dma_pgprot)(struct device *dev, pgprot_t prot, unsigned long attr
 
 unsigned long aml_max_pfn;
 
-unsigned long (*aml_kallsyms_lookup_name)(const char *name);
-
-/* For each probe you need to allocate a kprobe structure */
-static struct kprobe kp_lookup_name = {
-	.symbol_name	= "kallsyms_lookup_name",
-};
-
 /*
  * We need to save away the original address corresponding to a mapped entry
  * for the sync operations.
@@ -496,9 +489,11 @@ not_found:
 	tmp_io_tlb_used = io_tlb_used;
 
 	spin_unlock_irqrestore(&io_tlb_lock, flags);
+#ifdef CONFIG_PRINTK
 	if (!(attrs & DMA_ATTR_NO_WARN) && __printk_ratelimit(__func__))
 		dev_warn(hwdev, "swiotlb buffer is full (sz: %zd bytes), total %lu (slots), used %lu (slots)\n",
 			 alloc_size, io_tlb_nslabs, tmp_io_tlb_used);
+#endif
 	return (phys_addr_t)DMA_MAPPING_ERROR;
 found:
 	io_tlb_used += nslots;
@@ -1253,6 +1248,27 @@ static void *get_symbol_addr(const char *symbol_name)
 	return kp.addr;
 }
 
+static unsigned long get_max_pfn(void)
+{
+	int nid;
+	unsigned long end_pfn;
+
+	/* Not inialized....update now */
+	/* find out "max pfn" */
+	end_pfn = 0;
+	for_each_node_state(nid, N_MEMORY) {
+		unsigned long node_end;
+
+		node_end = node_end_pfn(nid);
+		if (end_pfn < node_end)
+			end_pfn = node_end;
+	}
+
+	return end_pfn;
+}
+
+static struct reserved_mem *g_rmem1;
+
 static int __nocfi aml_smmu_symbol_init(void *data)
 {
 	int ret;
@@ -1300,16 +1316,8 @@ static int __nocfi aml_smmu_symbol_init(void *data)
 	aml_dma_pgprot = (pgprot_t (*)(struct device *dev, pgprot_t prot,
 				unsigned long attrs))get_symbol_addr("dma_pgprot");
 #endif
-	ret = register_kprobe(&kp_lookup_name);
-	if (ret < 0) {
-		pr_err("register_kprobe failed, returned %d\n", ret);
-		return ret;
-	}
-	pr_debug("kprobe lookup offset at %px\n", kp_lookup_name.addr);
-
-	aml_kallsyms_lookup_name = (unsigned long (*)(const char *name))kp_lookup_name.addr;
-
-	aml_max_pfn = *(unsigned long *)aml_kallsyms_lookup_name("max_pfn");
+	aml_max_pfn = get_max_pfn();
+	pr_info("aml_max_pfn: %lx\n", aml_max_pfn);
 
 	/* Record our private device structure */
 	platform_set_drvdata(pdev, smmu);
@@ -1352,6 +1360,7 @@ static int __nocfi aml_smmu_symbol_init(void *data)
 		return -1;
 	}
 
+	g_rmem1 = rmem;
 	pcie_swiotlb_init(dev);
 	aml_dma_atomic_pool_init(dev);
 
@@ -1397,10 +1406,33 @@ static int aml_smmu_device_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static void aml_smmu_device_shutdown(struct platform_device *pdev)
+#if CONFIG_PM_SLEEP
+static int aml_smmu_device_resume_noirq(struct device *dev)
 {
-	aml_smmu_device_remove(pdev);
+	int ret = 0;
+	u32 handle;
+
+	if (g_rmem1) {
+		dev_info(dev, "tee protect memory: %lu MiB at 0x%lx\n",
+			(unsigned long)g_rmem1->size / SZ_1M, (unsigned long)g_rmem1->base);
+		ret = aml_tee_protect_mem_by_type(TEE_MEM_TYPE_PCIE,
+						  g_rmem1->base, g_rmem1->size, &handle);
+		if (ret) {
+			dev_err(dev, "pcie tee mem protect fail: 0x%x\n", ret);
+			return -1;
+			}
+	} else {
+		dev_err(dev, "Can't get reserve memory region\n");
+		return -1;
+	}
+
+	return 0;
 }
+
+static const struct dev_pm_ops aml_smmu_pm_ops = {
+	.restore_noirq = aml_smmu_device_resume_noirq,
+};
+#endif
 
 static const struct of_device_id aml_smmu_of_match[] = {
 	{ .compatible = "amlogic,smmu", },
@@ -1413,10 +1445,12 @@ static struct platform_driver aml_smmu_driver = {
 		.name			= "aml_smmu",
 		.of_match_table		= of_match_ptr(aml_smmu_of_match),
 		.suppress_bind_attrs	= true,
+#if CONFIG_PM_SLEEP
+		.pm = &aml_smmu_pm_ops,
+#endif
 	},
 	.probe	= aml_smmu_device_probe,
 	.remove	= aml_smmu_device_remove,
-	.shutdown = aml_smmu_device_shutdown,
 };
 
 //module_platform_driver(aml_smmu_driver);

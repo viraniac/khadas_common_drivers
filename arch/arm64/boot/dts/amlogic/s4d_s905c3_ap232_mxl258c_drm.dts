@@ -59,6 +59,11 @@
 			bconsole-size = <0x10000>;
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
+		};
+
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
 			reg = <0x0 0x04f00000 0x0 0x00100000>;
@@ -169,10 +174,10 @@
 		vdin1_cma_reserved:linux,vdin1_cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			/* up to 1920x1080 yuv422 8bit and 5 buffers
-			 * 1920x1080x2x5 = 20 M
+			/* up to 720p yuv420 8bit and 4 buffers
+			 * 1280x720x1.5x4 = 8 M
 			 */
-			size = <0x0 0x01400000>;
+			size = <0x0 0x00800000>;
 			alignment = <0x0 0x400000>;
 		};
 		/* global autoconfigured region for contiguous allocations */
@@ -195,38 +200,6 @@
 		dev_name = "aml_amdolby_vision_driver";
 		status = "okay";
 		tv_mode = <0>;/*1:enable ;0:disable*/
-	};
-	cvbsout {
-		compatible = "amlogic, cvbsout-s4";
-		status = "okay";
-
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* s4d */
-		performance_pal = <0x1bf0  0x9 /* default Matrx625 CTCC value */
-			0x1b12  0x80c0
-			0x1b05  0xfa
-			0x1b56  0x333
-			0x1c59  0xf060
-			0xffff  0x0>; /* ending flag */
-		performance = <0x1bf0  0x9 /* ccitt033 SVA value */
-			0x1b12  0x8040
-			0x1b05  0x2
-			0x1b56  0x333
-			0x1c59  0xf458
-			0xffff  0x0>; /* ending flag */
-		performance_ntsc = <0x1bf0  0x3 /* Matrx525 TTC value */
-			0x1b12  0x8180
-			0x1b05  0xf0
-			0x1b56  0x333
-			0x1c59  0xed66
-			0xffff  0x0>; /* ending flag */
 	};
 
 	dvb-extern {
@@ -487,15 +460,6 @@
 		cma_mem_size = <0>; // MB
 		agc_pin_direction;//for S4D av2018 rf agc reverse
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -1631,7 +1595,7 @@
 };
 
 &vpu {
-	clk_level = <7>;
+	clk_level = <8>;
 };
 
 /*if you want to use vdin just modify status to "ok"*/

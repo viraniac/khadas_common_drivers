@@ -1185,6 +1185,17 @@ static bool optee_msg_api_revision_is_compatible(optee_invoke_fn *invoke_fn)
 	return false;
 }
 
+static bool optee_get_dynamic_shm_stats(optee_invoke_fn *invoke_fn)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_GET_DYN_SHM_STATS, 0, 0, 0, 0, 0, 0, 0, &res);
+	if (res.a0 == OPTEE_SMC_RETURN_OK && res.a1 == 1)
+		return true;
+
+	return false;
+}
+
 static bool optee_msg_exchange_capabilities(optee_invoke_fn *invoke_fn,
 					    u32 *sec_caps, u32 *max_notif_value,
 					    unsigned int *rpc_param_count)
@@ -1228,7 +1239,7 @@ optee_config_shm_memremap(optee_invoke_fn *invoke_fn, void **memremaped_shm)
 	union {
 		struct arm_smccc_res smccc;
 		struct optee_smc_get_shm_config_result result;
-	} res;
+	} res, logger_res;
 	unsigned long vaddr;
 	phys_addr_t paddr;
 	size_t size;
@@ -1260,15 +1271,19 @@ optee_config_shm_memremap(optee_invoke_fn *invoke_fn, void **memremaped_shm)
 	}
 	vaddr = (unsigned long)va;
 
-	memset(&res, 0, sizeof(res));
-	invoke_fn(OPTEE_SMC_GET_LOGGER_CONFIG, 0, 0, 0, 0, 0, 0, 0, &res.smccc);
-	if (res.smccc.a0 == OPTEE_SMC_RETURN_UNKNOWN_FUNCTION) {
+	invoke_fn(OPTEE_SMC_GET_LOGGER_CONFIG, 0, 0, 0, 0, 0, 0, 0, &logger_res.smccc);
+	if (logger_res.smccc.a0 == OPTEE_SMC_RETURN_UNKNOWN_FUNCTION) {
 		rc = tee_shm_pool_alloc_res_mem(vaddr, paddr,
 				size - DEF_LOGGER_SHM_SIZE,
 				OPTEE_MIN_STATIC_POOL_ALIGN);
 	} else {
-		rc = tee_shm_pool_alloc_res_mem(vaddr, paddr,
-				size, OPTEE_MIN_STATIC_POOL_ALIGN);
+		if (logger_res.smccc.a1 < (res.result.start + res.result.size) &&
+				logger_res.smccc.a1 >= res.result.start)
+			rc = tee_shm_pool_alloc_res_mem(vaddr, paddr,
+					size - logger_res.smccc.a2, OPTEE_MIN_STATIC_POOL_ALIGN);
+		else
+			rc = tee_shm_pool_alloc_res_mem(vaddr, paddr,
+					size, OPTEE_MIN_STATIC_POOL_ALIGN);
 	}
 
 	if (IS_ERR(rc))
@@ -1406,8 +1421,11 @@ static int optee_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	// disable dynamic share memory
-	sec_caps &= ~(OPTEE_SMC_SEC_CAP_DYNAMIC_SHM);
+	/*
+	 * If stats is false, Dynamic Shared Memory will be disabled
+	 */
+	if (!optee_get_dynamic_shm_stats(invoke_fn))
+		sec_caps &= ~(OPTEE_SMC_SEC_CAP_DYNAMIC_SHM);
 
 	/*
 	 * Try to use dynamic shared memory if possible

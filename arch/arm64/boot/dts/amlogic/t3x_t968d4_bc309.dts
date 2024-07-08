@@ -7,8 +7,8 @@
 
 #include "mesont3x.dtsi"
 #include "partition_mbox_ab.dtsi"
-#include "mesont3x_drm.dtsi"
 #include "mesont3x_bc309-panel.dtsi"
+#include "mesont3x_drm.dtsi"
 #include <dt-bindings/input/input.h>
 
 / {
@@ -69,7 +69,11 @@
 			ftrace-size = <0x80000>;
 			pmsg-size = <0x10000>;
 			bconsole-size = <0x10000>;
-			status = "disabled";
+		};
+
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
 		};
 
 		debug_reserved:linux,iotrace {
@@ -112,15 +116,15 @@
 
 		lcd_tcon_reserved:linux,lcd_tcon {
 			compatible = "amlogic, lcd_tcon";
-			reg = <0x0 0x5e800000 0x0 0x00c00000>;
-			no-map;
+			reg = <0x0 0x5e800000 0x0 0x00a02840>;
+			//no-map;
 		};
 
 		codec_mm_cma:linux,codec_mm_cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			/*codec_mm_cma 8K + 1080P max can alloc size M*/
-			size = <0x0 0x54400000>;
+			/*Primary + Secondary + PIP based on TV/ASOP: max scenario need 712MB*/
+			size = <0x0 0x2c800000>;
 			alignment = <0x0 0x400000>;
 			alloc-ranges = <0x0 0x0 0x0 0xe0000000>;
 			linux,contiguous-region;
@@ -153,6 +157,7 @@
 		camera_cma_reserved:linux,camera_cma {
 			compatible = "shared-dma-pool";
 			reusable;
+			status = "disabled";
 			size = <0x0 0x0>;
 			//size = <0x0 0xB000000>;
 			alignment = <0x0 0x400000>;
@@ -262,12 +267,9 @@
 			reusable;
 			/* frc:size need 4M alignment
 			 * 1080P 16 buffer:88Mhz (0x5800000)
-			 * 4k 16 buffer:348Mhz (0x15c00000)
-			 * 400Mhz (0x19000000)
-			 * 384Mhz (0x18000000)
-			 * 368Mhz (0x17000000)
+			 * 4k 16 buffer:312Mhz (0x13800000)
 			 */
-			size = <0x0 0x15c00000>; // reserved 212M
+			size = <0x0 0x13800000>;
 			alignment = <0x0 0x400000>;
 			linux,contiguous-region;
 			/*alloc-ranges = <0x0 0x0 0x0 0xB0000000>;*/
@@ -371,15 +373,6 @@
 		//hf = <1>;
 		tb = <0>;
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -609,6 +602,7 @@
 				"fclk_div4",
 				"fclk_div5";
 		hdmirx_id = <0>;
+		vrr_range_dynamic_update_en = <1>;
 		en_4k_2_2k = <0>;
 		hpd_low_cec_off = <0>;
 		arc_port = <2>;
@@ -631,7 +625,7 @@
 			0x0 0x0 0x0 0x0
 			0x0 0x0 0x0 0x0
 			0x0 0xfe390000 0x0 0x20000
-			0x0 0xfe000000 0x0 0x1fff
+			0x0 0xfe000000 0x0 0x15000
 			0x0 0xfe008000 0x280 0x334>;
 	};
 
@@ -955,7 +949,7 @@
 			   0x0 0xfe002000 0x0 0x2000>;	//reset
 
 		spectrum = <1>;
-		cma_mem_size = <40>; // MB
+		cma_mem_size = <16>; // MB
 	};
 
 	dvb-extern {
@@ -992,7 +986,7 @@
 		dmxdev_num = <0x11>;
 
 		tsn_from = "demod";
-
+		ts_clone = <0x0>;
 		/*single demod setting */
 		ts1_sid = <0x21>;
 		ts1 = "parallel";
@@ -1207,7 +1201,7 @@
 				&clkc CLKID_HIFI_PLL
 				&clkc CLKID_HIFI1_PLL>;
 		clock-names = "mclk", "clk_srcpll", "clk_src_cd";
-
+		src-clk-freq = <491520000>;
 		/* enable control gain */
 		ctrl_gain = <1>;
 		status = "okay";
@@ -1243,7 +1237,7 @@
 		samesource_sel = <3>;
 		/* In for ACODEC_ADC */
 		/* tdmin-src-name = "acodec_adc"; */
-		tdmin-src-name = "hdmirx";
+		tdmin-src-name = "hdmirx_b";
 		/*enable default mclk(12.288M), before extern codec start*/
 		start_clk_enable = <1>;
 
@@ -1252,6 +1246,7 @@
 
 		/* enable control gain */
 		ctrl_gain = <1>;
+		src-clk-freq = <491520000>;
 
 		/* pcpd_monitor*/
 		pcpd_monitor_src = <&pcpd_monitor_a>;
@@ -1276,9 +1271,9 @@
 				&clkc CLKID_HIFI_PLL
 				&clkc CLKID_HIFI1_PLL>;
 		clock-names = "mclk", "clk_srcpll", "clk_src_cd";
-
+		src-clk-freq = <491520000>;
 		/* enable control gain */
-		tdmin-src-name = "hdmirx";
+		tdmin-src-name = "hdmirx_b";
 		ctrl_gain = <1>;
 		status = "okay";
 	};
@@ -1299,6 +1294,7 @@
 				&clkc CLKID_HIFI1_PLL>;
 		clock-names = "gate_in", "gate_out", "mclk",
 					"mclk_pad", "clk_srcpll", "clk_src_cd";
+		src-clk-freq = <491520000>;
 		status = "okay";
 		suspend-clk-off = <1>;
 	};
@@ -1382,17 +1378,6 @@
 		status = "okay";
 	};
 
-	extn:extn {
-		compatible = "amlogic, t7-snd-extn";
-		#sound-dai-cells = <0>;
-
-		interrupts =
-				<GIC_SPI 42 IRQ_TYPE_EDGE_RISING>;
-		interrupt-names = "irq_frhdmirx";
-
-		status = "okay";
-	};
-
 	aed:effect {
 		compatible = "amlogic, snd-effect-v4";
 		#sound-dai-cells = <0>;
@@ -1421,9 +1406,10 @@
 	asrca: resample@0 {
 		compatible = "amlogic, t3x-resample-a";
 		clocks = <&clkc CLKID_HIFI_PLL
+			&clkc CLKID_HIFI1_PLL
 			&clkaudio CLKID_AUDIO_MCLK_B
 			&clkaudio CLKID_AUDIO_RESAMPLE_A>;
-		clock-names = "resample_pll", "resample_src", "resample_clk";
+		clock-names = "resample_pll", "clk_src_cd", "resample_src", "resample_clk";
 
 		/*same with toddr_src
 		 *	TDMIN_A,    0
@@ -1448,9 +1434,10 @@
 	asrcb: resample@1 {
 		compatible = "amlogic, t3x-resample-b";
 		clocks = <&clkc CLKID_HIFI_PLL
+			&clkc CLKID_HIFI1_PLL
 			&clkaudio CLKID_AUDIO_MCLK_F
 			&clkaudio CLKID_AUDIO_RESAMPLE_B>;
-		clock-names = "resample_pll", "resample_src", "resample_clk";
+		clock-names = "resample_pll", "clk_src_cd", "resample_src", "resample_clk";
 		src-clk-freq = <491520000>;
 
 		/*this resample is only used for loopback_A.*/
@@ -1461,9 +1448,10 @@
 	asrcc: resample@2 {
 		compatible = "amlogic, t3x-resample-c";
 		clocks = <&clkc CLKID_HIFI_PLL
+			&clkc CLKID_HIFI1_PLL
 			&clkaudio CLKID_AUDIO_MCLK_B
 			&clkaudio CLKID_AUDIO_RESAMPLE_C>;
-		clock-names = "resample_pll", "resample_src", "resample_clk";
+		clock-names = "resample_pll", "clk_src_cd", "resample_src", "resample_clk";
 
 		/*same with toddr_src
 		 *	TDMIN_A,    0
@@ -1578,6 +1566,7 @@
 
 		/* define loopack with pdm mic. */
 		mic-src = <&pdm>;
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 
@@ -1722,6 +1711,41 @@
 	pinctrl-0=<&i2c1_pins1>;
 };
 
+&CPU0 {
+	operating-points-v2 = <&a55_single_opp_table0>,
+				<&a55_single_opp_table1>,
+				<&a55_single_opp_table2>,
+				<&a55_single_opp_table3>;
+};
+
+&CPU1 {
+	operating-points-v2 = <&a55_single_opp_table0>,
+				<&a55_single_opp_table1>,
+				<&a55_single_opp_table2>,
+				<&a55_single_opp_table3>;
+};
+
+&CPU2 {
+	operating-points-v2 = <&a55_single_opp_table0>,
+				<&a55_single_opp_table1>,
+				<&a55_single_opp_table2>,
+				<&a55_single_opp_table3>;
+};
+
+&CPU3 {
+	operating-points-v2 = <&a76_single_opp_table0>,
+				<&a76_single_opp_table1>,
+				<&a76_single_opp_table2>,
+				<&a76_single_opp_table3>;
+};
+
+&CPU4 {
+	operating-points-v2 = <&a76_single_opp_table0>,
+				<&a76_single_opp_table1>,
+				<&a76_single_opp_table2>,
+				<&a76_single_opp_table3>;
+};
+
 &csiphy2 {
 	port {
 		csiphy2_ep: endpoint {
@@ -1863,6 +1887,13 @@
 		compatible = "lcd_ext, i2c";
 		dev_name = "i2c_CS901";
 		reg = <0x20>;
+		status = "okay";
+	};
+
+	lcd_extern_i2c3: lcd_extern_i2c@36 {
+		compatible = "lcd_ext, i2c";
+		dev_name = "i2c_CS603";
+		reg = <0x36>;
 		status = "okay";
 	};
 };
@@ -2167,6 +2198,7 @@
 	wb_sel = <0>;/*1:mtx ;0:gainoff*/
 	vlock_en = <1>;/*1:enable;0:disable*/
 	vlock_mode = <0x8>;
+	vrr_priority = <0>;/*1:game mode vrr always on;0:vrr on depend on vrr signal*/
 	/*vlock work mode:
 	 *bit0:auto ENC
 	 *bit1:auto PLL

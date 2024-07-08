@@ -17,6 +17,11 @@ const struct soc_enum audio_coding_type_enum =
 	SOC_ENUM_SINGLE(SND_SOC_NOPM, 0, ARRAY_SIZE(audio_coding_type_names),
 			audio_coding_type_names);
 
+const struct soc_enum spdifin_sample_rate_enum[] = {
+	SOC_ENUM_SINGLE(SND_SOC_NOPM, 0, ARRAY_SIZE(spdifin_samplerate),
+			spdifin_samplerate),
+};
+
 bool audio_coding_is_lpcm(enum audio_coding_types coding_type)
 {
 	return ((coding_type >= AUDIO_CODING_TYPE_STEREO_LPCM) &&
@@ -85,7 +90,12 @@ static unsigned int iec_rate_to_csfs(unsigned int rate)
 	return csfs;
 }
 
-unsigned int iec_rate_from_csfs(unsigned int csfs)
+/* expand unsupport csfs asoundef.h */
+#define IEC958_AES3_CON_FS_128000  (11 << 0)
+#define IEC958_AES3_CON_FS_352800  (13 << 0)
+#define IEC958_AES3_CON_FS_384000  (5 << 0)
+
+unsigned int iec_rate_from_csfs(unsigned int csfs, bool h)
 {
 	unsigned int rate = 0;
 
@@ -119,6 +129,18 @@ unsigned int iec_rate_from_csfs(unsigned int csfs)
 		break;
 	case IEC958_AES3_CON_FS_192000:
 		rate = 192000;
+		break;
+	case IEC958_AES3_CON_FS_128000:
+		rate = 128000;
+		break;
+	case IEC958_AES3_CON_FS_352800:
+		if (h)
+			rate = 705600;
+		else
+			rate = 352800;
+		break;
+	case IEC958_AES3_CON_FS_384000:
+		rate = 384000;
 		break;
 	case IEC958_AES3_CON_FS_NOTID:
 		rate = 0;
@@ -462,6 +484,7 @@ void spdif_notify_to_hdmitx(struct snd_pcm_substream *substream,
 	aud_param.i2s_ch_mask = 0x1;
 	aud_param.aud_src_if = AUD_SRC_IF_SPDIF;
 
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 	if (codec_type == AUD_CODEC_TYPE_AC3) {
 		aout_notifier_call_chain(AOUT_EVENT_RAWDATA_AC_3,
 					 &aud_param);
@@ -486,19 +509,22 @@ void spdif_notify_to_hdmitx(struct snd_pcm_substream *substream,
 		aout_notifier_call_chain(AOUT_EVENT_IEC_60958_PCM,
 					 &aud_param);
 	}
+#endif
 }
 
 /* notify hdmitx to prepare for changing audio format or settings */
 void notify_hdmitx_to_prepare(void)
 {
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 	struct aud_para aud_param;
 
 	memset(&aud_param, 0, sizeof(aud_param));
 	aud_param.prepare = true;
 	aout_notifier_call_chain(AOUT_EVENT_IEC_60958_PCM, &aud_param);
+#endif
 }
 
-#ifdef CONFIG_AMLOGIC_HDMITX
+#if defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21)
 unsigned int aml_audio_hdmiout_mute_flag;
 /* call HDMITX API to enable/disable internal audio out */
 int aml_get_hdmi_out_audio(struct snd_kcontrol *kcontrol,

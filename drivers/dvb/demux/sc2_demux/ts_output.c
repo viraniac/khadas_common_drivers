@@ -64,6 +64,10 @@ struct es_params_t {
 	int has_splice;
 	unsigned int have_sent_len;
 	u32 dirty_len;
+	s64 pre_time_ms;
+	u32 es_wp;
+	u32 es_header_wp;
+	u8 es_wp_has_err;
 };
 
 struct ts_out {
@@ -136,6 +140,7 @@ struct out_elem {
 	unsigned int aucpu_mem_size;
 	unsigned int aucpu_read_offset;
 	__u64 newest_pts;
+	__u64 cur_pts;
 
 	/*pts/dts for aucpu*/
 	s32 aucpu_pts_handle;
@@ -929,6 +934,14 @@ static int get_non_sec_es_header(struct out_elem *pout, char *last_header,
 	else
 		pheader->len = cur_es_bytes - last_es_bytes;
 
+	if ((cur_header[2] & 0x2) && !(cur_header[2] & 0xc)) {
+		pout->cur_pts = cur_header[3] >> 1 & 0x1;
+		pout->cur_pts <<= 32;
+		pout->cur_pts |= ((__u64)cur_header[15]) << 24
+		    | ((__u64)cur_header[14]) << 16
+		    | ((__u64)cur_header[13]) << 8
+		    | ((__u64)cur_header[12]);
+	}
 //	pr_dbg("sid:0x%0x pid:0x%0x len:%d,cur_es:0x%0x, last_es:0x%0x\n",
 //	       pout->sid, pout->es_pes->pid,
 //		   pheader->len, cur_es_bytes, last_es_bytes);
@@ -1031,14 +1044,15 @@ static int write_es_data(struct out_elem *pout, struct es_params_t *es_params)
 		if (es_params->has_splice == 0) {
 			memcpy(&header, &es_params->header, h_len);
 			ATRACE_COUNTER(pout->name, es_params->header.pts);
-			pr_dbg("%s pid:0x%0x sid:0x%0x flag:%d, pts:0x%lx, dts:0x%lx, len:%d\n",
+			pr_dbg("%s pid:0x%0x sid:0x%0x flag:%d, pts:0x%lx, dts:0x%lx, len:%d offset:0x%0x\n",
 		       pout->type == AUDIO_TYPE ? "audio" : "video",
 			   pout->es_pes->pid,
 			   pout->sid,
 		       header.pts_dts_flag,
 		       (unsigned long)header.pts,
 		       (unsigned long)header.dts,
-		       header.len);
+		       header.len,
+		       pout->pchan->r_offset);
 		} else {
 			header.len = es_params->header.len;
 		pr_dbg("%s pid:0x%0x sid:0x%0x flag:%d, pts:0x%lx, dts:0x%lx, len:%d\n",
@@ -1199,7 +1213,7 @@ static int create_aucpu_pts(struct out_elem *pout)
 		ret =
 		    _alloc_buff(pout->aucpu_pts_mem_size, 0,
 					&pout->aucpu_pts_mem,
-					&pout->aucpu_pts_mem_phy);
+					&pout->aucpu_pts_mem_phy, 0);
 		if (ret != 0) {
 			dprint("aucpu pts alloc buf fail\n");
 			return -1;
@@ -1217,8 +1231,9 @@ static int create_aucpu_pts(struct out_elem *pout)
 		pout->aucpu_pts_handle = aml_aucpu_strm_create(&src,
 				&dst, &cfg);
 		if (pout->aucpu_pts_handle < 0) {
-			_free_buff(pout->aucpu_pts_mem_phy,
-				pout->aucpu_pts_mem_size, 0);
+			_free_buff(pout->aucpu_pts_mem,
+				pout->aucpu_pts_mem_phy,
+				pout->aucpu_pts_mem_size, 0, 0);
 			pout->aucpu_pts_mem = 0;
 
 			dprint("%s create aucpu pts fail, ret:%d\n",
@@ -1267,7 +1282,7 @@ static int create_aucpu_inst(struct out_elem *pout)
 		pout->aucpu_mem_size = pout->pchan->mem_size;
 		ret =
 		    _alloc_buff(pout->aucpu_mem_size, 0, &pout->aucpu_mem,
-				&pout->aucpu_mem_phy);
+				&pout->aucpu_mem_phy, 0);
 		if (ret != 0) {
 			dprint("aucpu mem alloc fail\n");
 			return -1;
@@ -1283,8 +1298,9 @@ static int create_aucpu_inst(struct out_elem *pout)
 		cfg.config_flags = 0;
 		pout->aucpu_handle = aml_aucpu_strm_create(&src, &dst, &cfg);
 		if (pout->aucpu_handle < 0) {
-			_free_buff(pout->aucpu_mem_phy,
-				pout->aucpu_mem_size, 0);
+			_free_buff(pout->aucpu_mem,
+				pout->aucpu_mem_phy,
+				pout->aucpu_mem_size, 0, 0);
 			pout->aucpu_mem = 0;
 			dprint("%s create aucpu fail, ret:%d\n",
 			       __func__, pout->aucpu_handle);
@@ -2106,6 +2122,56 @@ static int _handle_es_splice(struct out_elem *pout, struct es_params_t *es_param
 	return 0;
 }
 
+static void notify_encrypt_for_t5w(struct out_elem *pout, struct es_params_t *es_params)
+{
+	s64 now_time_ms;
+
+	if (es_params->pre_time_ms == -1) {
+		es_params->pre_time_ms = ktime_to_ms(ktime_get());
+		es_params->es_wp = SC2_bufferid_get_wp_offset(pout->pchan);
+		es_params->es_header_wp = SC2_bufferid_get_wp_offset(pout->pchan1);
+//		dprint("set wp and pre_time\n");
+	} else {
+		now_time_ms = ktime_to_ms(ktime_get());
+		if ((now_time_ms - es_params->pre_time_ms) >= 500) {
+			if (es_params->es_wp != SC2_bufferid_get_wp_offset(pout->pchan) &&
+				es_params->es_header_wp ==
+				SC2_bufferid_get_wp_offset(pout->pchan1)) {
+				if (pout->output_mode) {
+					if (pout->type == VIDEO_TYPE || pout->type == AUDIO_TYPE) {
+						struct dmx_sec_es_data sec_es_data;
+
+						memset(&sec_es_data, 0,
+							sizeof(struct dmx_sec_es_data));
+						sec_es_data.pts_dts_flag = 0xC;
+						out_ts_cb_list(pout, (char *)&sec_es_data,
+							sizeof(struct dmx_sec_es_data), 0, 0);
+						pr_dbg("notify sec mode encrypt type:%d\n",
+							pout->type);
+						es_params->es_wp_has_err = 1;
+					}
+				} else {
+					if (pout->type == VIDEO_TYPE || pout->type == AUDIO_TYPE) {
+						struct dmx_non_sec_es_header es_data_header;
+
+						memset(&es_data_header, 0,
+							sizeof(struct dmx_non_sec_es_header));
+						es_data_header.pts_dts_flag = 0xC;
+						out_ts_cb_list(pout, (char *)&es_data_header,
+							sizeof(struct dmx_non_sec_es_header), 0, 0);
+						pr_dbg("notify non-sec mode encrypt type:%d\n",
+							pout->type);
+						es_params->es_wp_has_err = 1;
+					}
+				}
+			} else {
+//				es_params->es_wp = SC2_bufferid_get_wp_offset(pout->pchan);
+			}
+			es_params->pre_time_ms = -1;
+		}
+	}
+}
+
 static int _handle_es(struct out_elem *pout, struct es_params_t *es_params)
 {
 	int ret = 0;
@@ -2144,6 +2210,28 @@ static int _handle_es(struct out_elem *pout, struct es_params_t *es_params)
 		    get_non_sec_es_header(pout, plast_header, pcur_header,
 					  pheader);
 		mutex_unlock(&pout->pts_mutex);
+		/*for t5w some encrypt streams need notify high level*/
+		if (get_dmx_version() == 4) {
+			if (ret == -3) {
+				notify_encrypt_for_t5w(pout, es_params);
+			} else {
+				es_params->pre_time_ms = -1;
+			}
+			/*first es error, jump & correct wp*/
+			if (ret == 0 && es_params->es_wp_has_err) {
+				unsigned int cur_wp = 0;
+
+				cur_wp = pcur_header[7] << 24 |
+					pcur_header[6] << 16 | pcur_header[5] << 8 | pcur_header[4];
+				memcpy(&es_params->last_last_header,
+					&es_params->last_header, 16);
+				memcpy(&es_params->last_header, pcur_header,
+						sizeof(es_params->last_header));
+				pout->pchan->r_offset = cur_wp % pout->pchan->mem_size;
+				es_params->es_wp_has_err = 0;
+				return 0;
+			}
+		}
 		if (ret < 0) {
 			if (ret == -3) {
 				if (pout->type == VIDEO_TYPE && video_es_splice) {
@@ -2671,7 +2759,7 @@ struct out_elem *ts_output_find_same_section_pid(int sid, int pid)
 	return NULL;
 }
 
-struct out_elem *ts_output_find_dvr(int sid)
+struct out_elem *ts_output_find_dvr(int sid, int sec_level)
 {
 	int i = 0;
 
@@ -2679,9 +2767,9 @@ struct out_elem *ts_output_find_dvr(int sid)
 		struct out_elem *pout = &out_elem_table[i];
 
 		if (pout->used &&
-		    pout->sid == sid && pout->format == DVR_FORMAT) {
+		    pout->sid == sid && pout->format == DVR_FORMAT &&
+		    pout->pchan && pout->pchan->sec_level == sec_level)
 			return pout;
-		}
 	}
 	return NULL;
 }
@@ -2727,9 +2815,11 @@ struct out_elem *ts_output_open(int sid, u8 dmx_id, u8 format,
 	pout->media_type = media_type;
 	pout->ref = 0;
 	pout->newest_pts = 0;
+	pout->cur_pts = 0;
 	pout->decoder_rp_offset = INVALID_DECODE_RP;
 	memset(&attr, 0, sizeof(struct bufferid_attr));
 	attr.mode = OUTPUT_MODE;
+	attr.format = format;
 
 	if (format == ES_FORMAT) {
 		attr.is_es = 1;
@@ -2810,6 +2900,10 @@ struct out_elem *ts_output_open(int sid, u8 dmx_id, u8 format,
 		mutex_lock(&es_output_mutex);
 		add_ts_out_list(&es_out_task_tmp, ts_out_tmp);
 		mutex_unlock(&es_output_mutex);
+		if (get_dmx_version() == 4) {
+			tsout_config_save_junk(1);
+			ts_out_tmp->es_params->pre_time_ms = -1;
+		}
 	} else {
 		add_ts_out_list(&ts_out_task_tmp, ts_out_tmp);
 	}
@@ -2862,8 +2956,9 @@ int ts_output_close(struct out_elem *pout)
 			pr_dbg("aucpu_strm_remove fail ret:%d\n", ret);
 		pout->aucpu_handle = -1;
 
-		_free_buff(pout->aucpu_mem_phy,
-				pout->aucpu_mem_size, 0);
+		_free_buff(pout->aucpu_mem,
+				pout->aucpu_mem_phy,
+				pout->aucpu_mem_size, 0, 0);
 		pout->aucpu_mem = 0;
 	}
 
@@ -2885,8 +2980,9 @@ int ts_output_close(struct out_elem *pout)
 			pr_dbg("aucpu_strm_remove pts fail ret:%d\n", ret);
 		pout->aucpu_pts_handle = -1;
 
-		_free_buff(pout->aucpu_pts_mem_phy,
-				pout->aucpu_pts_mem_size, 0);
+		_free_buff(pout->aucpu_pts_mem,
+				pout->aucpu_pts_mem_phy,
+				pout->aucpu_pts_mem_size, 0, 0);
 		pout->aucpu_pts_mem = 0;
 	}
 
@@ -3371,8 +3467,12 @@ int ts_output_get_newest_pts(struct out_elem *pout,
 	char newest_header[16];
 	__u64 newest_pts_tmp = 0;
 
-	*newest_pts = pout->newest_pts;
+	if (!pout || !pout->pchan1) {
+		dprint("%s line:%d parameter fail\n", __func__, __LINE__);
+		return -1;
+	}
 	memset(&newest_header, 0, sizeof(newest_header));
+
 	if (pout->type == VIDEO_TYPE || pout->type == AUDIO_TYPE) {
 		mutex_lock(&pout->pts_mutex);
 		if (!pout->aucpu_pts_start &&
@@ -3398,7 +3498,12 @@ int ts_output_get_newest_pts(struct out_elem *pout,
 			ret = aucpu_bufferid_read_newest_pts(pout, &pts_dts);
 		else
 			ret = SC2_bufferid_read_newest_pts(pout->pchan1, &pts_dts);
-		if (ret != 0) {
+		/*has pts, not newest*/
+		if (ret == -1) {
+			mutex_unlock(&pout->pts_mutex);
+			return -2;
+		}
+		if (ret > 0) {
 			memcpy((char *)newest_header, pts_dts, 16);
 		} else {
 			mutex_unlock(&pout->pts_mutex);
@@ -3406,14 +3511,14 @@ int ts_output_get_newest_pts(struct out_elem *pout,
 		}
 
 		pid = (newest_header[1] & 0x1f) << 8 | newest_header[0];
-		if (pout->es_pes->pid != pid) {
-			dprint("%s pid diff req pid %d, ret pid:%d\n",
-				   __func__, pout->es_pes->pid, pid);
+		if (pout->es_pes && pout->es_pes->pid != pid) {
+//			dprint("%s pid diff req pid %d, ret pid:%d\n",
+//				   __func__, pout->es_pes->pid, pid);
 			mutex_unlock(&pout->pts_mutex);
 			return -2;
 		}
 		if (newest_header[2] & 0xc) {
-			dprint("%s scrambled es, invalid\n", __func__);
+//			dprint("%s scrambled es, invalid\n", __func__);
 			mutex_unlock(&pout->pts_mutex);
 			return -2;
 		}
@@ -3427,14 +3532,14 @@ int ts_output_get_newest_pts(struct out_elem *pout,
 		newest_pts_tmp &= 0x1FFFFFFFF;
 
 		if (newest_header[2] & 0x2) {
-			pout->newest_pts = newest_pts_tmp;
-			*newest_pts = newest_pts_tmp;
-			pr_dbg("%s pts:0x%lx\n", __func__, (unsigned long)newest_pts_tmp);
+			if (newest_pts)
+				*newest_pts = newest_pts_tmp;
+			mutex_unlock(&pout->pts_mutex);
+			return 0;
 		}
-
 		mutex_unlock(&pout->pts_mutex);
 	}
-	return 0;
+	return -1;
 }
 
 int ts_output_get_mem_info(struct out_elem *pout,
@@ -3443,9 +3548,20 @@ int ts_output_get_mem_info(struct out_elem *pout,
 			   unsigned int *free_size, unsigned int *wp_offset,
 			   __u64 *newest_pts)
 {
+	__u64 tmp_pts = 0;
+	int ret = 0;
+
+	if (!pout || !pout->pchan) {
+		dprint("%s line:%d parameter error\n", __func__, __LINE__);
+		return -1;
+	}
 	*total_size = pout->pchan->mem_size;
 	*buf_phy_start = pout->pchan->mem_phy;
-	*wp_offset = SC2_bufferid_get_wp_offset(pout->pchan);
+	if (pout->pchan)
+		*wp_offset = SC2_bufferid_get_wp_offset(pout->pchan);
+	else
+		*wp_offset = 0;
+
 	if (pout->aucpu_start) {
 		unsigned int now_w = 0;
 		unsigned int mem_size = pout->aucpu_mem_size;
@@ -3471,8 +3587,26 @@ int ts_output_get_mem_info(struct out_elem *pout,
 				*free_size = pout->decoder_rp_offset - w;
 		}
 	}
-	if (newest_pts && pout->format == ES_FORMAT)
-		ts_output_get_newest_pts(pout, newest_pts);
+	if (newest_pts && pout->format == ES_FORMAT) {
+		ret = ts_output_get_newest_pts(pout, &tmp_pts);
+		if (ret == -3) {
+			if (pout->newest_pts != pout->cur_pts)
+				pr_dbg("e newest_pts %s pid:0x%0x pts:0x%lx\n",
+						pout->type == VIDEO_TYPE ? "video" : "audio",
+						pout->es_pes->pid, (unsigned long)pout->cur_pts);
+			pout->newest_pts = pout->cur_pts;
+			*newest_pts = pout->newest_pts;
+		} else if (ret == 0) {
+			if (pout->newest_pts != tmp_pts)
+				pr_dbg("g newest_pts %s pid:0x%0x pts:0x%lx\n",
+						pout->type == VIDEO_TYPE ? "video" : "audio",
+						pout->es_pes->pid, (unsigned long)tmp_pts);
+			pout->newest_pts = tmp_pts;
+			*newest_pts = pout->newest_pts;
+		} else {
+			*newest_pts = pout->newest_pts;
+		}
+	}
 	return 0;
 }
 

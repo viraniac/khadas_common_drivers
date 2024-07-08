@@ -21,6 +21,9 @@
 #include <linux/amlogic/media/ge2d/ge2d_func.h>
 #include <linux/amlogic/media/video_processor/video_pp_common.h>
 #include <linux/amlogic/media/dmabuf_heaps/amlogic_dmabuf_heap.h>
+#ifdef CONFIG_AMLOGIC_MEDIA_VIDEO
+#include <linux/amlogic/media/video_sink/video.h>
+#endif
 
 #include "meson_uvm_aicolor_processor.h"
 static struct dma_buf *dmabuf_last;
@@ -340,8 +343,8 @@ int attach_aicolor_hook_mod_info(int shared_fd,
 	struct uvm_handle *handle;
 	bool attached = false;
 	struct uvm_aicolor_info *aicolor_info = (struct uvm_aicolor_info *)buf;
+	int output_fps, output_pts_inc_scale = 0, output_pts_inc_scale_base = 0;
 	struct vframe_s *vf = NULL;
-	bool enable_aicolor = true;
 
 	aicolor_info->need_do_aicolor = 1;
 	aicolor_info->dw_height = 0;
@@ -349,22 +352,38 @@ int attach_aicolor_hook_mod_info(int shared_fd,
 
 	if (!uvm_open_aicolor) {
 		aicolor_info->need_do_aicolor = 0;
-		enable_aicolor = false;
 	} else {
 		vf = aicolor_get_dw_vf(aicolor_info);
 		if (IS_ERR_OR_NULL(vf)) {
-			aicolor_print(PRINT_OTHER, "get no vf\n");
+			aicolor_print(PRINT_ERROR, "get no vf\n");
 			return -EINVAL;
 		}
 		aicolor_info->dw_height = vf->height;
 		aicolor_info->dw_width = vf->width;
 		if (vf->width > 3840 ||
 		    vf->height > 2160 ||
-		    vf->flag & VFRAME_FLAG_VIDEO_SECURE) {
+		    vf->flag & VFRAME_FLAG_VIDEO_SECURE ||
+		    vf->flag & VFRAME_FLAG_GAME_MODE ||
+		    vf->flag & VFRAME_FLAG_PC_MODE ||
+		    vf->canvas0_config[0].bit_depth & P010_MODE) {
 			aicolor_print(PRINT_OTHER, "bypass %d %d\n",
 				vf->width, vf->height);
 			aicolor_info->need_do_aicolor = 0;
-			enable_aicolor = false;
+		}
+
+		get_output_pcrscr_info(&output_pts_inc_scale, &output_pts_inc_scale_base);
+		if (!output_pts_inc_scale_base) {
+			aicolor_print(PRINT_OTHER, "get output pcrscr info failed.\n");
+			output_fps = 0;
+		} else {
+			output_fps = 90000 * 16 * (u64)output_pts_inc_scale;
+			output_fps = div64_u64(output_fps, output_pts_inc_scale_base);
+		}
+		aicolor_print(PRINT_OTHER, "scale: %d, base: %d, output_fps is %d.\n",
+			output_pts_inc_scale, output_pts_inc_scale_base, output_fps);
+		if (output_fps < 24000) {
+			aicolor_print(PRINT_OTHER, "output fps more than 60, bypass ai_sr.\n");
+			aicolor_info->need_do_aicolor = 0;
 		}
 	}
 
@@ -420,7 +439,7 @@ int attach_aicolor_hook_mod_info(int shared_fd,
 	else
 		aicolor_info->omx_index = -1;
 
-	if (enable_aicolor)
+	if (aicolor_info->need_do_aicolor)
 		aicolor_print(PRINT_OTHER, "nn_aicolor=%px, omx_index=%d\n",
 			nn_aicolor, aicolor_info->omx_index);
 
@@ -467,13 +486,15 @@ int aicolor_setinfo(void *arg, char *buf)
 	return 0;
 }
 
-static void dump_vf(struct vframe_s *vf, phys_addr_t addr, struct uvm_aicolor_info *info)
+static void dump_vf(struct vframe_s *vf, phys_addr_t addr, struct uvm_aicolor_info *info, int num)
 {
 #ifdef CONFIG_AMLOGIC_ENABLE_VIDEO_PIPELINE_DUMP_DATA
 	struct file *fp;
 	char name_buf[32];
 	int write_size;
+	int write_size_uv;
 	u8 *data;
+	u8 *data_uv;
 	loff_t pos;
 
 	if (IS_ERR_OR_NULL(vf) || IS_ERR_OR_NULL(info)) {
@@ -486,10 +507,12 @@ static void dump_vf(struct vframe_s *vf, phys_addr_t addr, struct uvm_aicolor_in
 		return;
 	}
 
-	snprintf(name_buf, sizeof(name_buf), "/data/tmp/ge2dOut.rgb");
+	snprintf(name_buf, sizeof(name_buf), "/data/tmp/ge2dOut_%d.rgb", num);
 	fp = filp_open(name_buf, O_CREAT | O_RDWR, 0644);
-	if (IS_ERR(fp))
+	if (IS_ERR(fp)) {
+		aicolor_print(PRINT_ERROR, "open file path %s failed.\n", name_buf);
 		return;
+	}
 	write_size = info->nn_input_frame_height * info->nn_input_frame_width * 3;
 	data = codec_mm_vmap(addr, write_size);
 	if (!data)
@@ -501,20 +524,29 @@ static void dump_vf(struct vframe_s *vf, phys_addr_t addr, struct uvm_aicolor_in
 	codec_mm_unmap_phyaddr(data);
 	filp_close(fp, NULL);
 
-	snprintf(name_buf, sizeof(name_buf), "/data/tmp/dec.yuv");
+	snprintf(name_buf, sizeof(name_buf), "/data/tmp/dec_%d.yuv", num);
 	fp = filp_open(name_buf, O_CREAT | O_RDWR, 0644);
 	if (IS_ERR(fp))
 		return;
-	write_size = vf->canvas0_config[0].width * vf->canvas0_config[0].height
-		* 3 / 2;
+	write_size = vf->canvas0_config[0].width * vf->canvas0_config[0].height;
+	write_size_uv = vf->canvas0_config[1].width * vf->canvas0_config[1].height / 2;
 	data = codec_mm_vmap(vf->canvas0_config[0].phy_addr, write_size);
-	if (!data)
+	data_uv = codec_mm_vmap(vf->canvas0_config[1].phy_addr, write_size_uv);
+	if (!data || !data_uv) {
+		aicolor_print(PRINT_ERROR, "%s: vmap failed.\n", __func__);
 		return;
+	}
 	pos = 0;
 	kernel_write(fp, data, write_size, &pos);
-	aicolor_print(PRINT_ERROR, "aicolor: write %u size to addr%p\n",
+	kernel_write(fp, data_uv, write_size_uv, &pos);
+	aicolor_print(PRINT_NN_DUMP, "aicolor: write y data %u size from addr%p\n",
 		write_size, data);
+	aicolor_print(PRINT_NN_DUMP, "aicolor: write uv data %u size from addr%p\n",
+		write_size_uv, data_uv);
+	aicolor_print(PRINT_NN_DUMP, "aicolor: yuv w %d, h %d.\n",
+		vf->canvas0_config[0].width, vf->canvas0_config[0].height);
 	codec_mm_unmap_phyaddr(data);
+	codec_mm_unmap_phyaddr(data_uv);
 	filp_close(fp, NULL);
 #endif
 }
@@ -535,6 +567,7 @@ int aicolor_getinfo(void *arg, char *buf)
 	struct dma_buf_attachment *attach = NULL;
 	struct sg_table *table = NULL;
 	struct page *page = NULL;
+	static int dump_count;
 
 	aicolor_info = (struct uvm_aicolor_info *)buf;
 
@@ -585,6 +618,7 @@ int aicolor_getinfo(void *arg, char *buf)
 		output.width = aicolor_info->nn_input_frame_width;
 		output.height = aicolor_info->nn_input_frame_height;
 		aicolor_info->omx_index = vf->omx_index;
+		aicolor_info->ge2d_out_phy_addr = (ulong)phy_addr;
 
 		output.format = GE2D_FORMAT_S24_RGB;
 		output.addr = (ulong)phy_addr;
@@ -599,8 +633,15 @@ int aicolor_getinfo(void *arg, char *buf)
 			+ (end_time.tv_usec - begin_time.tv_usec)) / 1000;
 		aicolor_print(PRINT_OTHER, "ge2d cost: %d ms\n", cost_time);
 		if (uvm_aicolor_dump) {
-			uvm_aicolor_dump = 0;
-			dump_vf(vf, (ulong)phy_addr, aicolor_info);
+			if (dump_count < uvm_aicolor_dump) {
+				dump_vf(vf, (ulong)phy_addr, aicolor_info, dump_count + 1);
+				dump_count++;
+			} else {
+				aicolor_print(PRINT_ERROR, "finish dump %d vframe.\n",
+					uvm_aicolor_dump);
+				uvm_aicolor_dump = 0;
+				dump_count = 0;
+			}
 		}
 	}
 	return 0;

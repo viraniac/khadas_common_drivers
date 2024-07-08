@@ -75,6 +75,11 @@
 			pmsg-size = <0x20000>;
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
+		};
+
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
 			reg = <0x0 0x04f00000 0x0 0x00100000>;
@@ -301,39 +306,6 @@
 		status = "okay";
 	};
 
-	cvbsout {
-		compatible = "amlogic, cvbsout-sc2";
-		status = "disabled";
-
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* tm2 */
-		performance = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x8080
-			0x1b05  0xfd
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
-		performance_sarft = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x0
-			0x1b05  0x9
-			0x1c59  0xfc48
-			0xffff  0x0>; /* ending flag */
-		performance_revB_telecom = <0x1bf0  0x9
-			0x1b56  0x546
-			0x1b12  0x8080
-			0x1b05  0x9
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
-	};
-
 	multi-di {
 		//status = "okay";
 		/***************************************************
@@ -375,15 +347,6 @@
 		 ***************************************************/
 		//hf = <0>;
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "okay";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -853,7 +816,7 @@
 		/*GPIOT-19 conflict with audio speaker */
 		status = "disabled";
 
-		fe_num = <2>;
+		fe_num = <1>;
 		fe0_demod = "cxd2856";
 		fe0_i2c_adap_id = <&i2c5>;
 		fe0_demod_i2c_addr = <0xD8>;
@@ -1537,8 +1500,9 @@
 
 &i2c1 {
 	status = "okay";
-	pinctrl-names="default";
 	pinctrl-0=<&i2c1_pins1>;
+	pinctrl-1=<&i2c1_pins1_sleep>;
+	pinctrl-names="default", "sleep";
 
 	tas5707_36: tas5707_36@1b {
 		compatible = "ti,tas5707";
@@ -1558,10 +1522,11 @@
 
 &i2c2 {
 	status = "okay";
-	pinctrl-names = "default";//, "sleep"
-	pinctrl-0 = <&i2c2_pins3>;
-	//pinctrl-1 = <&i2c2_sleep_pins2>;
-	clock-frequency = <100000>; /* default 100k */
+	pinctrl-0=<&i2c2_pins3>;
+	pinctrl-1=<&i2c2_pins3_sleep>;
+	pinctrl-names="default", "sleep";
+	clock-frequency = <400000>; /* default 100k */
+
 	sensor-i2c@6c {
 		compatible = "arm, i2c-sensor";
 		reg = <0x6c>;
@@ -1571,16 +1536,175 @@
 		reg-data-type = <1>;
 		link-device = <&phycsi>;
 	};
+	touchscreen@5d {
+			compatible = "goodix,gt9xx";
+			status = "okay";
+			reg = <0x5d>;
+			reset-gpio = <&gpio GPIOZ_12 GPIO_ACTIVE_HIGH>;
+			irq-gpio = <&gpio GPIOZ_13 GPIO_ACTIVE_HIGH>;
+			rotation = <0>;
+			tp_id = <0>;
+			abs_x_max = <1280>;
+			abs_y_max = <800>;
+			goodix,cfg-group0 = [
+				5B 00 05 20 03 0A 0D 00 01 08 32
+				05 64 3C 03 05 00 00 00 00 00 00
+				00 1C 1E 22 14 90 30 AA 1E 1C D6
+				09 00 00 01 9A 04 25 00 00 00 00
+				00 00 00 00 07 00 00 14 2F 94 C5
+				02 07 00 00 04 A5 15 00 8D 19 00
+				78 1E 00 67 24 00 58 2B 00 58 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 19 18 17 16 15 14 11 10 0F
+				0E 0D 0C 09 08 07 06 05 04 01 00
+				00 00 00 00 00 00 00 00 00 00 00
+				02 04 06 07 08 0A 0C 0D 0E 0F 10
+				11 12 13 14 19 1B 1C 1E 1F 20 21
+				22 23 24 25 26 27 28 29 2A 00 00
+				00 00 00 00 00 00 00 00 F6 01];
+			goodix,cfg-group2 = [
+				5B 00 05 20 03 0A 0D 00 01 08 32
+				05 64 3C 03 05 00 00 00 00 00 00
+				00 1C 1E 22 14 90 30 AA 1E 1C D6
+				09 00 00 01 9A 04 25 00 00 00 00
+				00 00 00 00 07 00 00 14 2F 94 C5
+				02 07 00 00 04 A5 15 00 8D 19 00
+				78 1E 00 67 24 00 58 2B 00 58 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 19 18 17 16 15 14 11 10 0F
+				0E 0D 0C 09 08 07 06 05 04 01 00
+				00 00 00 00 00 00 00 00 00 00 00
+				02 04 06 07 08 0A 0C 0D 0E 0F 10
+				11 12 13 14 19 1B 1C 1E 1F 20 21
+				22 23 24 25 26 27 28 29 2A 00 00
+				00 00 00 00 00 00 00 00 F6 01];
+	};
 };
 
-&i2c5 {
+&i2c3 {
 	status = "okay";
-	pinctrl-names = "default";//, "sleep"
-	pinctrl-0 = <&i2c5_pins1>;
-	//pinctrl-1 = <&i2c2_sleep_pins2>;
-	clock-frequency = <100000>; /* default 100k */
+	pinctrl-0=<&i2c3_pins1>;
+	pinctrl-1=<&i2c3_pins1_sleep>;
+	pinctrl-names="default", "sleep";
+	clock-frequency = <400000>; /* default 100k */
+
+	sensor-i2c@6c {
+		compatible = "arm, i2c-sensor-sub";
+		reg = <0x6c>;
+		reg-names = "i2c-sensor";
+		slave-addr = <0x6c>;
+		reg-type = <2>;
+		reg-data-type = <1>;
+		link-device = <&phycsi>;
+	};
+	touchscreen@5d {
+			compatible = "goodix,gt9xx";
+			status = "okay";
+			reg = <0x5d>;
+			reset-gpio = <&gpio GPIOZ_11 GPIO_ACTIVE_HIGH>;
+			irq-gpio = <&gpio GPIOZ_10 GPIO_ACTIVE_HIGH>;
+			rotation = <0>;
+			tp_id = <1>;
+			abs_x_max = <1280>;
+			abs_y_max = <800>;
+			goodix,cfg-group0 = [
+				5B 00 05 20 03 0A 0D 00 01 08 32
+				05 64 3C 03 05 00 00 00 00 00 00
+				00 1C 1E 22 14 90 30 AA 1E 1C D6
+				09 00 00 01 9A 04 25 00 00 00 00
+				00 00 00 00 07 00 00 14 2F 94 C5
+				02 07 00 00 04 A5 15 00 8D 19 00
+				78 1E 00 67 24 00 58 2B 00 58 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 19 18 17 16 15 14 11 10 0F
+				0E 0D 0C 09 08 07 06 05 04 01 00
+				00 00 00 00 00 00 00 00 00 00 00
+				02 04 06 07 08 0A 0C 0D 0E 0F 10
+				11 12 13 14 19 1B 1C 1E 1F 20 21
+				22 23 24 25 26 27 28 29 2A 00 00
+				00 00 00 00 00 00 00 00 F6 01];
+			goodix,cfg-group2 = [
+				5B 00 05 20 03 0A 0D 00 01 08 32
+				05 64 3C 03 05 00 00 00 00 00 00
+				00 1C 1E 22 14 90 30 AA 1E 1C D6
+				09 00 00 01 9A 04 25 00 00 00 00
+				00 00 00 00 07 00 00 14 2F 94 C5
+				02 07 00 00 04 A5 15 00 8D 19 00
+				78 1E 00 67 24 00 58 2B 00 58 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 00 00 00 00 00 00 00 00 00
+				00 00 19 18 17 16 15 14 11 10 0F
+				0E 0D 0C 09 08 07 06 05 04 01 00
+				00 00 00 00 00 00 00 00 00 00 00
+				02 04 06 07 08 0A 0C 0D 0E 0F 10
+				11 12 13 14 19 1B 1C 1E 1F 20 21
+				22 23 24 25 26 27 28 29 2A 00 00
+				00 00 00 00 00 00 00 00 F6 01];
+	};
 };
 
+&i2c4 {
+	status = "okay";
+	pinctrl-0=<&i2c4_pins1>;
+	pinctrl-1=<&i2c4_pins1_sleep>;
+	pinctrl-names="default", "sleep";
+	clock-frequency = <100000>; /* default 100k */
+
+	touchscreen@14 {
+		compatible = "goodix,gt9xx";
+		status = "okay";
+		reg = <0x14>;
+		reset-gpio = <&gpio GPIOY_5 GPIO_ACTIVE_HIGH>;
+		irq-gpio = <&gpio GPIOY_4 GPIO_ACTIVE_HIGH>;
+		tp_id = <2>;
+		rotation = <3>;
+		abs_x_max = <1280>;
+		abs_y_max = <800>;
+		goodix,cfg-group0 = [
+		5B 00 05 20 03 0A 0D 00 01 08 32
+		05 64 3C 03 05 00 00 00 00 00 00
+		00 1C 1E 22 14 90 30 AA 1E 1C D6
+		09 00 00 01 9A 04 25 00 00 00 00
+		00 00 00 00 07 00 00 14 2F 94 C5
+		02 07 00 00 04 A5 15 00 8D 19 00
+		78 1E 00 67 24 00 58 2B 00 58 00
+		00 00 00 00 00 00 00 00 00 00 00
+		00 00 00 00 00 00 00 00 00 00 00
+		00 00 00 00 00 00 00 00 00 00 00
+		00 00 19 18 17 16 15 14 11 10 0F
+		0E 0D 0C 09 08 07 06 05 04 01 00
+		00 00 00 00 00 00 00 00 00 00 00
+		02 04 06 07 08 0A 0C 0D 0E 0F 10
+		11 12 13 14 19 1B 1C 1E 1F 20 21
+		22 23 24 25 26 27 28 29 2A 00 00
+		00 00 00 00 00 00 00 00 F6 01];
+		goodix,cfg-group2 = [
+		5B 00 05 20 03 0A 0D 00 01 08 32
+		05 64 3C 03 05 00 00 00 00 00 00
+		00 1C 1E 22 14 90 30 AA 1E 1C D6
+		09 00 00 01 9A 04 25 00 00 00 00
+		00 00 00 00 07 00 00 14 2F 94 C5
+		02 07 00 00 04 A5 15 00 8D 19 00
+		78 1E 00 67 24 00 58 2B 00 58 00
+		00 00 00 00 00 00 00 00 00 00 00
+		00 00 00 00 00 00 00 00 00 00 00
+		00 00 00 00 00 00 00 00 00 00 00
+		00 00 19 18 17 16 15 14 11 10 0F
+		0E 0D 0C 09 08 07 06 05 04 01 00
+		00 00 00 00 00 00 00 00 00 00 00
+		02 04 06 07 08 0A 0C 0D 0E 0F 10
+		11 12 13 14 19 1B 1C 1E 1F 20 21
+		22 23 24 25 26 27 28 29 2A 00 00
+		00 00 00 00 00 00 00 00 F6 01];
+	};
+};
 /* SDIO */
 &sd_emmc_a {
 	status = "okay";
@@ -1682,12 +1806,6 @@
 	memory-region = <&adapt_cma_reserved>;
 };
 
-&ir {
-	status = "disabled";
-	pinctrl-0 = <&remote_pins>;
-	pinctrl-names = "default";
-};
-
 &spifc {
 	status = "disabled";
 	spi-nor@0 {
@@ -1714,6 +1832,7 @@
 &drm_vpu {
 	status = "okay";
 	logo_addr = "0x3f800000";
+	osd_occupied_index = <1>;
 	connectors_dev: port@1 {
 		drm_to_lcd0: endpoint@2 {
 			reg = <2>;
@@ -1768,18 +1887,20 @@
 };
 
 &amvideom {
-	display_device_cnt = <2>;
-	vpp0_layer_count = <2>;
+	display_device_cnt = <3>;
+	vpp0_layer_count = <1>;
 	/* number of video layer display on vpp1 */
 	vpp1_layer_count = <1>;
+	vpp2_layer_count = <1>;
+	/* set vppx hold line, default value is 8 if not set */
+	vpp1_hold_line = <0>;
 };
 
 &amhdmitx {
 	status = "okay";
 	repeater_tx = <0>;
-	enc_idx = <0>;
+	enc_idx = <2>;
 	vrr_type = <2>; /* 1: GAME-VRR, 2: QMS-VRR */
-	tv_usage = <1>;
 };
 
 /*if you want to use vdin just modify status to "ok"*/
@@ -1804,6 +1925,7 @@
 &vdin1 {
 	memory-region = <&vdin1_cma_reserved>;
 	status = "okay";
+	rdma_not_register;
 };
 
 &periphs_pinctrl {
@@ -1969,7 +2091,8 @@
 &ir {
 	status = "okay";
 	pinctrl-0 = <&remote_pins>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&remote_pins_sleep>;
+	pinctrl-names = "default", "sleep";
 };
 
 &amlvecm {
@@ -2006,7 +2129,8 @@
 
 &pwm_ab {
 	pinctrl-0 = <&pwm_a_pins>;
-	pinctrl-names = "default";
+	pinctrl-1 = <&pwm_a_pins_sleep>;
+	pinctrl-names = "default", "sleep";
 	status = "okay";
 };
 
@@ -2028,8 +2152,9 @@
 };
 
 &pwmao_cd {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pwm_ao_d_pins>;
+	pinctrl-1 = <&pwm_ao_d_pins_sleep>;
 	status = "okay";
 };
 

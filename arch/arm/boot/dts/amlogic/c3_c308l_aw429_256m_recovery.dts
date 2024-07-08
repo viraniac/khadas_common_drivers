@@ -105,6 +105,11 @@
 			status = "disabled";
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0>;
+		};
+
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
 			reg = <0x04f00000 0x00100000>;
@@ -1206,7 +1211,7 @@
 			};
 			system{
 				offset=<0x0 0x0>;
-				size=<0x0 0x6000000>;
+				size=<0x0 0x8000000>;
 			};
 			data{
 				offset=<0xffffffff 0xffffffff>;

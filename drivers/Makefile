@@ -8,7 +8,7 @@ obj-$(CONFIG_AMLOGIC_SECMON)		+= secmon/
 obj-y					+= clk/
 obj-$(CONFIG_AMLOGIC_GPIO)		+= gpio/
 obj-$(CONFIG_MAILBOX)			+= mailbox/
-obj-y					+= pwm/
+obj-$(CONFIG_AMLOGIC_PWM)			+= pwm/
 obj-y					+= power/
 obj-$(CONFIG_AMLOGIC_CPU_INFO)		+= cpu_info/
 obj-$(CONFIG_CPU_FREQ)			+= cpufreq/
@@ -66,6 +66,7 @@ obj-y                       += armisp/
 obj-y                       += armisp-g12b/
 obj-$(CONFIG_AMLOGIC_NPU) += npu/
 obj-y                       += adla/
+obj-$(CONFIG_AMLOGIC_USBCAM)		+= dvb_usbci/
 
 KBUILD_CFLAGS_MODULE += $(GKI_EXT_KERNEL_MODULE_PREDEFINE)
 all:

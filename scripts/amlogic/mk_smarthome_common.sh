@@ -66,7 +66,7 @@ fi
 source ${ROOT_DIR}/${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/amlogic_utils.sh
 source ${ROOT_DIR}/${KERNEL_DIR}/${COMMON_DRIVERS_DIR}/scripts/amlogic/amlogic_smarthome_utils.sh
 
-autotest
+copy_pre_commit
 
 handle_input_parameters_for_smarthome "$@"
 
@@ -75,6 +75,10 @@ export KERNEL_DIR COMMON_DRIVERS_DIR MANUAL_INSMOD_MODULE
 set_default_parameters_for_smarthome
 
 auto_patch_to_common_dir
+
+if [[ -d ${MODULES_STAGING_DIR} ]]; then
+	rm -rf ${MODULES_STAGING_DIR}
+fi
 
 mkdir -p ${DIST_DIR} ${MODULES_STAGING_DIR}
 

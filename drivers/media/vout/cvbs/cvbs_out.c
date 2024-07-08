@@ -62,6 +62,7 @@
 #include <linux/component.h>
 #include <linux/amlogic/gki_module.h>
 #include <drm/amlogic/meson_drm_bind.h>
+#include <linux/amlogic/media/vout/cvbs.h>
 
 #ifdef CONFIG_AMLOGIC_VOUT_CC_BYPASS
 /* interrupt source */
@@ -466,6 +467,7 @@ static int cvbs_out_setmode(void)
 	cvbs_out_reg_write(ENCI_VIDEO_EN, 0);
 	set_vmode_clk();
 	ret = cvbs_out_set_venc(local_cvbs_mode);
+	cvbs_bist_test(cvbs_drv->video_mute ? 8 : 0, NULL);
 	if (ret) {
 		mutex_lock(&setmode_mutex);
 		return -1;
@@ -910,6 +912,14 @@ static void cvbs_bist_test(unsigned int bist, void *data)
 	}
 }
 
+void cvbs_video_mute(bool mute)
+{
+	mutex_lock(&setmode_mutex);
+	cvbs_bist_test(mute ? 8 : 0, NULL);
+	cvbs_drv->video_mute = mute;
+	mutex_unlock(&setmode_mutex);
+}
+
 static ssize_t aml_CVBS_attr_vdac_power_show(struct class *class,
 					     struct class_attribute *attr,
 					     char *buf)
@@ -1314,6 +1324,10 @@ static void cvbs_debug_store(const char *buf)
 			pr_info("cvbs: invalid bist\n");
 			goto DEBUG_END;
 		}
+		if (bist == 0)
+			cvbs_drv->video_mute = false;
+		else
+			cvbs_drv->video_mute = true;
 		cvbs_bist_test(bist, NULL);
 
 		break;
@@ -1696,6 +1710,39 @@ static void cvbsout_clktree_remove(struct device *dev)
 }
 
 #ifdef CONFIG_OF
+#ifndef CONFIG_AMLOGIC_REMOVE_OLD
+struct meson_cvbsout_data meson_tl1_cvbsout_data = {
+	.cpu_id = CVBS_CPU_TYPE_TL1,
+	.name = "meson-tl1-cvbsout",
+
+	.vdac_vref_adj = 0x10,
+	.vdac_gsw = 0x0,
+
+	.reg_vid_pll_clk_div = HHI_VID_PLL_CLK_DIV,
+	.reg_vid_clk_div = HHI_VID_CLK_DIV,
+	.reg_vid_clk_ctrl = HHI_VID_CLK_CNTL,
+	.reg_vid2_clk_div = HHI_VIID_CLK_DIV,
+	.reg_vid2_clk_ctrl = HHI_VIID_CLK_CNTL,
+	.reg_vid_clk_ctrl2 = HHI_VID_CLK_CNTL2,
+};
+#endif
+
+struct meson_cvbsout_data meson_s1a_cvbsout_data = {
+	.cpu_id = CVBS_CPU_TYPE_S1A,
+	.name = "meson-s1a-cvbsout",
+
+	.vdac_vref_adj = 0x10,
+	.vdac_gsw = 0x5c,
+
+	.reg_vid_pll_clk_div = CLKCTRL_VID_PLL_CLK_DIV,
+	.reg_vid_clk_div = CLKCTRL_VID_CLK_DIV,
+	.reg_vid_clk_ctrl = CLKCTRL_VID_CLK_CTRL,
+	.reg_vid2_clk_div = CLKCTRL_VIID_CLK_DIV,
+	.reg_vid2_clk_ctrl = CLKCTRL_VIID_CLK_CTRL,
+	.reg_vid_clk_ctrl2 = CLKCTRL_VID_CLK_CTRL2,
+};
+
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 struct meson_cvbsout_data meson_g12a_cvbsout_data = {
 	.cpu_id = CVBS_CPU_TYPE_G12A,
 	.name = "meson-g12a-cvbsout",
@@ -1725,23 +1772,6 @@ struct meson_cvbsout_data meson_g12b_cvbsout_data = {
 	.reg_vid2_clk_ctrl = HHI_VIID_CLK_CNTL,
 	.reg_vid_clk_ctrl2 = HHI_VID_CLK_CNTL2,
 };
-
-#ifndef CONFIG_AMLOGIC_REMOVE_OLD
-struct meson_cvbsout_data meson_tl1_cvbsout_data = {
-	.cpu_id = CVBS_CPU_TYPE_TL1,
-	.name = "meson-tl1-cvbsout",
-
-	.vdac_vref_adj = 0x10,
-	.vdac_gsw = 0x0,
-
-	.reg_vid_pll_clk_div = HHI_VID_PLL_CLK_DIV,
-	.reg_vid_clk_div = HHI_VID_CLK_DIV,
-	.reg_vid_clk_ctrl = HHI_VID_CLK_CNTL,
-	.reg_vid2_clk_div = HHI_VIID_CLK_DIV,
-	.reg_vid2_clk_ctrl = HHI_VIID_CLK_CNTL,
-	.reg_vid_clk_ctrl2 = HHI_VID_CLK_CNTL2,
-};
-#endif
 
 struct meson_cvbsout_data meson_sm1_cvbsout_data = {
 	.cpu_id = CVBS_CPU_TYPE_SM1,
@@ -1878,9 +1908,25 @@ struct meson_cvbsout_data meson_t5w_cvbsout_data = {
 	.reg_vid_clk_ctrl2 = HHI_VID_CLK0_CTRL2,
 };
 
-struct meson_cvbsout_data meson_s1a_cvbsout_data = {
-	.cpu_id = CVBS_CPU_TYPE_S1A,
-	.name = "meson-s1a-cvbsout",
+struct meson_cvbsout_data meson_s7_cvbsout_data = {
+	.cpu_id = CVBS_CPU_TYPE_S7,
+	.name = "meson-s7-cvbsout",
+
+	.vdac_vref_adj = 0x10,
+	.vdac_gsw = 0x5c,
+
+	.reg_vid_pll_clk_div = CLKCTRL_VID_PLL_CLK_DIV,
+	.reg_vid_clk_div = CLKCTRL_VID_CLK_DIV,
+	.reg_vid_clk_ctrl = CLKCTRL_VID_CLK_CTRL,
+	.reg_vid2_clk_div = CLKCTRL_VIID_CLK_DIV,
+	.reg_vid2_clk_ctrl = CLKCTRL_VIID_CLK_CTRL,
+	.reg_vid_clk_ctrl2 = CLKCTRL_VID_CLK_CTRL2,
+};
+#endif
+
+struct meson_cvbsout_data meson_s7d_cvbsout_data = {
+	.cpu_id = CVBS_CPU_TYPE_S7D,
+	.name = "meson-s7d-cvbsout",
 
 	.vdac_vref_adj = 0x10,
 	.vdac_gsw = 0x5c,
@@ -1894,13 +1940,6 @@ struct meson_cvbsout_data meson_s1a_cvbsout_data = {
 };
 
 static const struct of_device_id meson_cvbsout_dt_match[] = {
-	{
-		.compatible = "amlogic, cvbsout-g12a",
-		.data		= &meson_g12a_cvbsout_data,
-	}, {
-		.compatible = "amlogic, cvbsout-g12b",
-		.data		= &meson_g12b_cvbsout_data,
-	},
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
 	{
 		.compatible = "amlogic, cvbsout-tl1",
@@ -1908,6 +1947,17 @@ static const struct of_device_id meson_cvbsout_dt_match[] = {
 	},
 #endif
 	{
+		.compatible = "amlogic, cvbsout-s1a",
+		.data		= &meson_s1a_cvbsout_data,
+	},
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+	{
+		.compatible = "amlogic, cvbsout-g12a",
+		.data		= &meson_g12a_cvbsout_data,
+	}, {
+		.compatible = "amlogic, cvbsout-g12b",
+		.data		= &meson_g12b_cvbsout_data,
+	}, {
 		.compatible = "amlogic, cvbsout-sm1",
 		.data		= &meson_sm1_cvbsout_data,
 	}, {
@@ -1935,9 +1985,13 @@ static const struct of_device_id meson_cvbsout_dt_match[] = {
 		.compatible = "amlogic, cvbsout-t5w",
 		.data		= &meson_t5w_cvbsout_data,
 	}, {
-		.compatible = "amlogic, cvbsout-s1a",
-		.data		= &meson_s1a_cvbsout_data,
+		.compatible = "amlogic, cvbsout-s7",
+		.data		= &meson_s7_cvbsout_data,
+	}, {
+		.compatible = "amlogic, cvbsout-s7d",
+		.data = &meson_s7d_cvbsout_data,
 	},
+#endif
 	{}
 };
 #endif
@@ -2069,8 +2123,8 @@ static int cvbsout_probe(struct platform_device *pdev)
 	cvbs_drv->cvbs_data = (struct meson_cvbsout_data *)match->data;
 	cvbs_log_dbg("%s, cpu_id:%d,name:%s\n", __func__,
 		cvbs_drv->cvbs_data->cpu_id, cvbs_drv->cvbs_data->name);
-
-	if (cvbs_drv->cvbs_data->cpu_id != CVBS_CPU_TYPE_SC2 &&
+	cvbs_drv->video_mute = false;
+	if (cvbs_drv->cvbs_data->cpu_id <= CVBS_CPU_TYPE_S1A &&
 	    cvbs_drv->cvbs_data->cpu_id >= CVBS_CPU_TYPE_S4)
 		cvbsout_clktree_probe(&pdev->dev);
 

@@ -7,6 +7,7 @@
 #include <linux/delay.h>
 #include "common.h"
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 #define WAIT_FOR_PLL_LOCKED(_reg) \
 	do { \
 		u32 st = 0; \
@@ -42,7 +43,7 @@ static bool set_hpll_hclk_v1(u32 m, u32 frac_val)
 	hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, frac_val);
 	hd21_write_reg(ANACTRL_HDMIPLL_CTRL2, 0x00000000);
 
-	if (frac_val == 0x8148) {
+	if (frac_val == 0x8168) {
 		if ((para->timing.vic == HDMI_96_3840x2160p50_16x9 ||
 		     para->timing.vic == HDMI_97_3840x2160p60_16x9 ||
 		     para->timing.vic == HDMI_106_3840x2160p50_64x27 ||
@@ -158,7 +159,7 @@ void set21_t7_hpll_clk_out(u32 frac_rate, u32 clk)
 {
 	switch (clk) {
 	case 5940000:
-		if (set_hpll_hclk_v1(0xf7, frac_rate ? 0x8148 : 0x10000))
+		if (set_hpll_hclk_v1(0xf7, frac_rate ? 0x8168 : 0x10000))
 			break;
 		if (set_hpll_hclk_v2(0x7b, 0x18000))
 			break;
@@ -246,9 +247,9 @@ void set21_t7_hpll_clk_out(u32 frac_rate, u32 clk)
 		WAIT_FOR_PLL_LOCKED(ANACTRL_HDMIPLL_CTRL0);
 		HDMITX_INFO("HPLL: 0x%x\n", hd21_read_reg(ANACTRL_HDMIPLL_CTRL0));
 		break;
-	case 4032000:
-		hd21_write_reg(ANACTRL_HDMIPLL_CTRL0, 0x3b0004a8);
-		hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, 0x00000000);
+	case 4115866:
+		hd21_write_reg(ANACTRL_HDMIPLL_CTRL0, 0x3b0004ab);
+		hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, 0x0000fd22);
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL2, 0x00000000);
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL3, 0x4a691c00);
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL4, 0x33771290);
@@ -356,6 +357,7 @@ void set21_t7_hpll_clk_out(u32 frac_rate, u32 clk)
 		break;
 	}
 }
+#endif
 
 void set21_hpll_od1_t7(u32 div)
 {
@@ -420,6 +422,16 @@ void hdmitx21_phy_bandgap_en_t7(void)
 		hd21_write_reg(ANACTRL_HDMIPHY_CTRL0, 0x0b4242);
 }
 
+void hdmitx21_sys_reset_t7(void)
+{
+	/* Refer to system-Registers.docx */
+	hd21_write_reg(RESETCTRL_RESET0, 1 << 29); /* hdmi_tx */
+	hd21_write_reg(RESETCTRL_RESET0, 1 << 22); /* hdmitxphy */
+	hd21_write_reg(RESETCTRL_RESET0, 1 << 19); /* vid_pll_div */
+	hd21_write_reg(RESETCTRL_RESET0, 1 << 16); /* hdmitx_apb */
+}
+
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 void set21_phy_by_mode_t7(u32 mode)
 {
 	switch (mode) {
@@ -443,15 +455,6 @@ void set21_phy_by_mode_t7(u32 mode)
 		hd21_write_reg(ANACTRL_HDMIPHY_CTRL3, 0x2ab0ff3b);
 		break;
 	}
-}
-
-void hdmitx21_sys_reset_t7(void)
-{
-	/* Refer to system-Registers.docx */
-	hd21_write_reg(RESETCTRL_RESET0, 1 << 29); /* hdmi_tx */
-	hd21_write_reg(RESETCTRL_RESET0, 1 << 22); /* hdmitxphy */
-	hd21_write_reg(RESETCTRL_RESET0, 1 << 19); /* vid_pll_div */
-	hd21_write_reg(RESETCTRL_RESET0, 1 << 16); /* hdmitx_apb */
 }
 
 void set21_hpll_sspll_t7(enum hdmi_vic vic)
@@ -484,3 +487,14 @@ void set21_hpll_sspll_t7(enum hdmi_vic vic)
 		break;
 	}
 }
+
+void hdmitx_t7_clock_gate_ctrl(bool en)
+{
+	if (!en) {
+		hd21_set_reg_bits(ANACTRL_HDMIPLL_CTRL0, 1, 29, 1);
+		usleep_range(49, 51);
+		hd21_set_reg_bits(ANACTRL_HDMIPLL_CTRL0, 0, 28, 1);
+	}
+}
+
+#endif

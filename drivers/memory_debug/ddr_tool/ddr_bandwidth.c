@@ -22,6 +22,31 @@
 #include "ddr_bandwidth.h"
 #include "dmc.h"
 
+#define KERNEL_ATRACE_TAG KERNEL_ATRACE_TAG_DDR_BW
+#include <trace/events/meson_atrace.h>
+
+static const char chann_names0[][50] = {
+	"ddr_bw ch 0 (MB/S)",
+	"ddr_bw ch 1 (MB/S)",
+	"ddr_bw ch 2 (MB/S)",
+	"ddr_bw ch 3 (MB/S)",
+	"ddr_bw ch 4 (MB/S)",
+	"ddr_bw ch 5 (MB/S)",
+	"ddr_bw ch 6 (MB/S)",
+	"ddr_bw ch 7 (MB/S)",
+};
+
+static char chann_names1[][50] = {
+	"ddr_bw0 ch 0 (MB/S)",
+	"ddr_bw0 ch 1 (MB/S)",
+	"ddr_bw0 ch 2 (MB/S)",
+	"ddr_bw0 ch 3 (MB/S)",
+	"ddr_bw0 ch 4 (MB/S)",
+	"ddr_bw0 ch 5 (MB/S)",
+	"ddr_bw0 ch 6 (MB/S)",
+	"ddr_bw0 ch 7 (MB/S)",
+};
+
 #define PXP_DEBUG	1
 #if PXP_DEBUG
 static unsigned long pxp_debug_freq;
@@ -99,6 +124,8 @@ static void cal_ddr_usage_single(struct ddr_bandwidth *db)
 	cnt  = db->clock_count;
 
 	for (i = 0; i < db->dmc_number; i++) {
+		char label[] = "ddr_bw  total (MB/S)";
+
 		/* mbw = ((freq * 2) * 2 * (data_bus_width/8)) */
 		freq = db->data_extern[i].freq;
 		mbw = (u64)freq * db->data_extern[i].data_bus_width / 2;
@@ -146,6 +173,18 @@ static void cal_ddr_usage_single(struct ddr_bandwidth *db)
 							db->data_extern[i].cur_sample.bandwidth[j];
 		}
 		db->data_extern[i].avg.sample_count++;
+
+		label[6] = '0' + i;
+
+		ATRACE_COUNTER(label, db->data_extern[i].prev_sample.total_bandwidth / 1000);
+
+		for (j = 0; j < db->channels; j++) {
+			chann_names1[j][6] = '0' + i;
+			ATRACE_COUNTER(chann_names1[j],
+					db->data_extern[i].prev_sample.bandwidth[j] / 1000);
+		}
+
+		db->data_extern[i].prev_sample = db->data_extern[i].cur_sample;
 	}
 }
 
@@ -273,6 +312,15 @@ static void cal_ddr_usage(struct ddr_bandwidth *db, struct ddr_grant *dg)
 	}
 	db->avg.sample_count++;
 
+	ATRACE_COUNTER("ddr_bw total (MB/S)",
+			db->prev_sample.total_bandwidth / 1000);
+
+	for (i = 0; i < db->channels; i++)
+		ATRACE_COUNTER(chann_names0[i],
+				db->prev_sample.bandwidth[i] / 1000);
+
+	db->prev_sample = db->cur_sample;
+
 	/* calculate single dmc bandwidth*/
 	if (dmc_is_asymmetry(aml_db))
 		cal_ddr_usage_single(db);
@@ -286,7 +334,7 @@ static irqreturn_t dmc_irq_handler(int irq, void *dev_instance)
 	struct ddr_grant dg = {0};
 
 	db = (struct ddr_bandwidth *)dev_instance;
-	if (db->ops && db->ops->handle_irq && db->mode) {
+	if (db->ops && db->ops->handle_irq) {
 		if (!db->ops->handle_irq(db, &dg))
 			cal_ddr_usage(db, &dg);
 	}
@@ -528,7 +576,7 @@ static ssize_t mode_store(struct class *cla,
 
 	if (aml_db->mode == MODE_DISABLE && val != MODE_DISABLE) {
 		int r = request_irq(aml_db->irq_num, dmc_irq_handler,
-				IRQF_SHARED, "ddr_bandwidth", (void *)aml_db);
+				IRQF_SHARED | IRQF_ONESHOT, "ddr_bandwidth", (void *)aml_db);
 		if (r < 0) {
 			pr_info("ddr bandwidth request irq failed\n");
 			return count;
@@ -1314,6 +1362,15 @@ static int __init init_chip_config(int cpu, struct ddr_bandwidth *band)
 		aml_db->mali_port[1] = -1;
 		break;
 #endif
+#ifdef CONFIG_AMLOGIC_DDR_BANDWIDTH_S7
+	case DMC_TYPE_S7:
+	case DMC_TYPE_S7D:
+		band->ops = &s7_ddr_bw_ops;
+		aml_db->channels = 8;
+		aml_db->mali_port[0] = 12;
+		aml_db->mali_port[1] = -1;
+		break;
+#endif
 	default:
 		pr_err("%s, Can't find ops for chip:%x\n", __func__, cpu);
 		return -1;
@@ -1628,6 +1685,14 @@ static const struct of_device_id aml_ddr_bandwidth_dt_match[] = {
 	{
 		.compatible = "amlogic,ddr-bandwidth-txhd2",
 		.data = (void *)DMC_TYPE_TXHD2,
+	},
+	{
+		.compatible = "amlogic,ddr-bandwidth-s7",
+		.data = (void *)DMC_TYPE_S7,
+	},
+	{
+		.compatible = "amlogic,ddr-bandwidth-s7d",
+		.data = (void *)DMC_TYPE_S7D,
 	},
 #endif
 	{

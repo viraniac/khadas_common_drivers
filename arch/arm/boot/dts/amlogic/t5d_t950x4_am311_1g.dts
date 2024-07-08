@@ -6,7 +6,7 @@
 /dts-v1/;
 
 #include "mesont5d.dtsi"
-#include "partition_mbox_ab.dtsi"
+#include "partition_mbox_ab_gpt_from_dts.dtsi"
 #include "mesont5d_am311-panel.dtsi"
 #include "mesont5_drm.dtsi"
 #include "mesont5d_audio.dtsi"
@@ -45,6 +45,11 @@
 			pmsg-size = <0x20000>;
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x80000>;
+		};
+
 		secmon_reserved: linux,secmon {
 			compatible = "shared-dma-pool";
 			no-map;
@@ -56,25 +61,23 @@
 		logo_reserved:linux,meson-fb {
 			compatible = "amlogic, meson-fb";
 			alignment = <0x400000>;
-			reg = <0x3f800000 0x800000>;
+			reg = <0x3f800000 0x400000>;
 		};
 
 		lcd_tcon_reserved:linux,lcd_tcon {
 			compatible = "amlogic, lcd_tcon";
-			reg = <0x3f000000 0x00800000>;
-			no-map;
+			reg = <0x3f000000 0x00502840>;
+			//no-map;
 		};
 
 		codec_mm_cma:linux,codec_mm_cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			/* yuv420(32x3)96M + di(7x4,11x5)84M + workbuf(12M)
-			 * the sum with align 4M then is equal to 192M
-			 */
-			size = <0x9000000>;
+			/* testAV1Decode60fps1920x1080: 116MB is required at least */
+			size = <0x7400000>;
 			alignment = <0x400000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 			linux,contiguous-region;
-			alloc-ranges = <0x0 0x3f800000>;
 		};
 
 		/* codec shared reserved */
@@ -83,7 +86,7 @@
 			size = <0x0>;
 			/*alignment = <0x100000>;*/
 			//no-map;
-			alloc-ranges = <0x0 0x3f400000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 
 		ion_cma_reserved:linux,ion-dev {
@@ -91,14 +94,14 @@
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x3f400000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 		ion_fb_reserved:linux,ion-fb {
 			compatible = "shared-dma-pool";
 			reusable;
 			size = <0x0>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x3f400000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 		/* secure ion for gpu, advice size is 80M */
 		ion_secure_reserved:linux,ion-secure {
@@ -121,6 +124,7 @@
 			/* 1080p TV androidT size 36M */
 			size = <0x2400000>;
 			alignment = <0x400000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 
 		/*  vdin0 CMA pool */
@@ -138,9 +142,9 @@
 			reusable;
 			/* 420 mode:1280x720x2x4=8MB */
 			/* 444 mode:1280x720x3x4=12MB */
-			size = <0x800000>;
+			size = <0x000000>;
 			alignment = <0x400000>;
-			alloc-ranges = <0x0 0x3f400000>;
+			alloc-ranges = <0x30000000 0x10000000>;
 		};
 
 		/* demod_reserved:linux,demod {
@@ -158,7 +162,7 @@
 		 *		//8M
 		 *		size = <0x0800000>;
 		 *		alignment = <0x400000>;
-		 *	alloc-ranges = <0x0 0x3f400000>;
+		 *	alloc-ranges = <0x0 0x30000000>;
 		 *};
 		 */
 
@@ -250,12 +254,14 @@
 		 * post_nub: default is 9
 		 ***************************************************/
 		//post_nub = <9>;
+		post-wr-support = <0>;
+		postlink_en = <1>;
 	};
-#if 0
+
 	aml_dtv_demod {
 		compatible = "amlogic, ddemod-t5d-revB";
 		dev_name = "aml_dtv_demod";
-		status = "disabled";
+		status = "disable";
 		diseqc_name = "sgm_41286";
 		pinctrl-names="if_agc_pins", "diseqc_out", "rf_agc_pins";
 		pinctrl-0=<&dtvdemod_if_agc_pins>;
@@ -268,7 +274,7 @@
 		interrupt-names = "demod_isr";
 
 		power-domains = <&pwrdm PDID_T5_DEMOD>;
-		clocks = <&clkc CLKID_DAC_CLK>;
+		//clocks = <&clkc CLKID_DAC_CLK>;
 		clock-names = "vdac_clk_gate";
 
 		reg = <0xff670000 0x10000	/*dtv demod base*/
@@ -278,10 +284,10 @@
 			>;
 
 		spectrum = <1>;
-		cma_mem_size = <40>; // MB
+		cma_mem_size = <0>; // MB
 		//memory-region = <&demod_cma_reserved>;//<&demod_reserved>;
 	};
-#endif
+
 	/* Audio Related start */
 	auge_sound {
 		compatible = "amlogic, auge-sound-card";
@@ -448,10 +454,10 @@
 		dev_name = "dvb-extern";
 		status = "okay";
 
-		fe_num = <0>;
+		fe_num = <1>;
 		fe0_demod = "internal";
 
-		tuner_num = <1>; /* tuner number, multi tuner support */
+		tuner_num = <2>; /* tuner number, multi tuner support */
 		tuner0_name = "mxl661_tuner";
 		tuner0_i2c_adap = <&i2c0>;
 		tuner0_i2c_addr = <0x60>;
@@ -647,7 +653,7 @@
 		 * bit8:use 8bit  at 4k_50/60hz_10bit
 		 * bit9:use 10bit at 4k_50/60hz_10bit
 		 */
-		tv_bit_mode = <0x235>;
+		tv_bit_mode = <0x215>;
 		/* afbce_bit_mode: (amlogic frame buff compression encoder)
 		 * bit0 -- enable afbce
 		 * bit1 -- enable afbce compression-lossy
@@ -774,15 +780,6 @@
 		key_val = <0 143 266 389 0 143 266>; //val=voltage/1800mV*1023
 		key_tolerance = <40 40 40 40 40 40 40>;
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "okay";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey {
 		compatible = "amlogic,unifykey";
@@ -1273,15 +1270,15 @@
 &sd_emmc_c {
 	status = "okay";
 	pinctrl-names = "default", "clk-gate";
-	pinctrl-1 = <&emmc_conf_pull_up &emmc_conf_pull_done>;
-	pinctrl-2 = <&emmc_clk_gate_pins>;
+	pinctrl-0 = <&emmc_conf_pull_up &emmc_conf_pull_done>;
+	pinctrl-1 = <&emmc_clk_gate_pins>;
 
 	bus-width = <8>;
 	cap-mmc-highspeed;
 	//mmc-ddr-1_8v;
-	//mmc-hs200-1_8v;
-	//mmc-hs400-1_8v;
-	max-frequency = <50000000>;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	max-frequency = <200000000>;
 	non-removable;
 	disable-wp;
 	hs4_core_phase = <0>;

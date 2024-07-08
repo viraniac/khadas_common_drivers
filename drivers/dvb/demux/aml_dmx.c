@@ -83,6 +83,14 @@ struct dump_node {
 	struct list_head node;
 };
 
+struct dmx_adjust_mem_t {
+	int format;
+	int data;
+	int mem_size;
+	struct list_head node;
+};
+
+struct list_head dmx_adjust_mem_head;
 //#define OPEN_REGISTER_NODE
 
 static struct jiffies_pcr jiffies_pcr_record[MAX_PCR_NUM];
@@ -148,6 +156,7 @@ static int out_ts_elem_cb(struct out_elem *pout,
 			  char *buf, int count, void *udata,
 			  int req_len, int *req_ret);
 static int _dmx_free_input_id(int id);
+static int find_adjust_mem_item(int format, int data);
 
 static inline void _invert_mode(struct dmx_section_filter *filter)
 {
@@ -467,6 +476,13 @@ static int _dmx_write_from_user(struct dmx_demux *demux,
 	pmem_start_phys = (char *)pdmx->input_mem_phys + CACHE_ALIGNMENT_LEN;
 	len = count;
 
+	if (check_ts_alignm && !pdmx->last_pack) {
+		pdmx->last_pack = kmalloc(CACHE_ALIGNMENT_LEN, GFP_KERNEL);
+		if (!pdmx->last_pack) {
+			dprint("kmalloc fail for ts alignm, disable ts alignm\n");
+			check_ts_alignm = 0;
+		}
+	}
 	/**/
 	if (mode == 0 && check_ts_alignm && pdmx->last_len) {
 		memcpy((void *)pdmx->input_mem + CACHE_ALIGNMENT_LEN - pdmx->last_len,
@@ -500,34 +516,30 @@ static int _dmx_write_from_user(struct dmx_demux *demux,
 
 static struct sw_demux_sec_feed *_dmx_section_feed_alloc(struct aml_dmx *demux)
 {
-	int i;
+	struct sw_demux_sec_feed *d_node;
 
-	for (i = 0; i < demux->sec_feed_num; i++)
-		if (demux->section_feed[i].state == DMX_STATE_FREE)
-			break;
-
-	if (i == demux->sec_feed_num)
+	d_node = kmalloc(sizeof(*d_node), GFP_KERNEL);
+	if (!d_node)
 		return NULL;
+	memset(d_node, 0, sizeof(*d_node));
+	d_node->state = DMX_STATE_ALLOCATED;
 
-	demux->section_feed[i].state = DMX_STATE_ALLOCATED;
-
-	return &demux->section_feed[i];
+	list_add_tail(&d_node->node, &demux->section_feed_list);
+	return d_node;
 }
 
 static struct sw_demux_ts_feed *_dmx_ts_feed_alloc(struct aml_dmx *demux)
 {
-	int i;
+	struct sw_demux_ts_feed *d_node;
 
-	for (i = 0; i < demux->ts_feed_num; i++)
-		if (demux->ts_feed[i].state == DMX_STATE_FREE)
-			break;
-
-	if (i == demux->ts_feed_num)
+	d_node = kmalloc(sizeof(*d_node), GFP_KERNEL);
+	if (!d_node)
 		return NULL;
+	memset(d_node, 0, sizeof(*d_node));
+	d_node->state = DMX_STATE_ALLOCATED;
 
-	demux->ts_feed[i].state = DMX_STATE_ALLOCATED;
-
-	return &demux->ts_feed[i];
+	list_add_tail(&d_node->node, &demux->ts_feed_list);
+	return d_node;
 }
 
 static struct sw_demux_sec_filter *_dmx_dmx_sec_filter_alloc(struct
@@ -605,7 +617,7 @@ static void _sec_cb(u8 *sec, int len, void *data)
 	spin_lock(&dmxdevfilter->dev->lock);
 	free = dvb_ringbuffer_free(&dmxdevfilter->buffer);
 	if (len > free) {
-		pr_info("dvb-core: pid:0x%0x sec buffer isn't enough\n",
+		pr_dbg("dvb-core: pid:0x%0x sec buffer isn't enough\n",
 			sec_feed->pid);
 		spin_unlock(&dmxdevfilter->dev->lock);
 		return;
@@ -1034,31 +1046,41 @@ static int _dmx_ts_feed_set(struct dmx_ts_feed *ts_feed, u16 pid, int ts_type,
 	    pes_type == DMX_PES_AUDIO1 ||
 	    pes_type == DMX_PES_AUDIO2 || pes_type == DMX_PES_AUDIO3) {
 		type = AUDIO_TYPE;
-		mem_size = audio_buf_size;
+		mem_size = find_adjust_mem_item(ES_FORMAT, pid);
+		if (mem_size == -1)
+			mem_size = audio_buf_size;
 		media_type = (filter->params.pes.flags >>
 		DMX_AUDIO_FORMAT_BIT) & 0xFF;
 	} else if (pes_type == DMX_PES_VIDEO0 ||
 		   pes_type == DMX_PES_VIDEO1 ||
 		   pes_type == DMX_PES_VIDEO2 || pes_type == DMX_PES_VIDEO3) {
 		type = VIDEO_TYPE;
-		mem_size = video_buf_size;
+		mem_size = find_adjust_mem_item(ES_FORMAT, pid);
+		if (mem_size == -1)
+			mem_size = video_buf_size;
 	} else if (pes_type == DMX_PES_SUBTITLE0 ||
 		   pes_type == DMX_PES_SUBTITLE1 ||
 		   pes_type == DMX_PES_SUBTITLE2 ||
 		   pes_type == DMX_PES_SUBTITLE3) {
 		type = SUB_TYPE;
-		mem_size = pes_buf_size;
+		mem_size = find_adjust_mem_item(PES_FORMAT, pid);
+		if (mem_size == -1)
+			mem_size = pes_buf_size;
 		media_type = MEDIA_PES_SUB;
 	} else if (pes_type == DMX_PES_TELETEXT0 ||
 		   pes_type == DMX_PES_TELETEXT1 ||
 		   pes_type == DMX_PES_TELETEXT2 ||
 		   pes_type == DMX_PES_TELETEXT3) {
 		type = TTX_TYPE;
-		mem_size = pes_buf_size;
+		mem_size = find_adjust_mem_item(PES_FORMAT, pid);
+		if (mem_size == -1)
+			mem_size = pes_buf_size;
 		media_type = MEDIA_PES_SUB;
 	} else {
 		type = OTHER_TYPE;
-		mem_size = pes_buf_size;
+		mem_size = find_adjust_mem_item(PES_FORMAT, pid);
+		if (mem_size == -1)
+			mem_size = pes_buf_size;
 	}
 	if (filter->params.pes.flags & DMX_ES_OUTPUT) {
 		format = ES_FORMAT;
@@ -1073,7 +1095,9 @@ static int _dmx_ts_feed_set(struct dmx_ts_feed *ts_feed, u16 pid, int ts_type,
 			pr_dbg("%s PES_FORMAT\n", __func__);
 		} else {
 			format = DVR_FORMAT;
-			mem_size = dvr_buf_size;
+			mem_size = find_adjust_mem_item(DVR_FORMAT, demux->id);
+			if (mem_size == -1)
+				mem_size = dvr_buf_size;
 			pr_dbg("%s DVR_FORMAT\n", __func__);
 		}
 	}
@@ -1102,7 +1126,7 @@ static int _dmx_ts_feed_set(struct dmx_ts_feed *ts_feed, u16 pid, int ts_type,
 
 	sec_level = (filter->params.pes.flags >> 10) & 0x7;
 
-	if (demux->source == INPUT_LOCAL_SEC)
+	if (demux->source == INPUT_LOCAL_SEC && format != DVR_FORMAT)
 		sec_level = local_sec_level;
 
 	feed->type = type;
@@ -1124,7 +1148,7 @@ static int _dmx_ts_feed_set(struct dmx_ts_feed *ts_feed, u16 pid, int ts_type,
 	}
 
 	if (format == DVR_FORMAT) {
-		feed->ts_out_elem = ts_output_find_dvr(sid);
+		feed->ts_out_elem = ts_output_find_dvr(sid, demux->sec_dvr_size ? 1 : 0);
 		if (feed->ts_out_elem) {
 			pr_dbg("find same pid elem:0x%lx\n",
 			       (unsigned long)(feed->ts_out_elem));
@@ -1160,7 +1184,6 @@ static int _dmx_ts_feed_set(struct dmx_ts_feed *ts_feed, u16 pid, int ts_type,
 		if (demux->sec_dvr_size != 0 && format == DVR_FORMAT) {
 			ts_output_set_sec_mem(feed->ts_out_elem,
 				demux->sec_dvr_buff, demux->sec_dvr_size);
-			demux->sec_dvr_size = 0;
 			sec_level = 1;
 		}
 		if (sec_level != 0)
@@ -1197,7 +1220,9 @@ static int _dmx_ts_feed_set(struct dmx_ts_feed *ts_feed, u16 pid, int ts_type,
 			cb_id, format, 0, demux->id);
 		feed->cb_id = cb_id;
 	} else {
-		dprint("%s error\n", __func__);
+		dprint("%s error, no resource\n", __func__);
+		mutex_unlock(demux->pmutex);
+		return -ENOSPC;
 	}
 
 	if (feed->type == VIDEO_TYPE) {
@@ -1459,7 +1484,9 @@ static int _dmx_section_feed_start_filtering(struct dmx_section_feed *feed)
 	sec_feed->sec_out_elem = ts_output_open(sid, demux->id,
 		SECTION_FORMAT, SEC_TYPE, MEDIA_TS_SYS, 0);
 	if (sec_feed->sec_out_elem) {
-		mem_size = sec_buf_size;
+		mem_size = find_adjust_mem_item(SECTION_FORMAT, sec_feed->pid);
+		if (mem_size == -1)
+			mem_size = sec_buf_size;
 		ret = ts_output_set_mem(sec_feed->sec_out_elem,
 				mem_size, sec_level, 0, 0);
 		if (ret != 0) {
@@ -1479,6 +1506,10 @@ static int _dmx_section_feed_start_filtering(struct dmx_section_feed *feed)
 		ts_output_add_cb(sec_feed->sec_out_elem,
 				 _ts_out_sec_cb, sec_feed, cb_id,
 				 SECTION_FORMAT, 1, demux->id);
+	} else {
+		dprint("%s error, no resource\n", __func__);
+		mutex_unlock(demux->pmutex);
+		return -ENOSPC;
 	}
 	pr_dbg("sec_out_elem:0x%lx\n", (unsigned long)(sec_feed->sec_out_elem));
 	mutex_unlock(demux->pmutex);
@@ -1719,6 +1750,8 @@ static int _dmx_release_ts_feed(struct dmx_demux *dmx,
 	struct pid_node *entry = NULL;
 	struct pid_node *tmp = NULL;
 	struct aml_dvb *advb = aml_get_dvb_device();
+	struct sw_demux_ts_feed *ts_entry = NULL;
+	struct sw_demux_ts_feed *ts_tmp = NULL;
 
 	if (!ts_feed)
 		return 0;
@@ -1777,8 +1810,10 @@ static int _dmx_release_ts_feed(struct dmx_demux *dmx,
 			if (feed->pid == 0x2000)
 				ts_output_remove_pid(feed->ts_out_elem, 0x1fff);
 			ret = ts_output_close(feed->ts_out_elem);
-			if (ret == 0)
+			if (ret == 0) {
 				demux->dvr_ts_output = NULL;
+				demux->sec_dvr_size = 0;
+			}
 		} else {
 			ts_output_close(feed->ts_out_elem);
 		}
@@ -1817,6 +1852,13 @@ static int _dmx_release_ts_feed(struct dmx_demux *dmx,
 
 	feed->state = DMX_STATE_FREE;
 	feed->ts_out_elem = NULL;
+
+	list_for_each_entry_safe(ts_entry, ts_tmp, &demux->ts_feed_list, node) {
+		if (ts_entry == feed) {
+			list_del(&ts_entry->node);
+			kfree(ts_entry);
+		}
+	}
 
 	if (advb->ts_clone) {
 		demux->used_feed_num--;
@@ -1893,6 +1935,8 @@ static int _dmx_release_section_feed(struct dmx_demux *dmx,
 	struct aml_dmx *demux = (struct aml_dmx *)dmx->priv;
 	struct sw_demux_sec_feed *sec_feed;
 	struct aml_dvb *advb = aml_get_dvb_device();
+	struct sw_demux_sec_feed *entry = NULL;
+	struct sw_demux_sec_feed *tmp = NULL;
 
 	sec_feed = (struct sw_demux_sec_feed *)feed;
 
@@ -1911,6 +1955,13 @@ static int _dmx_release_section_feed(struct dmx_demux *dmx,
 
 	if (sec_feed->filter)
 		vfree(sec_feed->filter);
+
+	list_for_each_entry_safe(entry, tmp, &demux->section_feed_list, node) {
+		if (entry == sec_feed) {
+			list_del(&entry->node);
+			kfree(entry);
+		}
+	}
 
 	if (advb->ts_clone) {
 		demux->used_feed_num--;
@@ -2188,7 +2239,7 @@ int _dmx_get_mem_info(struct dmx_demux *dmx, void *v_info)
 {
 	struct aml_dmx *demux = (struct aml_dmx *)dmx->priv;
 	int filter_num = 0;
-	int i = 0, j = 0;
+	int j = 0;
 	int free_mem = 0;
 	int total_mem = 0;
 	__u64 newest_pts = 0;
@@ -2199,15 +2250,19 @@ int _dmx_get_mem_info(struct dmx_demux *dmx, void *v_info)
 	unsigned int wp_offset;
 	struct filter_mem_info *pinfo;
 	struct dmx_filter_mem_info *info = v_info;
+	struct sw_demux_sec_feed *entry = NULL;
+	struct sw_demux_sec_feed *tmp = NULL;
+	struct sw_demux_ts_feed *ts_entry = NULL;
+	struct sw_demux_ts_feed *ts_tmp = NULL;
 
 	if (mutex_lock_interruptible(demux->pmutex))
 		return -ERESTARTSYS;
 
-	for (i = 0; i < demux->ts_feed_num; i++) {
-		if (demux->ts_feed[i].state < DMX_STATE_ALLOCATED)
+	list_for_each_entry_safe(ts_entry, ts_tmp, &demux->ts_feed_list, node) {
+		if (ts_entry->state < DMX_STATE_ALLOCATED)
 			continue;
 
-		ts_feed = &demux->ts_feed[i];
+		ts_feed = ts_entry;
 
 		if (ts_feed->type == NONE_TYPE ||
 			ts_feed->type == SEC_TYPE ||
@@ -2257,12 +2312,11 @@ int _dmx_get_mem_info(struct dmx_demux *dmx, void *v_info)
 		filter_num++;
 	}
 
-	for (i = 0; i < demux->sec_feed_num; i++) {
-		if (demux->section_feed[i].state < DMX_STATE_ALLOCATED)
+	list_for_each_entry_safe(entry, tmp, &demux->section_feed_list, node) {
+		if (entry->state < DMX_STATE_ALLOCATED)
 			continue;
 
-		section_feed = &demux->section_feed[i];
-
+		section_feed = entry;
 		for (j = 0; j < section_feed->sec_filter_num; j++) {
 			if (section_feed->filter[j].state != DMX_STATE_GO)
 				continue;
@@ -2317,7 +2371,11 @@ static int _dmx_set_hw_source(struct dmx_demux *dmx, int hw_source)
 
 	if (advb->ts_clone) {
 		_dmx_set_hw_source_ts_clone(dmx, hw_source);
-		dsc_set_sid(demux->id, demux->sc2_input->id);
+		if (demux->sid != demux->sc2_input->id) {
+			demux->sid = demux->sc2_input->id;
+			ts_output_update_filter(demux->id, demux->sid);
+		}
+		dsc_set_sid(demux->id, demux->sid);
 		mutex_unlock(demux->pmutex);
 		return 0;
 	}
@@ -2471,6 +2529,7 @@ void dmx_init_hw(void)
 	SC2_bufferid_init();
 	_dmx_init_input_id();
 	memset(jiffies_pcr_record, 0, sizeof(jiffies_pcr_record));
+	INIT_LIST_HEAD(&dmx_adjust_mem_head);
 }
 
 int dmx_init(struct aml_dmx *pdmx, struct dvb_adapter *dvb_adapter)
@@ -2483,25 +2542,8 @@ int dmx_init(struct aml_dmx *pdmx, struct dvb_adapter *dvb_adapter)
 	     DMX_MEMORY_BASED_FILTERING);
 	pdmx->dmx_ext.dmx.priv = pdmx;
 
-	pdmx->ts_feed_num = MAX_TS_FEED_NUM;
-	pdmx->ts_feed = vmalloc(sizeof(*pdmx->ts_feed) * pdmx->ts_feed_num);
-	if (!pdmx->ts_feed)
-		return -ENOMEM;
-
-	for (i = 0; i < pdmx->ts_feed_num; i++)
-		pdmx->ts_feed[i].state = DMX_STATE_FREE;
-
-	pdmx->sec_feed_num = MAX_SEC_FEED_NUM;
-	pdmx->section_feed = vmalloc(sizeof(*pdmx->section_feed) *
-				     pdmx->sec_feed_num);
-	if (!pdmx->section_feed) {
-		vfree(pdmx->ts_feed);
-		pdmx->ts_feed = NULL;
-		return -ENOMEM;
-	}
-
-	for (i = 0; i < pdmx->sec_feed_num; i++)
-		pdmx->section_feed[i].state = DMX_STATE_FREE;
+	INIT_LIST_HEAD(&pdmx->ts_feed_list);
+	INIT_LIST_HEAD(&pdmx->section_feed_list);
 
 	INIT_LIST_HEAD(&pdmx->frontend_list);
 
@@ -2544,7 +2586,6 @@ int dmx_init(struct aml_dmx *pdmx, struct dvb_adapter *dvb_adapter)
 	ret = dvb_dmxdev_init(&pdmx->dev, dvb_adapter);
 	if (ret < 0) {
 		dprint("dvb_dmxdev_init failed: error %d\n", ret);
-		vfree(pdmx->ts_feed);
 		return -1;
 	}
 	pdmx->dev.dvr_dvbdev->writers = MAX_SW_DEMUX_USERS;
@@ -2553,13 +2594,11 @@ int dmx_init(struct aml_dmx *pdmx, struct dvb_adapter *dvb_adapter)
 	ret = pdmx->dmx_ext.dmx.add_frontend(&pdmx->dmx_ext.dmx, &pdmx->mem_fe);
 	if (ret < 0) {
 		dprint("dvb_dmxdev_init add frontend: error %d\n", ret);
-		vfree(pdmx->ts_feed);
 		return -1;
 	}
 	pdmx->dmx_ext.dmx.connect_frontend(&pdmx->dmx_ext.dmx, &pdmx->mem_fe);
 	if (ret < 0) {
 		dprint("dvb_dmxdev_init connect frontend: error %d\n", ret);
-		vfree(pdmx->ts_feed);
 		return -1;
 	}
 	pdmx->buf_warning_level = 60;
@@ -2577,8 +2616,6 @@ int dmx_init(struct aml_dmx *pdmx, struct dvb_adapter *dvb_adapter)
 int dmx_destroy(struct aml_dmx *pdmx)
 {
 	if (pdmx->init) {
-		vfree(pdmx->ts_feed);
-		vfree(pdmx->section_feed);
 		if (pdmx->sc2_input) {
 			ts_input_close(pdmx->sc2_input);
 			pdmx->sc2_input = NULL;
@@ -2667,7 +2704,7 @@ static void string_output(char *string, int type)
 static int dump_filter_ringbuffer(char *buf)
 {
 	struct aml_dvb *advb = aml_get_dvb_device();
-	int i = 0, h, j;
+	int h, j;
 	int r, total = 0;
 	struct dmx_demux *dmx;
 	struct aml_dmx *demux;
@@ -2679,6 +2716,10 @@ static int dump_filter_ringbuffer(char *buf)
 	ssize_t used_size, total_size;
 	struct dvb_ringbuffer *buffer;
 	char str_buf[255];
+	struct sw_demux_sec_feed *entry = NULL;
+	struct sw_demux_sec_feed *tmp = NULL;
+	struct sw_demux_ts_feed *ts_entry = NULL;
+	struct sw_demux_ts_feed *ts_tmp = NULL;
 
 	r = sprintf(buf, "********ringbuffer********\n");
 	buf += r;
@@ -2695,13 +2736,13 @@ static int dump_filter_ringbuffer(char *buf)
 	demux = (struct aml_dmx *)dmx->priv;
 	dvr_exit = 0;
 
-	for (i = 0; i < demux->ts_feed_num; i++) {
-		if (demux->ts_feed[i].state < DMX_STATE_GO)
+	list_for_each_entry_safe(ts_entry, ts_tmp, &demux->ts_feed_list, node) {
+		if (ts_entry->state < DMX_STATE_GO)
 			continue;
 
 		memset(&tmp_buf, 0, sizeof(tmp_buf));
 		strcpy(tmp_buf, "none");
-		ts_feed = &demux->ts_feed[i];
+		ts_feed = ts_entry;
 
 		if (ts_feed->format == ES_FORMAT) {
 			if (ts_feed->type == VIDEO_TYPE)
@@ -2754,11 +2795,11 @@ static int dump_filter_ringbuffer(char *buf)
 		total += r;
 	}
 
-	for (i = 0; i < demux->sec_feed_num; i++) {
-		if (demux->section_feed[i].state < DMX_STATE_ALLOCATED)
+	list_for_each_entry_safe(entry, tmp, &demux->section_feed_list, node) {
+		if (entry->state < DMX_STATE_ALLOCATED)
 			continue;
 
-		section_feed = &demux->section_feed[i];
+		section_feed = entry;
 
 		for (j = 0; j < section_feed->sec_filter_num; j++) {
 			if (section_feed->filter[j].state != DMX_STATE_GO)
@@ -2790,7 +2831,6 @@ static ssize_t dump_filter_show(struct class *class,
 		return -ERESTARTSYS;
 
 	size = ts_output_dump_info(buf);
-
 	mutex_unlock(&advb->mutex);
 	return size;
 }
@@ -3081,6 +3121,191 @@ static ssize_t ts_clone_store(struct class *class,
 	return size;
 }
 
+int ts_clone_probe(struct platform_device *pdev)
+{
+	char buf[32];
+	int ret;
+	u32 value = 0;
+
+	memset(buf, 0, 32);
+	snprintf(buf, sizeof(buf), "ts_clone");
+	ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
+	if (!ret && value == 0) {
+		pr_dbg("ts_clone disable\n");
+	} else {
+		pr_dbg("ts_clone enable\n");
+		ts_clone_store(NULL,  NULL, "1", 1);
+	}
+	return 0;
+}
+
+static int add_adjust_mem_item(int format, int data, int mem_size)
+{
+	struct dmx_adjust_mem_t *adjust_mem_node;
+	struct dmx_adjust_mem_t *tmp;
+
+	//find node
+	list_for_each_entry_safe(adjust_mem_node, tmp, &dmx_adjust_mem_head, node) {
+		if (adjust_mem_node->format == format &&
+			adjust_mem_node->data == data) {
+			adjust_mem_node->mem_size = mem_size;
+			return 0;
+		}
+	}
+	adjust_mem_node = kmalloc(sizeof(*adjust_mem_node), GFP_KERNEL);
+	if (!adjust_mem_node) {
+		dprint("%s kmalloc fail\n", __func__);
+		return -1;
+	}
+
+	memset(adjust_mem_node, 0, sizeof(struct dmx_adjust_mem_t));
+	adjust_mem_node->format = format;
+	adjust_mem_node->data = data;
+	adjust_mem_node->mem_size = mem_size;
+	INIT_LIST_HEAD(&adjust_mem_node->node);
+
+	list_add_tail(&adjust_mem_node->node, &dmx_adjust_mem_head);
+	return 0;
+}
+
+static int del_adjust_mem_item(int format, int data)
+{
+	struct dmx_adjust_mem_t *adjust_mem_node;
+	struct dmx_adjust_mem_t *tmp;
+
+	//find node
+	list_for_each_entry_safe(adjust_mem_node, tmp, &dmx_adjust_mem_head, node) {
+		if (adjust_mem_node->format == format &&
+			adjust_mem_node->data == data) {
+			list_del(&adjust_mem_node->node);
+			kfree(adjust_mem_node);
+			return 0;
+		}
+	}
+	return -1;
+}
+
+static int print_adjust_mem_item(char *buf)
+{
+	int r, total = 0;
+
+	struct dmx_adjust_mem_t *adjust_mem_node;
+	struct dmx_adjust_mem_t *tmp;
+
+	//find node
+	list_for_each_entry_safe(adjust_mem_node, tmp, &dmx_adjust_mem_head, node) {
+		if (adjust_mem_node->format == ES_FORMAT)
+			r = sprintf(buf, "es pid:%d mem size:%d\n",
+					adjust_mem_node->data, adjust_mem_node->mem_size);
+		else if (adjust_mem_node->format == PES_FORMAT)
+			r = sprintf(buf, "pes pid:%d mem size:%d\n",
+					adjust_mem_node->data, adjust_mem_node->mem_size);
+		else if (adjust_mem_node->format == SECTION_FORMAT)
+			r = sprintf(buf, "section pid:%d mem size:%d\n",
+					adjust_mem_node->data, adjust_mem_node->mem_size);
+		else if (adjust_mem_node->format == DVR_FORMAT)
+			r = sprintf(buf, "dvr %d mem size:%d\n",
+					adjust_mem_node->data, adjust_mem_node->mem_size);
+		else
+			continue;
+		buf += r;
+		total += r;
+	}
+	return total;
+}
+
+static int find_adjust_mem_item(int format, int data)
+{
+	struct dmx_adjust_mem_t *adjust_mem_node;
+	struct dmx_adjust_mem_t *tmp;
+
+	//find node
+	list_for_each_entry_safe(adjust_mem_node, tmp, &dmx_adjust_mem_head, node) {
+		if (adjust_mem_node->format == format &&
+			adjust_mem_node->data == data) {
+			return adjust_mem_node->mem_size;
+		}
+	}
+	return -1;
+}
+
+static ssize_t adjust_mem_show(struct class *class,
+				struct class_attribute *attr, char *buf)
+{
+	ssize_t size;
+	struct aml_dvb *advb = aml_get_dvb_device();
+
+	if (mutex_lock_interruptible(&advb->mutex))
+		return -ERESTARTSYS;
+
+	size = print_adjust_mem_item(buf);
+	mutex_unlock(&advb->mutex);
+
+	return size;
+}
+
+static ssize_t adjust_mem_store(struct class *class,
+				 struct class_attribute *attr,
+				 const char *buf, size_t size)
+{
+//	char tmp[255];
+	int device_no;
+	int mem_size = 0;
+	int pid = 0;
+	struct aml_dvb *advb = aml_get_dvb_device();
+	int ret = 0;
+
+	if (mutex_lock_interruptible(&advb->mutex))
+		return -ERESTARTSYS;
+
+	dprint("%s\n", buf);
+	if (!strncmp(buf, "dvr", 3)) {
+		ret = sscanf(buf, "dvr %d %d", &device_no, &mem_size);
+		dprint("dvr:%d, mem_size:%d\n", device_no, mem_size);
+		if (ret == 2) {
+			if (mem_size == 0) {
+				del_adjust_mem_item(DVR_FORMAT, device_no);
+			} else {
+				mem_size = mem_size / 188 * 188;
+				add_adjust_mem_item(DVR_FORMAT, device_no, mem_size);
+			}
+		}
+	} else if (!strncmp(buf, "es", 2)) {
+		ret = sscanf(buf, "es %d %d", &pid, &mem_size);
+		dprint("es pid:%d, mem_size:%d\n", pid, mem_size);
+		if (ret == 2) {
+			if (mem_size == 0)
+				del_adjust_mem_item(ES_FORMAT, pid);
+			else
+				add_adjust_mem_item(ES_FORMAT, pid, mem_size);
+		}
+	} else if (!strncmp(buf, "pes", 3)) {
+		ret = sscanf(buf, "pes %d %d", &pid, &mem_size);
+		dprint("pes pid:0x%0x, mem_size:0x%0x\n", pid, mem_size);
+		if (ret == 2) {
+			if (mem_size == 0)
+				del_adjust_mem_item(PES_FORMAT, pid);
+			else
+				add_adjust_mem_item(PES_FORMAT, pid, mem_size);
+		}
+	} else if (!strncmp(buf, "section", 7)) {
+		ret = sscanf(buf, "section %d %d", &pid, &mem_size);
+		dprint("section pid:0x%0x, mem_size:0x%0x\n", pid, mem_size);
+		if (ret == 2) {
+			if (mem_size == 0) {
+				del_adjust_mem_item(SECTION_FORMAT, pid);
+			} else {
+				mem_size = mem_size / 188 * 188;
+				add_adjust_mem_item(SECTION_FORMAT, pid, mem_size);
+			}
+		}
+	} else {
+		dprint("%s invalid\n", buf);
+	}
+	mutex_unlock(&advb->mutex);
+	return size;
+}
+
 #ifdef OPEN_REGISTER_NODE
 static CLASS_ATTR_RW(register_addr);
 static CLASS_ATTR_RW(register_value);
@@ -3092,6 +3317,7 @@ static CLASS_ATTR_RW(cache_status);
 static CLASS_ATTR_RW(dmx_source);
 static CLASS_ATTR_RW(ts_clone);
 static CLASS_ATTR_RW(dump_ringbuffer);
+static CLASS_ATTR_RW(adjust_mem);
 
 static struct attribute *aml_dmx_class_attrs[] = {
 #ifdef OPEN_REGISTER_NODE
@@ -3105,6 +3331,7 @@ static struct attribute *aml_dmx_class_attrs[] = {
 	&class_attr_dmx_source.attr,
 	&class_attr_ts_clone.attr,
 	&class_attr_dump_ringbuffer.attr,
+	&class_attr_adjust_mem.attr,
 	NULL
 };
 

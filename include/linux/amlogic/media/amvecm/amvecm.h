@@ -111,6 +111,8 @@ bool is_hdmi_ll_as_hdr10(void);
  *#define VPP_VADJ1_BLMINUS_EN        (1 << 1)
  *#define VPP_VADJ1_EN                (1 << 0)
  */
+#define FLAG_RESUME_RECOVERY        BIT(21)
+#define SHARPNESS_GAIN_UPDATE       BIT(20)
 #define FLAG_GAMMA_TABLE_EN_SUB     BIT(19)
 #define FLAG_GAMMA_TABLE_DIS_SUB    BIT(18)
 #define FLAG_GAMMA_TABLE_R_SUB      BIT(17)
@@ -233,6 +235,8 @@ enum rw_md_e {
 	WR_MOD
 };
 
+struct vpp_hist_param_s *get_vpp_hist(void);
+
 struct ve_pq_table_s {
 	unsigned int src_timing;
 	unsigned int value1;
@@ -335,6 +339,7 @@ struct table_3dlut_s {
 } /*table_3dlut_s */;
 
 enum vlk_chiptype {
+	vlock_chip_null,
 	vlock_chip_txl,
 	vlock_chip_txlx,
 	vlock_chip_txhd,
@@ -357,14 +362,18 @@ enum chip_type {
 	chip_s5,
 	chip_t3x,
 	chip_txhd2,
-	chip_s1a
+	chip_s1a,
+	chip_s7,
+	chip_a4,
+	chip_s7d
 };
 
 enum chip_cls_e {
 	OTHER_CLS = 0,
 	TV_CHIP,
 	STB_CHIP,
-	SMT_CHIP
+	SMT_CHIP,
+	AD_CHIP
 };
 
 enum vlock_hw_ver_e {
@@ -415,7 +424,8 @@ enum vpp_index_e {
 	VPP_TOP0 = 0,
 	VPP_TOP1 = 1,
 	VPP_TOP2 = 2,
-	VPP_TOP_MAX_S = 3
+	VPP_PRE_VS = 3,
+	VPP_TOP_MAX_S = 4
 };
 
 enum vpp_slice_e {
@@ -472,6 +482,8 @@ extern enum chip_cls_e chip_cls_id;
 
 extern enum output_format_e output_format;
 
+extern unsigned int osd_pic_en;
+
 int amvecm_on_vs(struct vframe_s *display_vf,
 		 struct vframe_s *toggle_vf,
 		 int flags,
@@ -483,18 +495,18 @@ int amvecm_on_vs(struct vframe_s *display_vf,
 		 unsigned int cm_in_h,
 		 enum vd_path_e vd_path,
 		 enum vpp_index_e vpp_index);
-void refresh_on_vs(struct vframe_s *vf, struct vframe_s *rpt_vf);
-void pc_mode_process(void);
-void pq_user_latch_process(void);
+void refresh_on_vs(struct vframe_s *vf, struct vframe_s *rpt_vf, u32 vpp_index);
+void pc_mode_process(int vpp_index);
+void pq_user_latch_process(int vpp_index);
 void vlock_process(struct vframe_s *vf,
 		   struct vpp_frame_par_s *cur_video_sts);
 void frame_lock_process(struct vframe_s *vf,
-		   struct vpp_frame_par_s *cur_video_sts);
+		   struct vpp_frame_par_s *cur_video_sts, u16 line);
 int frc_input_handle(struct vframe_s *vf, struct vpp_frame_par_s *cur_video_sts);
 void get_hdr_process_name(int id, char *name, char *output_fmt);
 
 void vpp_vd_adj1_saturation_hue(signed int sat_val,
-				signed int hue_val, struct vframe_s *vf);
+				signed int hue_val, struct vframe_s *vf, int vpp_index);
 void amvecm_sharpness_enable(int sel);
 int metadata_read_u32(uint32_t *value);
 int metadata_wait(struct vframe_s *vf);
@@ -523,7 +535,7 @@ bool di_api_mov_sel(unsigned int mode,
 enum hdr_type_e get_cur_source_type(enum vd_path_e vd_path,
 	enum vpp_index_e vpp_index);
 
-int amvecm_set_saturation_hue(int mab, enum wr_md_e mode);
+int amvecm_set_saturation_hue(int mab, enum wr_md_e mode, int vpp_index);
 void amvecm_saturation_hue_update(int offset_val);
 
 #ifdef CONFIG_AMLOGIC_MEDIA_FRC
@@ -551,6 +563,7 @@ extern struct single_scene_s detected_scenes[SCENE_MAX];
 extern int freerun_en;
 u32 hdr_set(u32 module_sel, u32 hdr_process_select, enum vpp_index_e vpp_index);
 int vinfo_lcd_support(void);
+int vinfo_hdmi_out_fmt(void);
 int dv_pq_ctl(enum dv_pq_ctl_e ctl);
 int cm_force_update_flag(void);
 int get_lum_ave(void);
@@ -600,5 +613,12 @@ struct gamma_data_s *get_gm_data(void);
 void bs_ct_latch(void);
 int pkt_adv_chip(void);
 extern unsigned int ai_color_enable;
+
+int register_osd_status_cb(int (*get_osd_enable_status)(u32 index));
+void resume_recovery_process(int vpp_index);
+extern uint demo_pk_sr_final_pgains;
+extern uint demo_pk_sr_final_ngains;
+void amve_safa_demo_ctrl(unsigned int enable);
+
 #endif /* AMVECM_H */
 

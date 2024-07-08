@@ -31,9 +31,10 @@ static void construct_avi_packet(struct hdmitx_dev *hdev)
 	struct hdmi_format_para *para = &hdev->tx_comm.fmt_para;
 
 	hdmi_avi_infoframe_init(info);
-
+	info->version = 2;
 	info->colorspace = para->cs;
-	info->scan_mode = HDMI_SCAN_MODE_NONE;
+	/* underscan */
+	info->scan_mode = HDMI_SCAN_MODE_UNDERSCAN;
 	if (para->timing.v_active <= 576)
 		info->colorimetry = HDMI_COLORIMETRY_ITU_601;
 	else
@@ -53,6 +54,9 @@ static void construct_avi_packet(struct hdmitx_dev *hdev)
 		/*HDMI Spec V1.4b P151*/
 		if (!hdev->frl_rate) /* TODO, clear under FRL */
 			info->video_code = 0;
+	/* refer to CTA-861-H Page 69 */
+	if (info->video_code >= 128)
+		info->version = 3;
 	info->ycc_quantization_range = HDMI_YCC_QUANTIZATION_RANGE_LIMITED;
 	info->content_type = HDMI_CONTENT_TYPE_GRAPHICS;
 	info->pixel_repeat = 0;
@@ -130,7 +134,7 @@ int hdmitx21_set_display(struct hdmitx_dev *hdev, enum hdmi_vic videocode)
 			hdmitx_hw_cntl_config(&hdev->tx_hw.base, CONF_CT_MODE, SET_CT_OFF);
 		} else {
 			hdmitx_hw_cntl_config(&hdev->tx_hw.base, CONF_CT_MODE,
-				hdev->tx_comm.ct_mode | hdev->it_content << 4);
+				hdev->tx_comm.ct_mode | hdev->tx_comm.it_content << 4);
 		}
 		ret = 0;
 	}
@@ -139,6 +143,7 @@ int hdmitx21_set_display(struct hdmitx_dev *hdev, enum hdmi_vic videocode)
 	return ret;
 }
 
+/* TODO: merge in hdmitx_common_setup_vsif_packet() */
 static void hdmi_set_vend_spec_infofram(struct hdmitx_dev *hdev,
 					enum hdmi_vic videocode)
 {

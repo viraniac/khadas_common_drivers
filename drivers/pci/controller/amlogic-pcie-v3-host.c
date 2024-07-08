@@ -509,14 +509,12 @@ static int __maybe_unused amlogic_pcie_suspend_noirq(struct device *dev)
 
 	err = readl_poll_timeout(amlogic->pcictrl_base + PCIE_A_CTRL5, value,
 				 PCIE_LINK_STATE_CHECK(value, LTSSM_L1_IDLE) |
-				 PCIE_LINK_STATE_CHECK(value, LTSSM_L2_IDLE) |
-				 PCIE_LINK_STATE_CHECK(value, LTSSM_L0), 20,
-				 jiffies_to_msecs(5 * HZ));
-	if (err) {
-		dev_dbg(amlogic->dev, "PCIe link enter LP timeout!,LTSSM=0x%lx\n",
+				 PCIE_LINK_STATE_CHECK(value, LTSSM_L2_IDLE),
+				 2, 50 * USEC_PER_MSEC);
+	if (err)
+		dev_err(amlogic->dev,
+			"PCIe LP timeout!,LTSSM=0x%lx, PLS check pcie device suspend status\n",
 			((((value) >> 18)) & GENMASK(4, 0)));
-		return err;
-	}
 
 	amlogic_pcie_deinit_phys(amlogic);
 
@@ -728,6 +726,15 @@ static int amlogic_pcie_rc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static void amlogic_pcie_shutdown(struct platform_device *pdev)
+{
+	struct amlogic_pcie *amlogic = platform_get_drvdata(pdev);
+
+	amlogic_pcie_deinit_phys(amlogic);
+
+	amlogic_pcie_disable_clocks(amlogic);
+}
+
 static const struct of_device_id amlogic_pcie_of_match[] = {
 	{ .compatible = "amlogic, amlogic-pcie-v3", },
 	{ .compatible = "amlogic,amlogic-pcie-v3", },
@@ -744,6 +751,7 @@ static struct platform_driver amlogic_pcie_driver = {
 	},
 	.probe = amlogic_pcie_rc_probe,
 	.remove = amlogic_pcie_rc_remove,
+	.shutdown = amlogic_pcie_shutdown,
 };
 
 module_platform_driver(amlogic_pcie_driver);

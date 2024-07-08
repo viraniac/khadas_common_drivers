@@ -533,6 +533,7 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-txhd2";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg = <0xff638000 0x400>;
 		reg_base = <0xff639000>;
 		interrupts = <0 52 IRQ_TYPE_EDGE_RISING>;
@@ -699,7 +700,7 @@
 		>;
 		clocks = <&clkc CLKID_CDAC_CLK>;
 		clock-names = "vdac_clk_gate";
-		cutwindow_val_h = <0 0 0 0 8>; /* level 0~4 */
+		cutwindow_val_h = <0 0 0 0 24>; /* level 0~4 */
 		cutwindow_val_v = <4 8 14 16 24>;  /* level 0~4 */
 	};
 
@@ -778,9 +779,9 @@
 		reg = <0xff646000 0x200    /* clk */
 			0xff644000 0x40     /* pwrctrl */
 			0xff900000 0x40000>; /* vcbus */
-		clk_level = <3>;
-		/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-		/* 4: 333.3M    5: 400.0M */
+		clk_level = <4>;
+		/* 0: 24M       1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+		/* 5: 333.3M    6: 400.0M */
 	};
 
 	meson_fb: fb {
@@ -1176,12 +1177,6 @@
 			#size-cells = <1>;
 			ranges = <0x0 0xff800000 0xa000>;
 
-			cpu_version {
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				reg=<0x140 0x4>;
-				amlogic,has-chip-id;
-			};
-
 			dcon_led: dcon_led@0x1000 {
 				compatible = "amlogic,led_unipolar_ctrl";
 				reg = <0x1000 0x88>;
@@ -1418,7 +1413,7 @@
 			pll-setting-7 = <0xe0004>;
 			pll-setting-8 = <0xe000c>;
 			dis-thred-enhance = <0x2>;/**t7-0x38:bit[26-27]**/
-			analog_process_nm = <22>;
+			pll-version = <1>;
 			version = <3>;
 			phy0-reset-level-bit = <16>;
 			usb-reset-bit = <2>;
@@ -1481,11 +1476,11 @@
 			version = <1>;
 		};
 
-		crg_phy_21: crgphy21@ffe09020 {
+		crg_phy_21: crgphy21@ffdf8000 {
 			compatible = "amlogic, amlogic-crg-drd-usb2";
 			status = "disable";
 			#phy-cells = <0>;
-			reg = <0xFFE09020 0x40
+			reg = <0xFFDF8000 0x40
 					0xFFD01008 0x100
 					0xFF63A000 0x2000
 					0xFF658000 0x2000>;
@@ -1498,7 +1493,7 @@
 			pll-setting-7 = <0xe0004>;
 			pll-setting-8 = <0xe000c>;
 			dis-thred-enhance = <0x2>;/**t7-0x38:bit[26-27]**/
-			analog_process_nm = <22>;
+			pll-version = <1>;
 			version = <3>;
 			phy0-reset-level-bit = <17>;
 			phy1-reset-level-bit = <18>;
@@ -1511,11 +1506,11 @@
 			usb-phy-trim-reg = <0xFF800270>;
 		};
 
-		crg3_phy_21: crg3phy21@ffe09080 {
+		crg3_phy_21: crg3phy21@ffdf8080 {
 			compatible = "amlogic, amlogic-crg-drd-usb3";
 			status = "disable";
 			#phy-cells = <0>;
-			reg = <0xFFE09080 0x20>;
+			reg = <0xFFDF8080 0x20>;
 			phy1-reg = <0xFFE09080>;
 			phy1-reg-size = <0x20>;
 			reset-reg = <0xFFD01008>;

@@ -6,8 +6,8 @@
 /dts-v1/;
 
 #include "mesonsm1.dtsi"
-#include "mesonsm1_drm.dtsi"
 #include "mesonsm1_ac200-panel.dtsi"
+#include "mesonsm1_drm.dtsi"
 #include "partition_mbox_normal_dynamic.dtsi"
 
 / {
@@ -49,6 +49,11 @@
 			console-size = <0x40000>;
 			ftrace-size = <0x80000>;
 			pmsg-size = <0x20000>;
+		};
+
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
 		};
 
 		debug_reserved:linux,iotrace {
@@ -172,6 +177,7 @@
 		};
 		vm0_cma_reserved:linux,vm0_cma {
 			compatible = "shared-dma-pool";
+			status = "okay";
 			reusable;
 			size = <0x0 0x2000000>;
 			alignment = <0x0 0x400000>;
@@ -196,71 +202,11 @@
 		compatible = "gpio-leds";
 		status = "disabled";
 
-		net_red {
-			label="net_red";
-			/*gpios=<&gpio GPIOA_14 GPIO_ACTIVE_LOW>;*/
-			default-state ="on";
-		};
-
-		net_green {
-			label="net_green";
-			/*gpios=<&gpio GPIOA_15 GPIO_ACTIVE_HIGH>;*/
-			default-state ="on";
-		};
-
-		remote_led {
-			label = "remote_led";
-			gpios = <&gpio_ao GPIOAO_10 GPIO_ACTIVE_LOW>;
-			default-state = "off";
-			linux,default-trigger = "rc_feedback";
-		};
-
 		sys_led {
 			label="sys_led";
 			gpios=<&gpio_ao GPIOAO_11 GPIO_ACTIVE_LOW>;
 			default-state ="on";
 		};
-	};
-
-	cvbsout {
-		compatible = "amlogic, cvbsout-sm1";
-		dev_name = "cvbsout";
-		status = "okay";
-		clocks = <&clkc CLKID_VCLK2_ENCI
-			&clkc CLKID_VCLK2_VENCI0
-			&clkc CLKID_VCLK2_VENCI1
-			&clkc CLKID_DAC_CLK>;
-		clock-names = "venci_top_gate",
-			"venci_0_gate",
-			"venci_1_gate",
-			"vdac_clk_gate";
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* sm1 */
-		performance = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x8080
-			0x1b05  0xfd
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
-		performance_sarft = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x0
-			0x1b05  0x9
-			0x1c59  0xfc48
-			0xffff  0x0>; /* ending flag */
-		performance_revB_telecom = <0x1bf0  0x9
-			0x1b56  0x546
-			0x1b12  0x8080
-			0x1b05  0x9
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
 	};
 
 	codec_mm {
@@ -290,6 +236,31 @@
 		memory-region = <&ppmgr_reserved>;
 		dev_name = "ppmgr";
 		status = "okay";
+	};
+
+	multi-di {
+		compatible = "amlogic, dim-sm1";
+		status = "okay";
+		/* 0:use reserved; 1:use cma; 2:use cma as reserved */
+		flag_cma = <4>;	//<1>;
+		//memory-region = <&di_reserved>;
+		memory-region = <&di_cma_reserved>;
+		interrupts = <0 46 1
+				0 40 1>;
+		interrupt-names = "pre_irq", "post_irq";
+		clocks = <&clkc CLKID_VPU_CLKB_TMP>,
+			<&clkc CLKID_VPU_CLKB>;
+		clock-names = "vpu_clkb",
+			"vpu_mux";
+		clock-range = <334 667>;
+		/* buffer-size = <3621952>;(yuv422 8bit) */
+		buffer-size = <4074560>;/*yuv422 fullpack*/
+		/* reserve-iomap = "true"; */
+		/* if enable nr10bit, set nr10bit-support to 1 */
+		post-wr-support = <1>;
+		nr10bit-support = <1>;
+		nrds-enable = <1>;
+		pps-enable = <1>;
 	};
 
 	deinterlace {
@@ -815,6 +786,7 @@
 				sound-dai = <&dummy_codec>;
 			};
 		};
+/*
 		aml-audio-card,dai-link@6 {
 			mclk-fs = <256>;
 			suffix-name = "alsaPORT-earc";
@@ -826,7 +798,7 @@
 				sound-dai = <&dummy_codec>;
 			};
 		};
-
+*/
 		aml-audio-card,dai-link@7 {
 			mclk-fs = <256>;
 			continuous-clock;
@@ -1295,6 +1267,42 @@
 	pinctrl-0=<&i2c3_master_pins2>;
 	clock-frequency = <300000>; /* default 100k */
 
+	aw9523: aw9523_led@5b {
+		compatible = "amlogic,aw9523b_led";
+		reg = <0x5b>;
+		status = "okay";
+		// reset-gpio = <&gpio GPIOD_11 GPIO_ACTIVE_HIGH>;
+		platform = <4>;
+
+		led1 {
+			default_colors = <0 0 0>;
+			r_io_number = <0>;
+			g_io_number = <1>;
+			b_io_number = <2>;
+		};
+
+		led2 {
+			default_colors = <0 0 0>;
+			r_io_number = <3>;
+			g_io_number = <4>;
+			b_io_number = <5>;
+		};
+
+		led3 {
+			default_colors = <0 0 0>;
+			r_io_number = <6>;
+			g_io_number = <7>;
+			b_io_number = <8>;
+		};
+
+		led4 {
+			default_colors = <0 0 0>;
+			r_io_number = <9>;
+			g_io_number = <10>;
+			b_io_number = <11>;
+		};
+	};
+
 	/* for ref board */
 	ad82584f_62: ad82584f_62@31 {
 		compatible = "ESMT, ad82584f";
@@ -1674,7 +1682,7 @@
 }; /* end of audiobus */
 
 &earc {
-	status = "okay";
+	status = "disabled";
 };
 
 &pinctrl_periphs {
@@ -1889,9 +1897,9 @@
 	max-frequency = <200000000>;
 	non-removable;
 	disable-wp;
-	//mmc-ddr-1_8v;
-	//mmc-hs200-1_8v;
-	//mmc-hs400-1_8v;
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
 	//mmc-pwrseq = <&emmc_pwrseq>;
 	//vmmc-supply = <&vcc_3v3>;
 	//vqmmc-supply = <&vddio_boot>;

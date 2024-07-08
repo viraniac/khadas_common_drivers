@@ -20,9 +20,11 @@
 #include <dt-bindings/power/a1-pd.h>
 #include <dt-bindings/power/t5m-pd.h>
 #include <dt-bindings/power/s5-pd.h>
+#include <dt-bindings/power/s7-pd.h>
 #include <dt-bindings/power/t3x-pd.h>
 #include <dt-bindings/power/txhd2-pd.h>
 #include <dt-bindings/power/s1a-pd.h>
+#include <dt-bindings/power/s7d-pd.h>
 #include <linux/kallsyms.h>
 
 struct sec_pm_private_domain {
@@ -79,6 +81,7 @@ static int sec_pm_domain_power_on(struct generic_pm_domain *genpd)
 #define POWER_DOMAIN(_name, index, status, flag)	\
 	TOP_DOMAIN(_name, index, status, flag, 0)
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 static struct sec_pm_private_domain a1_pm_domains[] __initdata = {
 	[PDID_DSP_A] =  POWER_DOMAIN(dsp_a, PDID_DSP_A, DOMAIN_INIT_ON, GENPD_FLAG_ACTIVE_WAKEUP),
@@ -211,7 +214,7 @@ static struct sec_pm_domain_data c2_pm_domain_data __initdata = {
 };
 
 static struct sec_pm_private_domain sc2_pm_domains[] __initdata = {
-	[PDID_SC2_DSP] = POWER_DOMAIN(dsp, PDID_SC2_DSP, DOMAIN_INIT_OFF, 0),
+	[PDID_SC2_DSP] = POWER_DOMAIN(dsp, PDID_SC2_DSP, DOMAIN_INIT_ON, GENPD_FLAG_ACTIVE_WAKEUP),
 	[PDID_SC2_DOS_HCODEC] = POWER_DOMAIN(hcodec, PDID_SC2_DOS_HCODEC, DOMAIN_INIT_OFF, 0),
 	[PDID_SC2_DOS_HEVC] = POWER_DOMAIN(hevc, PDID_SC2_DOS_HEVC, DOMAIN_INIT_OFF, 0),
 	[PDID_SC2_DOS_VDEC] = POWER_DOMAIN(vdec, PDID_SC2_DOS_VDEC, DOMAIN_INIT_OFF, 0),
@@ -223,7 +226,8 @@ static struct sec_pm_private_domain sc2_pm_domains[] __initdata = {
 	[PDID_SC2_PCIE] = POWER_DOMAIN(pcie, PDID_SC2_PCIE, DOMAIN_INIT_OFF, 0),
 	[PDID_SC2_GE2D] = POWER_DOMAIN(ge2d, PDID_SC2_GE2D, DOMAIN_INIT_OFF, 0),
 	[PDID_SC2_ETH] = POWER_DOMAIN(eth, PDID_SC2_ETH, DOMAIN_INIT_ON, GENPD_FLAG_ALWAYS_ON),
-	[PDID_SC2_AUDIO] = POWER_DOMAIN(audio, PDID_SC2_AUDIO, DOMAIN_INIT_OFF, 0),
+	[PDID_SC2_AUDIO] = POWER_DOMAIN(audio, PDID_SC2_AUDIO, DOMAIN_INIT_ON,
+		GENPD_FLAG_ALWAYS_ON),
 };
 
 static struct sec_pm_domain_data sc2_pm_domain_data __initdata = {
@@ -679,6 +683,79 @@ static struct sec_pm_domain_data txhd2_pm_domain_data __initdata = {
 	.domains_count = ARRAY_SIZE(txhd2_pm_domains),
 };
 
+static struct sec_pm_private_domain s7_pm_domains[] __initdata = {
+	[PDID_S7_DOS_HEVC] = POWER_DOMAIN(hevc, PDID_S7_DOS_HEVC, DOMAIN_INIT_OFF,
+				       0),
+	[PDID_S7_DOS_VDEC] = POWER_DOMAIN(vdec, PDID_S7_DOS_VDEC, DOMAIN_INIT_OFF,
+					  0),
+	[PDID_S7_VPU_HDMI] = POWER_DOMAIN(hdmi, PDID_S7_VPU_HDMI, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7_USB_COMB] = POWER_DOMAIN(usb_comb, PDID_S7_USB_COMB, DOMAIN_INIT_ON,
+					GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7_SD_EMMC_C] = POWER_DOMAIN(sd_emmc_c, PDID_S7_SD_EMMC_C, DOMAIN_INIT_ON,
+				       GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7_GE2D] = POWER_DOMAIN(ge2d, PDID_S7_GE2D, DOMAIN_INIT_OFF,
+					  0),
+	[PDID_S7_SD_EMMC_A] = POWER_DOMAIN(sd_emmc_a, PDID_S7_SD_EMMC_A, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7_SD_EMMC_B] = POWER_DOMAIN(sd_emmc_b, PDID_S7_SD_EMMC_B, DOMAIN_INIT_ON,
+					GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7_ETH] = POWER_DOMAIN(eth, PDID_S7_ETH, DOMAIN_INIT_ON,
+				       GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7_AUCPU] = POWER_DOMAIN(aucpu, PDID_S7_AUCPU, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7_AUDIO] = POWER_DOMAIN(audio, PDID_S7_AUDIO, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+};
+
+static struct sec_pm_domain_data s7_pm_domain_data __initdata = {
+	.domains = s7_pm_domains,
+	.domains_count = ARRAY_SIZE(s7_pm_domains),
+};
+
+static struct sec_pm_private_domain s7d_pm_domains[] __initdata = {
+	[PDID_S7D_DOS_HCODEC] = POWER_DOMAIN(hcode, PDID_S7D_DOS_HCODEC, DOMAIN_INIT_OFF,
+					0),
+	[PDID_S7D_DOS_HEVC] = POWER_DOMAIN(hevc, PDID_S7D_DOS_HEVC, DOMAIN_INIT_OFF,
+				       0),
+	[PDID_S7D_DOS_VDEC] = POWER_DOMAIN(vdec, PDID_S7D_DOS_VDEC, DOMAIN_INIT_OFF,
+					  0),
+	[PDID_S7D_VPU_HDMI] = POWER_DOMAIN(hdmi, PDID_S7D_VPU_HDMI, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_USB_U2DRD] = POWER_DOMAIN(usb_u2d, PDID_USB_U2DRD, DOMAIN_INIT_ON,
+					GENPD_FLAG_ALWAYS_ON),
+	[PDID_USB_U2H] = POWER_DOMAIN(usb_u2h, PDID_USB_U2H, DOMAIN_INIT_ON,
+					GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_SD_EMMC_C] = POWER_DOMAIN(sd_emmc_c, PDID_S7D_SD_EMMC_C, DOMAIN_INIT_ON,
+				       GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_GE2D] = POWER_DOMAIN(ge2d, PDID_S7D_GE2D, DOMAIN_INIT_OFF,
+					  0),
+	[PDID_S7D_AMFC] = POWER_DOMAIN(amfc, PDID_S7D_AMFC, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_SD_EMMC_A] = POWER_DOMAIN(sd_emmc_a, PDID_S7D_SD_EMMC_A, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_SD_EMMC_B] = POWER_DOMAIN(sd_emmc_b, PDID_S7D_SD_EMMC_B, DOMAIN_INIT_ON,
+					GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_ETH] = POWER_DOMAIN(eth, PDID_S7D_ETH, DOMAIN_INIT_ON,
+				       GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_AUCPU] = POWER_DOMAIN(aucpu, PDID_S7D_AUCPU, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_AUDIO] = POWER_DOMAIN(audio, PDID_S7D_AUDIO, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_SRAMA] = POWER_DOMAIN(srama, PDID_S7D_SRAMA, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_DMC0] = POWER_DOMAIN(dmc0, PDID_S7D_DMC0, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_DMC1] = POWER_DOMAIN(dmc1, PDID_S7D_DMC1, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_S7D_DDR] = POWER_DOMAIN(ddr, PDID_S7D_DDR, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+};
+
+static struct sec_pm_domain_data s7d_pm_domain_data __initdata = {
+	.domains = s7d_pm_domains,
+	.domains_count = ARRAY_SIZE(s7d_pm_domains),
+};
 #endif
 
 static struct sec_pm_private_domain s1a_pm_domains[] __initdata = {
@@ -702,6 +779,39 @@ static struct sec_pm_domain_data s1a_pm_domain_data __initdata = {
 	.domains = s1a_pm_domains,
 	.domains_count = ARRAY_SIZE(s1a_pm_domains),
 };
+#else
+static struct sec_pm_private_domain c3_pm_domains[] __initdata = {
+	[PDID_C3_NNA] = POWER_DOMAIN(nna, PDID_C3_NNA, DOMAIN_INIT_OFF, 0),
+	[PDID_C3_AUDIO] = POWER_DOMAIN(audio, PDID_C3_AUDIO, DOMAIN_INIT_ON,
+				       GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_SDIOA] = POWER_DOMAIN(sdioa, PDID_C3_SDIOA, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_EMMC] = POWER_DOMAIN(emmc, PDID_C3_EMMC, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_USB_COMB] = POWER_DOMAIN(usb_comb, PDID_C3_USB_COMB, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_SDCARD] = POWER_DOMAIN(sdcard, PDID_C3_SDCARD, DOMAIN_INIT_ON,
+					GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_ETH] = POWER_DOMAIN(eth, PDID_C3_ETH, DOMAIN_INIT_ON,
+				     GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_GE2D] = POWER_DOMAIN(ge2d, PDID_C3_GE2D, DOMAIN_INIT_ON, 0),
+	[PDID_C3_CVE] = POWER_DOMAIN(cve, PDID_C3_CVE, DOMAIN_INIT_ON, GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_GDC_WRAP] = POWER_DOMAIN(cdg_wrap, PDID_C3_GDC_WRAP, DOMAIN_INIT_ON,
+					  GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_ISP_TOP] = POWER_DOMAIN(isp_top, PDID_C3_ISP_TOP, DOMAIN_INIT_ON,
+					 GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_MIPI_ISP_WRAP] = POWER_DOMAIN(isp_warp, PDID_C3_MIPI_ISP_WRAP, DOMAIN_INIT_ON,
+					       GENPD_FLAG_ALWAYS_ON),
+	[PDID_C3_VCODEC] = POWER_DOMAIN(vcodec, PDID_C3_VCODEC, DOMAIN_INIT_ON,
+					GENPD_FLAG_ALWAYS_ON),
+};
+
+static struct sec_pm_domain_data c3_pm_domain_data __initdata = {
+	.domains = c3_pm_domains,
+	.domains_count = ARRAY_SIZE(c3_pm_domains),
+};
+
+#endif
 
 static int sec_pd_probe(struct platform_device *pdev)
 {
@@ -798,6 +908,7 @@ out:
 }
 
 static const struct of_device_id pd_match_table[] = {
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
 	{
 		.compatible = "amlogic,c1-power-domain",
@@ -865,11 +976,25 @@ static const struct of_device_id pd_match_table[] = {
 		.compatible = "amlogic,txhd2-power-domain",
 		.data = &txhd2_pm_domain_data,
 	},
+	{
+		.compatible = "amlogic,s7-power-domain",
+		.data = &s7_pm_domain_data,
+	},
+	{
+		.compatible = "amlogic,s7d-power-domain",
+		.data = &s7d_pm_domain_data,
+	},
 #endif
 	{
 		.compatible = "amlogic,s1a-power-domain",
 		.data = &s1a_pm_domain_data,
 	},
+#else
+	{
+		.compatible = "amlogic,c3-power-domain",
+		.data = &c3_pm_domain_data,
+	},
+#endif
 	{}
 };
 

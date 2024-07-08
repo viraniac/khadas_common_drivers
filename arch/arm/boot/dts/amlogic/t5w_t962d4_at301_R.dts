@@ -44,11 +44,16 @@
 		/* global autoconfigured region for contiguous allocations */
 		ramoops@0x07400000 {
 			compatible = "ramoops";
-			reg = <0x0 0x07400000 0x0 0x00100000>;
+			reg = <0x07400000 0x00100000>;
 			record-size = <0x20000>;
 			console-size = <0x40000>;
 			ftrace-size = <0x80000>;
 			pmsg-size = <0x20000>;
+		};
+
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x80000>;
 		};
 
 		debug_reserved:linux,iotrace {
@@ -63,10 +68,7 @@
 
 		defendkey_reserved:linux,defendkey {
 			compatible = "amlogic, defendkey";
-			reusable;
-			size = <0x100000>;
-			alignment = <0x100000>;
-			alloc-ranges = <0x04F00000 0x100000>;
+			reg = <0x04e00000 0x100000>;
 		};
 
 		secmon_reserved: linux,secmon {
@@ -89,7 +91,7 @@
 		lcd_tcon_reserved:linux,lcd_tcon {
 			compatible = "amlogic, lcd_tcon";
 			reg = <0x3ec00000 0x00c00000>;
-			no-map;
+			//no-map;
 		};
 
 		/*  vdin0 CMA pool */
@@ -195,12 +197,13 @@
 			alloc-ranges = <0x0 0x3f400000>;
 		};
 
-		ldc_mem_reserved:linux,ldc_mem {
-			compatible = "shared-dma-pool";
-			reusable;
-			size = <0x400000>;
-			alignment = <0x400000>;
-		};
+		/*ldc_mem_reserved:linux,ldc_mem {
+		 *	compatible = "shared-dma-pool";
+		 *	reusable;
+		 *	size = <0x400000>;
+		 *	alignment = <0x400000>;
+		 *};
+		 */
 	};
 
 	vddio_3v3_reg: fixedregulator@5{
@@ -214,6 +217,7 @@
 		gpio = <&gpio_ao GPIOD_10 GPIO_ACTIVE_HIGH>;	/* gpio d 10 */
 		startup-delay-us = <70000>;
 		enable-active-high;
+		regulator-always-on;
 	};
 
 	afe_1v8_reg: fixedregulator@6{
@@ -905,8 +909,12 @@
 		dai-tdm-clk-sel = <0>;
 
 		clocks = <&clkaudio CLKID_AUDIO_MCLK_A
+				&clkc CLKID_HIFI_PLL
 				&clkc CLKID_MPLL0>;
-		clock-names = "mclk", "clk_srcpll";
+		clock-names = "mclk", "clk_srcpll", "clk_src_cd";
+		src-clk-freq = <491520000>;
+		/* suspend disable clk */
+		suspend-clk-off = <1>;
 
 		status = "okay";
 	};
@@ -920,8 +928,9 @@
 		dai-tdm-clk-sel = <1>;
 
 		clocks = <&clkaudio CLKID_AUDIO_MCLK_B
+				&clkc CLKID_HIFI_PLL
 				&clkc CLKID_MPLL1>;
-		clock-names = "mclk", "clk_srcpll";
+		clock-names = "mclk", "clk_srcpll", "clk_src_cd";
 		pinctrl-names = "tdm_pins","tdmout_a_gpio";
 		pinctrl-0 =
 			<&tdm_b_pins
@@ -948,8 +957,9 @@
 		/* enable control gain */
 		ctrl_gain = <1>;
 
-		/* pcpd_monitor*/
-		pcpd_monitor_src = <&pcpd_monitor_a>;
+		src-clk-freq = <491520000>;
+		/* suspend disable clk */
+		suspend-clk-off = <1>;
 		status = "okay";
 
 		/* !!!For --TV platform-- ONLY */
@@ -968,9 +978,16 @@
 		dai-tdm-clk-sel = <2>;
 
 		clocks = <&clkaudio CLKID_AUDIO_MCLK_C
+				&clkc CLKID_HIFI_PLL
 				&clkc CLKID_MPLL2>;
-		clock-names = "mclk", "clk_srcpll";
+		clock-names = "mclk", "clk_srcpll", "clk_src_cd";
+		src-clk-freq = <491520000>;
 		tdmin-src-name = "hdmirx";
+
+		/* pcpd_monitor*/
+		pcpd_monitor_src = <&pcpd_monitor_a>;
+		/* suspend disable clk */
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 
@@ -991,7 +1008,7 @@
 
 		pinctrl-names = "pdm_pins";
 		pinctrl-0 = <&pdmin>;
-
+		src-clk-freq = <491520000>;
 		train_sample_count = <10>;
 
 		/* mode 0~4, defalut:1 */
@@ -1004,13 +1021,14 @@
 		compatible = "amlogic, tm2-revb-snd-spdif-a";
 		#sound-dai-cells = <0>;
 
-		clocks = <&clkc CLKID_MPLL0
+		clocks = <&clkc CLKID_HIFI_PLL
+				&clkc CLKID_MPLL0
 				&clkc CLKID_FCLK_DIV4
 				&clkaudio CLKID_AUDIO_GATE_SPDIFIN
 				&clkaudio CLKID_AUDIO_GATE_SPDIFOUT_A
 				&clkaudio CLKID_AUDIO_SPDIFIN
 				&clkaudio CLKID_AUDIO_SPDIFOUT_A>;
-		clock-names = "sysclk", "fixed_clk", "gate_spdifin",
+		clock-names = "sysclk", "clk_src_cd", "fixed_clk", "gate_spdifin",
 				"gate_spdifout", "clk_spdifin", "clk_spdifout";
 
 		interrupts =
@@ -1033,21 +1051,27 @@
 		 */
 
 		samesource_sel = <5>;
-
+		src-clk-freq = <491520000>;
 		/*spdif clk tuning enable*/
 		clk_tuning_enable = <1>;
+
+		/* suspend disable clk */
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 
 	spdifb:spdif@1 {
 		compatible = "amlogic, tm2-revb-snd-spdif-b";
 		#sound-dai-cells = <0>;
-
-		clocks = <&clkc CLKID_MPLL2 /*CLKID_HIFI_PLL*/
+		clocks = <&clkc CLKID_HIFI_PLL
+				&clkc CLKID_MPLL2 /*CLKID_HIFI_PLL*/
 				&clkaudio CLKID_AUDIO_GATE_SPDIFOUT_B
 				&clkaudio CLKID_AUDIO_SPDIFOUT_B>;
-		clock-names = "sysclk",
+		clock-names = "sysclk", "clk_src_cd",
 				"gate_spdifout", "clk_spdifout";
+		src-clk-freq = <491520000>;
+		/* suspend disable clk */
+		suspend-clk-off = <1>;
 		status = "okay";
 	};
 
@@ -1089,7 +1113,7 @@
 
 	asrca: resample@0 {
 		compatible = "amlogic, t5-resample-a";
-		clocks = <&clkc CLKID_MPLL1
+		clocks = <&clkc CLKID_HIFI_PLL
 			&clkaudio CLKID_AUDIO_MCLK_B
 			&clkaudio CLKID_AUDIO_RESAMPLE_A>;
 		clock-names = "resample_pll", "resample_src", "resample_clk";
@@ -1115,7 +1139,7 @@
 
 	asrcb: resample@1 {
 		compatible = "amlogic, t5-resample-b";
-		clocks = <&clkc CLKID_MPLL3
+		clocks = <&clkc CLKID_HIFI_PLL
 			&clkaudio CLKID_AUDIO_MCLK_F
 			&clkaudio CLKID_AUDIO_RESAMPLE_B>;
 		clock-names = "resample_pll", "resample_src", "resample_clk";
@@ -1170,11 +1194,11 @@
 
 		clocks = <&clkaudio CLKID_AUDIO_GATE_PDM
 			&clkc CLKID_FCLK_DIV3
-			&clkc CLKID_MPLL3
+			&clkc CLKID_HIFI_PLL
 			&clkaudio CLKID_AUDIO_PDMIN0
 			&clkaudio CLKID_AUDIO_PDMIN1
-			&clkc CLKID_MPLL1
-			&clkaudio CLKID_AUDIO_MCLK_B>;
+			&clkc CLKID_HIFI_PLL
+			&clkaudio CLKID_AUDIO_MCLK_A>;
 		clock-names = "pdm_gate",
 			"pdm_sysclk_srcpll",
 			"pdm_dclk_srcpll",
@@ -1228,10 +1252,10 @@
 
 		clocks = <&clkaudio CLKID_AUDIO_GATE_PDM
 			&clkc CLKID_FCLK_DIV3
-			&clkc CLKID_MPLL3
+			&clkc CLKID_HIFI_PLL
 			&clkaudio CLKID_AUDIO_PDMIN0
 			&clkaudio CLKID_AUDIO_PDMIN1
-			&clkc CLKID_MPLL0
+			&clkc CLKID_HIFI_PLL
 			&clkaudio CLKID_AUDIO_MCLK_A>;
 		clock-names = "pdm_gate",
 			"pdm_sysclk_srcpll",
@@ -1753,8 +1777,10 @@
 &spicc1 {	//for UWB/LocalDimm
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&spicc1_pins>;
-	cs-gpios = <&gpio GPIOH_22 GPIO_ACTIVE_HIGH>;
+	pinctrl-0 = <&spicc1_pins &spicc1_cs_pins>;
+	// cs-gpios = <&gpio GPIOH_22 GPIO_ACTIVE_HIGH>;
+	cs2clk-us = <2>;
+	clk2cs-us = <12>;
 };
 
 &spicc2 {

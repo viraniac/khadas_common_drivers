@@ -32,6 +32,9 @@
 #ifdef CONFIG_RANDOMIZE_BASE
 #include <asm/module.h>
 #endif
+#if CONFIG_AMLOGIC_KERNEL_VERSION < 14515
+#include <linux/kasan.h>
+#endif
 
 #ifndef CONFIG_AMLOGIC_PAGE_TRACE_INLINE
 #define DEBUG_PAGE_TRACE	0
@@ -739,6 +742,10 @@ unsigned long unpack_ip(struct page_trace *trace)
 		text = aml_text;
 	return text + ((trace->ret_ip) << 2);
 }
+
+#if IS_MODULE(CONFIG_AMLOGIC_PAGE_TRACE)
+EXPORT_SYMBOL(unpack_ip);
+#endif
 
 #ifdef CONFIG_ARM64
 /*
@@ -1901,11 +1908,7 @@ void __init page_trace_mem_init(void)
 
 	find_static_common_symbol(NULL);
 #ifdef CONFIG_KASAN	/* open multi_shot for kasan */
-#if CONFIG_AMLOGIC_KERNEL_VERSION >= 14515
-#if IS_ENABLED(CONFIG_KASAN_KUNIT_TEST) || IS_ENABLED(CONFIG_KASAN_MODULE_TEST)
-	kasan_save_enable_multi_shot();
-#endif
-#else
+#if CONFIG_AMLOGIC_KERNEL_VERSION < 14515
 	kasan_save_enable_multi_shot();
 #endif
 #endif

@@ -218,6 +218,15 @@
 		method = "smc";
 	};
 
+	provisionkey {
+		compatible = "amlogic, provisionkey";
+		status = "okay";
+		key-permit-default = "write";
+		//new key not need add dts if started with KEY_PROVISION_
+		KEY_PROVISION_XXX { };
+		//test_my_added_keyname { };
+	};//End provisionkey
+
 	cma_shrinker: cma_shrinker {
 		compatible = "amlogic, cma-shrinker";
 		status = "okay";
@@ -359,9 +368,9 @@
 		reg = <0xff646000 0x200    /* clk */
 			0xff644000 0x40     /* pwrctrl */
 			0xff900000 0x40000>; /* vcbus */
-		clk_level = <4>;
-		/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-		/* 4: 333.3M    5: 400.0M */
+		clk_level = <5>;
+		/* 0: 24M       1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+		/* 5: 333.3M    6: 400.0M */
 	};
 
 	meson_uvm{
@@ -1217,13 +1226,6 @@
 					clocks = <&xtal>;
 					clock-names = "xtal";
 				};
-
-				sec_AO: ao-secure@140 {
-					compatible = "amlogic,meson-gx-ao-secure", "syscon";
-					reg = <0x140 0x140>;
-					amlogic,has-chip-id;
-				};
-
 			};
 
 			uart_AO: serial@3000 {
@@ -1385,22 +1387,22 @@
 		status = "disabled";
 		compatible = "amlogic,meson-axg-mmc";
 		reg = <0xffe07000 0x800>,
-				<0xff64625c 0x4>,
-				<0xff6346c0 0x4>;
+			<0xff64625c 0x4>,
+			<0xff6346c0 0x4>;
 		interrupts = <GIC_SPI 191 IRQ_TYPE_EDGE_RISING>;
 		clocks = <&clkc CLKID_CLK81_SD_EMMC_C>,
-				<&clkc CLKID_SD_EMMC_C_MUX>,
-				<&clkc CLKID_SD_EMMC_C_GATE>,
-				<&xtal>,
-				<&clkc CLKID_FCLK_DIV2>,
-				<&clkc CLKID_GP0_PLL>;
+			<&clkc CLKID_SD_EMMC_C_MUX>,
+			<&clkc CLKID_SD_EMMC_C_GATE>,
+			<&xtal>,
+			<&clkc CLKID_GP0_PLL>,
+			<&clkc CLKID_GP0_PLL>;
 
 		clock-names = "core", "mux0", "mux1",
 					"clkin0", "clkin1", "clkin2";
 		card_type = <1>;
 		tx_delay = <10>;
 		//save_para = <1>;
-		src_clk_rate = <1152000000>;
+		src_clk_rate = <768000000>;
 		compute_cmd_delay = <0>;
 		compute_coef = <0>;
 		mmc_debug_flag;
@@ -1630,6 +1632,7 @@
 		nrds-enable = <1>;
 		pps-enable = <1>;
 		ponly_mode = <1>;
+		prelink_en = <1>;
 		bp_thd = <0>;
 		/* add for t5d verb bypass mem 2 ~ 15 */
 		t5db_nr_thd = <2>;
@@ -1691,6 +1694,12 @@
 		status = "okay";
 		reg = <0xff63c000 0x400    /* ana reg */
 			0xff646000 0x4a0>; /* clk reg */
+	};
+
+	di_process {
+		compatible = "amlogic, di_process";
+		dev_name = "di_process";
+		status = "okay";
 	};
 
 	vout: vout {
@@ -1768,6 +1777,7 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-t5d";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg = <0xff638280 0x100>;
 		reg_base = <0xff639000>;
 		interrupts = <GIC_SPI 52 IRQ_TYPE_EDGE_RISING>;
@@ -1835,6 +1845,15 @@
 		status = "okay";
 	};
 
+	aml_mkl: aml_mkl {
+		compatible = "amlogic,aml_mkl";
+		reg = <0xff630000 0x180>;
+		kl_type = <0>;
+		kl_vid_type = <0>;
+		kl_offset = <0x80 0x100>;
+		status = "okay";
+	};
+
 	cpu_ver_name {
 		compatible = "amlogic, cpu-major-id-t5d";
 	};
@@ -1863,10 +1882,12 @@
 		compatible = "amlogic, meson-cooldev";
 		cooling_devices {
 			ddr_cool {
-				ddr_reg = <0xff6384b4>;
-				ddr_status = <3>;
-				ddr_bits = <8 15>;
-				ddr_data = <0x4c 0x26 0x13>;
+				ddr_reg = <0xff6384b4 0xff638648>;
+				ddr_status = <13>;
+				ddr_bits = <8 15>, <0 8>;
+				ddr_data = <152 152 152 120 94 76 76 60 60 46 46 38 18>;
+				gpu_data = <0x33 0x33 0x33 0x33 0x33 0x33 0x33 0x33 0x33
+					0x33 0x33 0x33 0x33>;
 				node_name = "ddr_cool0";
 				device_type = "ddr";
 			};
@@ -1907,8 +1928,8 @@
 					type = "passive";
 				};
 				pddr_change: trip-point@2 {
-					temperature = <90000>;
-					hysteresis = <10000>;
+					temperature = <55000>;
+					hysteresis = <5000>;
 					type = "hot";
 				};
 				pcritical: trip-point@3 {
@@ -2176,7 +2197,7 @@
 			function = "emmc";
 			input-enable;
 			bias-pull-up;
-			drive-strength-microamp = <3000>;
+			drive-strength-microamp = <4000>;
 		};
 	};
 
@@ -2185,7 +2206,7 @@
 			groups = "GPIOB_8";
 			function = "gpio_periphs";
 			bias-pull-down;
-			drive-strength-microamp = <3000>;
+			drive-strength-microamp = <4000>;
 		};
 	};
 
@@ -2204,7 +2225,7 @@
 			function = "emmc";
 			input-enable;
 			bias-pull-up;
-			drive-strength-microamp = <3000>;
+			drive-strength-microamp = <4000>;
 		};
 	};
 
@@ -2214,7 +2235,7 @@
 			function = "emmc";
 			input-enable;
 			bias-pull-down;
-			drive-strength-microamp = <3000>;
+			drive-strength-microamp = <4000>;
 		};
 	};
 

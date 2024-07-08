@@ -119,6 +119,7 @@ struct aml_tdm {
 	/* tdmin_lb src sel */
 	int tdmin_lb_src;
 	int start_clk_enable;
+	int symmetric_rate_disable;
 	int clk_tuning_enable;
 	int last_rate;
 
@@ -149,6 +150,7 @@ struct aml_tdm {
 #endif
 	int tdmout_lane_mute_status[LANE_MAX3];
 	bool earc_use_48k;
+	int ext_amp_ws_inv;
 };
 
 #define to_aml_tdm(x)   container_of(x, struct aml_tdm, clk_nb)
@@ -489,7 +491,8 @@ static int aml_set_tdm_mclk_2(struct aml_tdm *p_tdm,
 	}
 
 	if (p_tdm->setting.standard_sysclk % 8000 == 0) {
-		if (aml_return_chip_id() != CLK_NOTIFY_CHIP_ID) {
+		if ((aml_return_chip_id() != CLK_NOTIFY_CHIP_ID)  &&
+			(aml_return_chip_id() != CLK_NOTIFY_CHIP_ID_T3X)) {
 			ratio = MPLL_HBR_FIXED_FREQ / p_tdm->setting.standard_sysclk;
 			clk_set_rate(p_tdm->clk, freq * ratio);
 			ret = clk_set_parent(p_tdm->mclk, p_tdm->clk);
@@ -512,7 +515,8 @@ static int aml_set_tdm_mclk_2(struct aml_tdm *p_tdm,
 			}
 		}
 	} else if (p_tdm->setting.standard_sysclk % 11025 == 0) {
-		if (aml_return_chip_id() != CLK_NOTIFY_CHIP_ID) {
+		if ((aml_return_chip_id() != CLK_NOTIFY_CHIP_ID)  &&
+			(aml_return_chip_id() != CLK_NOTIFY_CHIP_ID_T3X)) {
 			ratio = MPLL_CD_FIXED_FREQ / p_tdm->setting.standard_sysclk;
 			clk_set_rate(p_tdm->clk_src_cd, freq * ratio);
 			ret = clk_set_parent(p_tdm->mclk, p_tdm->clk_src_cd);
@@ -578,7 +582,7 @@ static int aml_set_tdm_mclk(struct aml_tdm *p_tdm, unsigned int freq, bool tune)
 	return ret;
 }
 
-static int aml_tdm_set_fmt(struct aml_tdm *p_tdm, unsigned int fmt, bool capture_active)
+int aml_tdm_set_fmt(struct aml_tdm *p_tdm, unsigned int fmt, bool capture_active)
 {
 	bool tdmin_src_hdmirx = false;
 	bool tdmin_src_hdmirxb = false;
@@ -617,7 +621,8 @@ static int aml_tdm_set_fmt(struct aml_tdm *p_tdm, unsigned int fmt, bool capture
 			   p_tdm->clk_sel, p_tdm->id, fmt, 1, 1,
 			   tdmin_src_hdmirx,
 			   tdmin_src_hdmirxb,
-			   p_tdm->chipinfo->use_vadtop);
+			   p_tdm->chipinfo->use_vadtop,
+			   p_tdm->ext_amp_ws_inv);
 	if (p_tdm->contns_clk && !IS_ERR(p_tdm->mclk)) {
 		int ret = clk_prepare_enable(p_tdm->mclk);
 
@@ -670,10 +675,16 @@ int aml_tdm_hw_setting_init(struct aml_tdm *p_tdm,
 	dump_pcm_setting(setting);
 
 	/* set pcm dai hw params */
-	p_tdm->setting.standard_sysclk = setting->sysclk;
-	aml_set_tdm_mclk(p_tdm, setting->sysclk, false);
-	aml_tdm_set_clkdiv(p_tdm, setting->sysclk_bclk_ratio);
-	aml_set_bclk_ratio(p_tdm, setting->bclk_lrclk_ratio);
+	if (p_tdm->symmetric_rate_disable &&
+		stream == SNDRV_PCM_STREAM_CAPTURE) {
+		pr_debug("%s(), skip clock setting when TDM-[%d] capture\n", __func__, p_tdm->id);
+	} else {
+		pr_debug("%s(), clock setting when TDM-%d stream=%d\n",
+				 __func__, p_tdm->id, stream);
+		aml_set_tdm_mclk(p_tdm, setting->sysclk, false);
+		aml_tdm_set_clkdiv(p_tdm, setting->sysclk_bclk_ratio);
+		aml_set_bclk_ratio(p_tdm, setting->bclk_lrclk_ratio);
+	}
 
 	ret = aml_tdm_set_lanes(p_tdm, channels, stream);
 	if (ret)
@@ -1226,9 +1237,16 @@ static void tdm_sharebuffer_prepare(struct snd_pcm_substream *substream,
 			AUD_CODEC_TYPE_STEREO_PCM,
 			1,
 			p_tdm->chipinfo->separate_tohdmitx_en);
-		if (aml_return_chip_id() != CLK_NOTIFY_CHIP_ID) {
+		if ((aml_return_chip_id() != CLK_NOTIFY_CHIP_ID)  &&
+			(aml_return_chip_id() != CLK_NOTIFY_CHIP_ID_T3X)) {
+			struct clk *clk = p_tdm->clk;
+
+			if ((p_tdm->setting.standard_sysclk % 11025 == 0) &&
+				!IS_ERR(p_tdm->clk_src_cd)) {
+				clk = p_tdm->clk_src_cd;
+			}
 			ops->set_clks(p_tdm->samesource_sel,
-				p_tdm->clk,
+				clk,
 				(p_tdm->last_mclk_freq >> 1), 1);
 		} else {
 			if (p_tdm->setting.standard_sysclk % 8000 == 0) {
@@ -1343,7 +1361,7 @@ static int aml_tdm_open(struct snd_soc_component *component, struct snd_pcm_subs
 			aed_dst_status = true;
 #endif
 		p_tdm->fddr = aml_audio_register_frddr(dev,
-			p_tdm->actrl, aml_tdm_ddr_isr,
+			aml_tdm_ddr_isr,
 			substream, aed_dst_status);
 		if (!p_tdm->fddr) {
 			ret = -ENXIO;
@@ -1352,7 +1370,7 @@ static int aml_tdm_open(struct snd_soc_component *component, struct snd_pcm_subs
 		}
 	} else {
 		p_tdm->tddr = aml_audio_register_toddr(dev,
-			p_tdm->actrl, aml_tdm_ddr_isr, substream);
+			aml_tdm_ddr_isr, substream);
 		if (!p_tdm->tddr) {
 			ret = -ENXIO;
 			dev_err(dev, "failed to claim to ddr\n");
@@ -1741,8 +1759,7 @@ static int aml_dai_tdm_prepare(struct snd_pcm_substream *substream,
 		 *  case, we still config spdif module
 		 *  TODO FIXME, consider 8 ch i2s, 2 ch spdif case even hdmitx 8 ch.
 		 */
-		if (p_tdm->samesource_sel != SHAREBUFFER_NONE &&
-			get_i2s2hdmitx_audio_format(rtd->card) == AUD_CODEC_TYPE_STEREO_PCM)
+		if (p_tdm->samesource_sel != SHAREBUFFER_NONE)
 			tdm_sharebuffer_prepare(substream, p_tdm);
 
 		/* i2s source to hdmix */
@@ -1780,7 +1797,9 @@ static int aml_dai_tdm_prepare(struct snd_pcm_substream *substream,
 			iec_get_channel_status_info(&chsts, codec_type,
 				runtime->rate, bit_depth, 0);
 			set_aud_param_ch_status(&chsts, &aud_param);
+#if (defined(CONFIG_AMLOGIC_HDMITX) || defined(CONFIG_AMLOGIC_HDMITX21))
 			aout_notifier_call_chain(event_type, &aud_param);
+#endif
 		}
 
 		fifo_id = aml_frddr_get_fifo_id(fr);
@@ -2596,7 +2615,7 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 		p_chipinfo->lane_cnt = LANE_MAX1;
 
 	p_tdm->lane_cnt = p_chipinfo->lane_cnt;
-	pr_info("%s, tdm ID = %u, lane_cnt = %d\n", __func__,
+	pr_debug("%s, tdm ID = %u, lane_cnt = %d\n", __func__,
 			p_tdm->id, p_tdm->lane_cnt);
 
 	/* get audio controller */
@@ -2614,14 +2633,14 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 		dev_src = of_find_device_by_node(np_src);
 		of_node_put(np_src);
 		p_tdm->pcpd_monitor_src = platform_get_drvdata(dev_src);
-		pr_info("%s(), pcpd src found\n", __func__);
+		pr_debug("%s(), pcpd src found\n", __func__);
 	}
 	ret = of_property_read_u32(dev->of_node, "src-clk-freq",
 				   &p_tdm->syssrc_clk_rate);
 	if (ret < 0)
 		p_tdm->syssrc_clk_rate = 0;
 	else
-		pr_info("%s sys-src clk rate from dts:%d\n",
+		pr_debug("%s sys-src clk rate from dts:%d\n",
 			__func__, p_tdm->syssrc_clk_rate);
 
 	/* get tdm mclk sel configs */
@@ -2676,7 +2695,7 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 	if (ret < 0)
 		p_tdm->i2s2hdmitx = 0;
 	else
-		pr_info("TDM id %d i2s2hdmi:%d\n",
+		pr_debug("TDM id %d i2s2hdmi:%d\n",
 			p_tdm->id,
 			p_tdm->i2s2hdmitx);
 
@@ -2714,7 +2733,8 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 	if (IS_ERR(p_tdm->clk_src_cd))
 		dev_err(&pdev->dev, "Can't get clk_src_cd\n");
 
-	if ((!IS_ERR(p_tdm->clk)) && (aml_return_chip_id() == CLK_NOTIFY_CHIP_ID)) {
+	if ((!IS_ERR(p_tdm->clk)) && ((aml_return_chip_id() == CLK_NOTIFY_CHIP_ID) ||
+		(aml_return_chip_id() == CLK_NOTIFY_CHIP_ID_T3X))) {
 		if (p_tdm->id == 0 || p_tdm->id == 1) {
 			p_tdm->clk_nb.notifier_call = aml_tdm_clock_notifier;
 			ret = clk_notifier_register(p_tdm->clk, &p_tdm->clk_nb);
@@ -2756,15 +2776,29 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 		clk_prepare_enable(p_tdm->clk_gate);
 	p_tdm->pin_ctl = devm_pinctrl_get_select(dev, "tdm_pins");
 	if (IS_ERR(p_tdm->pin_ctl))
-		pr_info("aml_tdm_get_pins error!\n");
+		pr_debug("aml_tdm_get_pins error!\n");
 
 	ret = of_property_read_u32(node, "start_clk_enable", &p_tdm->start_clk_enable);
 	if (ret < 0)
 		p_tdm->start_clk_enable = 0;
 	else
-		pr_info("TDM id %d output clk enable:%d\n",
+		pr_debug("TDM id %d output clk enable:%d\n",
 			p_tdm->id, p_tdm->start_clk_enable);
 
+	ret = of_property_read_u32(node, "symmetric_rate_disable", &p_tdm->symmetric_rate_disable);
+	if (ret < 0) {
+		p_tdm->symmetric_rate_disable = 0;
+	} else {
+		if (p_tdm->symmetric_rate_disable == 1)
+			aml_tdm_dai[p_tdm->id].symmetric_rate = 0;
+	}
+
+	ret = of_property_read_u32(node, "ext_amp_ws_inv", &p_tdm->ext_amp_ws_inv);
+	if (ret < 0)
+		p_tdm->ext_amp_ws_inv = 0;
+	else
+		pr_debug("TDM id %d ext_amp_ws_inv:%d\n",
+			p_tdm->id, p_tdm->ext_amp_ws_inv);
 	ret = of_property_read_u32(node, "ctrl_gain", &p_tdm->ctrl_gain_enable);
 	if (ret < 0)
 		p_tdm->ctrl_gain_enable = 0;
@@ -2794,7 +2828,7 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 	if (ret < 0)
 		p_tdm->clk_tuning_enable = 0;
 	else
-		pr_info("TDM id %d tuning clk enable:%d\n",
+		pr_debug("TDM id %d tuning clk enable:%d\n",
 			p_tdm->id, p_tdm->clk_tuning_enable);
 
 	ret = of_property_read_u32(node, "tdm_for_speaker",
@@ -2802,7 +2836,7 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 	if (ret < 0)
 		p_tdm->tdm_for_speaker = 0;
 	else
-		pr_info("TDM id %d tdm_for_speaker\n", p_tdm->id);
+		pr_debug("TDM id %d tdm_for_speaker\n", p_tdm->id);
 
 	if (p_tdm->chipinfo->regulator) {
 		p_tdm->regulator_vcc3v3 = devm_regulator_get(dev, "tdm3v3");
@@ -2986,7 +3020,8 @@ static void aml_tdm_platform_shutdown(struct platform_device *pdev)
 	if (!IS_ERR_OR_NULL(p_tdm->regulator_vcc3v3))
 		regulator_disable(p_tdm->regulator_vcc3v3);
 
-	if ((!IS_ERR(p_tdm->clk)) && (aml_return_chip_id() == CLK_NOTIFY_CHIP_ID)) {
+	if ((!IS_ERR(p_tdm->clk)) && ((aml_return_chip_id() == CLK_NOTIFY_CHIP_ID) ||
+		(aml_return_chip_id() == CLK_NOTIFY_CHIP_ID_T3X))) {
 		ret = clk_notifier_unregister(p_tdm->clk, &p_tdm->clk_nb);
 		if (ret)
 			return;

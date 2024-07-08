@@ -23,6 +23,7 @@
 #include <linux/time.h>
 #include <linux/delay.h>
 #include <sched.h>
+#include <linux/sched/topology.h>
 
 #include <trace/hooks/sched.h>
 #include <trace/hooks/dtask.h>
@@ -38,7 +39,7 @@ module_param(sched_interactive_task_util, int, 0644);
 static int sched_task_low_prio = 125;
 module_param(sched_task_low_prio, int, 0644);
 
-static int sched_task_high_prio = 110;
+static int sched_task_high_prio = 118;
 module_param(sched_task_high_prio, int, 0644);
 
 static int sched_rt_nice_enable;
@@ -77,15 +78,6 @@ module_param(sched_pick_next_task_util_score, int, 0644);
 
 static int sched_pick_next_task_ignore_wait_prio = 120;
 module_param(sched_pick_next_task_ignore_wait_prio, int, 0644);
-
-static int sched_place_entity_enable = 1;
-module_param(sched_place_entity_enable, int, 0644);
-
-static int sched_place_entity_debug;
-module_param(sched_place_entity_debug, int, 0644);
-
-static int sched_place_entity_factor = 3;
-module_param(sched_place_entity_factor, int, 0644);
 
 static int sched_check_preempt_tick_enable = 1;
 module_param(sched_check_preempt_tick_enable, int, 0644);
@@ -327,7 +319,7 @@ static int task_interactive_score(struct task_struct *p, unsigned long weight, i
 
 	prio_score = (sched_task_high_prio - p->prio) * 10;
 
-	if (!ignore_wait && sched_place_entity_enable) {
+	if (!ignore_wait) {
 		delta = rq_clock(rq_of(p->se.cfs_rq)) - p->android_kabi_reserved1;
 		delta = delta >> 20;
 		wait_score = delta * 10; //wait 1ms = 10, 10ms = 100, 20ms = 200;
@@ -454,43 +446,6 @@ static void aml_pick_next_task(void *data, struct rq *rq, struct task_struct **p
 	}
 }
 
-static inline u64 max_vruntime(u64 max_vruntime, u64 vruntime)
-{
-	s64 delta = (s64)(vruntime - max_vruntime);
-
-	if (delta > 0)
-		max_vruntime = vruntime;
-
-	return max_vruntime;
-}
-
-static void aml_place_entity(void *data, struct cfs_rq *cfs_rq, struct sched_entity *se,
-			     int initial, u64 *vruntime)
-{
-	u64 vruntime_new = cfs_rq->min_vruntime;
-	unsigned long thresh;
-
-	if (!sched_place_entity_enable)
-		return;
-
-	if (initial)
-		return;
-
-	if (sched_place_entity_factor) {
-		thresh = sysctl_sched_latency / sched_place_entity_factor;
-		vruntime_new -= thresh;
-
-		se->vruntime = max_vruntime(se->vruntime, vruntime_new);
-
-		if (sched_place_entity_debug && entity_is_task(se))
-			aml_trace_printk("cpu:%d task:%s/%d(%s) vrutime:%llu(%llu->%llu)\n",
-				      cpu_of(rq_of(cfs_rq)),
-				      task_of(se)->comm, task_of(se)->pid,
-				      task_of(se)->sched_task_group->css.cgroup->kn->name,
-				      se->vruntime, cfs_rq->min_vruntime, vruntime_new);
-	}
-}
-
 static void aml_check_preempt_tick(void *data, struct task_struct *p, unsigned long *ideal_runtime,
 				   bool *skip_preempt, unsigned long delta_exec, struct cfs_rq *cfs_rq,
 				   struct sched_entity *curr, unsigned int granularity)
@@ -550,6 +505,59 @@ static void aml_check_preempt_tick(void *data, struct task_struct *p, unsigned l
 #endif
 
 #ifdef CONFIG_ANDROID_VENDOR_HOOKS
+static int sched_place_entity_enable = 1;
+module_param(sched_place_entity_enable, int, 0644);
+
+static int sched_place_entity_debug;
+module_param(sched_place_entity_debug, int, 0644);
+
+static int sched_place_entity_factor = 3;
+module_param(sched_place_entity_factor, int, 0644);
+
+static inline u64 max_vruntime(u64 max_vruntime, u64 vruntime)
+{
+	s64 delta = (s64)(vruntime - max_vruntime);
+
+	if (delta > 0)
+		max_vruntime = vruntime;
+
+	return max_vruntime;
+}
+
+static void aml_place_entity(void *data, struct cfs_rq *cfs_rq, struct sched_entity *se,
+			     int initial, u64 *vruntime)
+{
+	u64 vruntime_new = cfs_rq->min_vruntime;
+	unsigned long thresh;
+
+	if (!sched_place_entity_enable)
+		return;
+
+	if (initial)
+		return;
+
+	if (sched_place_entity_factor) {
+		thresh = sysctl_sched_latency / sched_place_entity_factor;
+		vruntime_new -= thresh;
+
+		se->vruntime = max_vruntime(se->vruntime, vruntime_new);
+
+		if (sched_place_entity_debug && entity_is_task(se))
+#ifdef CONFIG_FAIR_GROUP_SCHED
+			aml_trace_printk("cpu:%d task:%s/%d(%s) vrutime:%llu(%llu->%llu)\n",
+				      cpu_of(rq_of(cfs_rq)),
+				      task_of(se)->comm, task_of(se)->pid,
+				      task_of(se)->sched_task_group->css.cgroup->kn->name,
+				      se->vruntime, cfs_rq->min_vruntime, vruntime_new);
+#else
+			aml_trace_printk("cpu:%d task:%s/%d vrutime:%llu(%llu->%llu)\n",
+				      cpu_of(rq_of(cfs_rq)),
+				      task_of(se)->comm, task_of(se)->pid,
+				      se->vruntime, cfs_rq->min_vruntime, vruntime_new);
+#endif
+	}
+}
+
 static void __maybe_unused sched_show_task_hook(void *data, struct task_struct *p)
 {
 	pr_info("task:%s/%d on_cpu=%d prio=%d sum_exec_runtime=%llu runnable_avg=%lu util_avg=%lu wake=%llu in_cpu=%llu off_cpu=%llu sleep=%llu tick=%llu rcu_neset=%d\n",
@@ -589,22 +597,39 @@ static void tick_entry_hook(void *data, struct rq *rq)
 }
 #endif
 
+void rebuild_sched_flag(void)
+{
+	int cpu, old_flags;
+	struct sched_domain *sd;
+
+	for_each_possible_cpu(cpu) {
+		for_each_domain(cpu, sd) {
+			old_flags = sd->flags;
+			sd->flags &= ~SD_WAKE_AFFINE;
+			sd->flags |= (SD_BALANCE_WAKE | SD_BALANCE_NEWIDLE);
+			pr_info("cpu:%d sd:%px flags:%x->%x\n", cpu, sd, old_flags, sd->flags);
+		}
+	}
+}
+EXPORT_SYMBOL(rebuild_sched_flag);
+
 int aml_sched_init(void)
 {
 #if defined(CONFIG_ANDROID_VENDOR_HOOKS) && defined(CONFIG_FAIR_GROUP_SCHED)
 	register_trace_android_rvh_select_task_rq_rt(aml_select_rt_nice, NULL);
 	register_trace_android_rvh_check_preempt_wakeup(aml_check_preempt_wakeup, NULL);
 	register_trace_android_rvh_replace_next_task_fair(aml_pick_next_task, NULL);
-	register_trace_android_rvh_place_entity(aml_place_entity, NULL);
 	register_trace_android_rvh_check_preempt_tick(aml_check_preempt_tick, NULL);
 #endif
 
 #ifdef CONFIG_ANDROID_VENDOR_HOOKS
+	register_trace_android_rvh_place_entity(aml_place_entity, NULL);
 	register_trace_sched_switch(sched_switch_hook, NULL);
 	register_trace_android_rvh_enqueue_task(enqueue_task_hook, NULL);
 	register_trace_android_rvh_tick_entry(tick_entry_hook, NULL);
 	register_trace_android_vh_sched_show_task(sched_show_task_hook, NULL);
 #endif
+	rebuild_sched_flag();
 
 	return 0;
 }

@@ -100,6 +100,38 @@ static int host_dump_memory(const void *buf, unsigned int bytes, int col)
 	return 0;
 }
 
+static unsigned int host_mbox_transfer(struct host_module *host)
+{
+	u32 cfg0;
+	u32 addr;
+	int ret;
+
+	switch (host->start_pos) {
+	case PURE_DDR:
+		addr = host->phys_ddr_addr;
+		break;
+	case PURE_SRAM:
+		addr = host->phys_sram_addr;
+		break;
+	default:
+		return 0;
+	};
+
+	cfg0 = 0x1 |  1 << 1 | 1 << 2;
+	host->mbox_buf.id = host->hostid;
+	host->mbox_buf.addr = addr;
+	host->mbox_buf.cfg0 = cfg0;
+
+	ret = aml_mbox_transfer_data(host->init_mbox_chan, MBOX_CMD_INIT_DSP,
+			&host->mbox_buf, sizeof(host->mbox_buf), NULL, 0, MBOX_SYNC);
+	if (ret < 0) {
+		dev_err(host->dev, "mbox transfer data  error %d\n", ret);
+		return ret;
+	}
+
+	return ret;
+}
+
 static unsigned long host_psci_smc(struct host_module *host)
 {
 	struct arm_smccc_res res = {0};
@@ -127,6 +159,22 @@ static unsigned long host_psci_smc(struct host_module *host)
 	return res.a0;
 }
 
+static unsigned long host_dsp_smc(struct host_module *host, unsigned int smc_subid)
+{
+	struct arm_smccc_res res = {0};
+
+	switch (smc_subid) {
+	case SMC_SUBID_DSP_PWRCTRL:
+		arm_smccc_smc(SMC_HIFI_DSP, smc_subid, host->hostid,
+			host->pwrctrl_access_en, 0, 0, 0, 0, &res);
+		break;
+	default:
+		return 0;
+	}
+
+	return res.a0;
+}
+
 static int host_clk_enable(struct host_module *host)
 {
 	int ret;
@@ -150,7 +198,10 @@ static int host_clk_enable(struct host_module *host)
 static void host_bootup(struct host_module *host)
 {
 	host_clk_enable(host);
-	host_psci_smc(host);
+	if (!IS_ERR_OR_NULL(host->init_mbox_chan))
+		host_mbox_transfer(host);
+	else
+		host_psci_smc(host);
 }
 
 static int host_fw_copy_to_memory(const struct firmware *fw,
@@ -302,6 +353,11 @@ static int host_suspend(struct device *dev)
 		return 0;
 
 	if (pm_runtime_active(dev) && host->pm_support) {
+		if (host->pwrctrl_support) {
+			host->pwrctrl_access_en = 1;
+			host_dsp_smc(host, SMC_SUBID_DSP_PWRCTRL);
+		}
+
 		pr_debug("AP send suspend cmd to dsp...\n");
 		strncpy(message, "MBOX_CMD_HIFI4SUSPEND", sizeof(message));
 		aml_mbox_transfer_data(host->mbox_chan, MBOX_CMD_HIFI4SUSPEND,
@@ -327,6 +383,11 @@ static int host_resume(struct device *dev)
 		aml_mbox_transfer_data(host->mbox_chan, MBOX_CMD_HIFI4RESUME,
 				   message, sizeof(message),
 				   message, sizeof(message), MBOX_SYNC);
+
+		if (host->pwrctrl_support) {
+			host->pwrctrl_access_en = 0;
+			host_dsp_smc(host, SMC_SUBID_DSP_PWRCTRL);
+		}
 	}
 
 	return 0;
@@ -671,28 +732,16 @@ static int host_firmware_reserved_ddr(struct platform_device *pdev, struct reser
 	struct resource res = {0};
 
 	mem_node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
-	if (!mem_node) {
-		ret = -1;
+	if (!mem_node)
 		goto out;
-	}
 	ret = of_address_to_resource(mem_node, 0, &res);
-	of_node_put(mem_node);
 	if (ret) {
 		dev_err(&pdev->dev, "resource memory init failed\n");
 		goto out;
 	}
+
+	of_node_put(mem_node);
 	fwmem->base = res.start;
-
-	/*when dsp is not supported, the reserved memory is released*/
-	if (!IS_ERR_OR_NULL(host->dspsup_reg) && (readl(host->dspsup_reg) & DSP_OTP)) {
-		dev_err(&pdev->dev, "this device not support dsp\n");
-		ret = host_free_reserved_area(__va(res.start), __va(PAGE_ALIGN(res.start +
-							resource_size(&res))), 0, "free_reserved");
-		if (ret)
-			pr_debug("reserved memory  release succeed!\n");
-		host_platform_remove(pdev);
-	}
-
 out:
 	return ret;
 }
@@ -701,22 +750,27 @@ static int host_parse_devtree(struct platform_device *pdev, struct host_module *
 {
 	struct resource *resource;
 	const char *clk_name = NULL;
-	struct reserved_mem fwmem;
+	struct reserved_mem fwmem = {0};
 	struct device *dev = &pdev->dev;
 	struct mbox_chan *mbox_chan;
 	int ret;
 
+	host->dspsup_reg = devm_platform_ioremap_resource_byname(pdev, "dspsupport-reg");
+	if (!IS_ERR_OR_NULL(host->dspsup_reg) && (readl(host->dspsup_reg) & DSP_OTP)) {
+		dev_err(&pdev->dev, "this device not support dsp\n");
+		return -EINVAL;
+	}
+
 	host->base_reg = devm_platform_ioremap_resource_byname(pdev, "base-reg");
-	if (IS_ERR_OR_NULL(host->base_reg))
+	if (IS_ERR_OR_NULL(host->base_reg)) {
 		dev_err(dev, "Reg base register is error\n");
+		return -EINVAL;
+	}
 
 	host->health_reg = devm_platform_ioremap_resource_byname(pdev, "health-reg");
 	if (IS_ERR_OR_NULL(host->health_reg))
 		dev_err(dev, "Not support health monitor\n");
 
-	host->dspsup_reg = devm_platform_ioremap_resource_byname(pdev, "dspsupport-reg");
-	if (IS_ERR_OR_NULL(host->dspsup_reg))
-		dev_err(dev, "Not support dsp\n");
 	if (!host_firmware_reserved_ddr(pdev, &fwmem, host)) {
 		resource = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ddrfw-region");
 		if (!IS_ERR_OR_NULL(resource)) {
@@ -742,6 +796,7 @@ static int host_parse_devtree(struct platform_device *pdev, struct host_module *
 			host->phys_remap_addr = resource->start;
 		}
 	}
+
 	resource = platform_get_resource_byname(pdev, IORESOURCE_MEM, "sram-region");
 	if (!IS_ERR_OR_NULL(resource)) {
 		host->phys_sram_size = resource->end - resource->start + 1;
@@ -754,17 +809,21 @@ static int host_parse_devtree(struct platform_device *pdev, struct host_module *
 		host->clk = devm_clk_get(dev, clk_name);
 		if (IS_ERR_OR_NULL(host->clk)) {
 			dev_err(dev, "can't get clk\n");
+			goto err;
 		} else {
 			ret = of_property_read_u32(dev->of_node, "clkfreq-khz",
 						   &host->clk_rate);
 			if (ret) {
 				dev_err(&pdev->dev, "of get clkfreq-khz failed\n");
-				return -EINVAL;
+				goto err;
 			}
 		}
 	}
 
 	host->pm_support = of_property_read_bool(dev->of_node, "pm-support");
+	if (host->pm_support)
+		host->pwrctrl_support = of_property_read_bool(dev->of_node, "pwrctrl-support");
+
 	/* mbox channel request */
 	mbox_chan = aml_mbox_request_channel_byname(&pdev->dev, "init_dsp");
 	if (!IS_ERR_OR_NULL(mbox_chan))
@@ -780,10 +839,14 @@ static int host_parse_devtree(struct platform_device *pdev, struct host_module *
 	ret = of_property_read_u8(dev->of_node, "startup-position", &host->start_pos);
 	if (ret) {
 		dev_err(dev, "Not find startup-position\n");
-		return -EINVAL;
+		goto err;
 	}
 
 	return 0;
+
+err:
+	return host_free_reserved_area(__va(fwmem.base), __va(PAGE_ALIGN(fwmem.base +
+				host->phys_ddr_size)), 0, "free_reserved");
 }
 
 static int host_platform_probe(struct platform_device *pdev)

@@ -25,7 +25,12 @@
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
+#include <linux/timer.h>
+
 /* Amlogic Headers */
+#ifdef CONFIG_AMLOGIC_FREERTOS
+#include <linux/amlogic/freertos.h>
+#endif
 #include <linux/amlogic/media/ge2d/ge2d.h>
 #include <linux/amlogic/media/ge2d/ge2d_cmd.h>
 #ifdef CONFIG_AMLOGIC_VPU
@@ -97,6 +102,12 @@ static ssize_t dump_reg_cnt_show(struct class *cla,
 static ssize_t dump_reg_cnt_store(struct class *cla,
 				  struct class_attribute *attr,
 				  const char *buf, size_t count);
+static ssize_t onoff_mode_show(struct class *cla,
+			       struct class_attribute *attr,
+			       char *buf);
+static ssize_t onoff_mode_store(struct class *cla,
+				struct class_attribute *attr,
+				const char *buf, size_t count);
 
 static const struct file_operations ge2d_fops = {
 	.owner = THIS_MODULE,
@@ -113,6 +124,7 @@ static CLASS_ATTR_RO(free_queue_status);
 static CLASS_ATTR_RW(log_level);
 static CLASS_ATTR_RW(dump_reg_enable);
 static CLASS_ATTR_RW(dump_reg_cnt);
+static CLASS_ATTR_RW(onoff_mode);
 
 static struct attribute *ge2d_class_attrs[] = {
 	&class_attr_work_queue_status.attr,
@@ -120,6 +132,7 @@ static struct attribute *ge2d_class_attrs[] = {
 	&class_attr_log_level.attr,
 	&class_attr_dump_reg_enable.attr,
 	&class_attr_dump_reg_cnt.attr,
+	&class_attr_onoff_mode.attr,
 	NULL
 };
 ATTRIBUTE_GROUPS(ge2d_class);
@@ -128,6 +141,57 @@ static struct class ge2d_class = {
 	.name = GE2D_CLASS_NAME,
 	.class_groups = ge2d_class_groups,
 };
+
+#ifdef CONFIG_AMLOGIC_FREERTOS
+struct timer_data_s {
+	int irq;
+	struct clk *clk_gate;
+	struct timer_list timer;
+	struct work_struct work;
+};
+
+static struct timer_data_s timer_data;
+#define TIMER_MS (2000)
+#endif
+
+static int parse_para(const char *para, int para_num, int *result)
+{
+	char *token = NULL;
+	char *params, *params_base;
+	int *out = result;
+	int len = 0, count = 0;
+	int res = 0;
+	int ret = 0;
+
+	if (!para)
+		return 0;
+
+	params = kstrdup(para, GFP_KERNEL);
+	params_base = params;
+	token = params;
+	if (!token)
+		return 0;
+	len = strlen(token);
+	do {
+		token = strsep(&params, " ");
+		while (token && (isspace(*token) ||
+				 !isgraph(*token)) && len) {
+			token++;
+			len--;
+		}
+		if (len == 0 || !token)
+			break;
+		ret = kstrtoint(token, 0, &res);
+		if (ret < 0)
+			break;
+		len = strlen(token);
+		*out++ = res;
+		count++;
+	} while ((token) && (count < para_num) && (len > 0));
+
+	kfree(params_base);
+	return count;
+}
 
 static ssize_t dump_reg_enable_show(struct class *cla,
 				    struct class_attribute *attr,
@@ -188,6 +252,35 @@ static ssize_t log_level_store(struct class *cla,
 	ret = kstrtoint(buf, 0, &res);
 	ge2d_log_info("ge2d log_level: %d->%d\n", ge2d_log_level, res);
 	ge2d_log_level = res;
+
+	return count;
+}
+
+static ssize_t onoff_mode_show(struct class *cla,
+			       struct class_attribute *attr,
+			       char *buf)
+{
+	u32 onoff_mode, on_cnt, off_cnt;
+
+	ge2d_get_onoff_mode(&onoff_mode, &on_cnt, &off_cnt);
+
+	return snprintf(buf, 80, "onoff_mode:%u on_cnt:%u off_cnt:%u\n",
+			onoff_mode, on_cnt, off_cnt);
+}
+
+static ssize_t onoff_mode_store(struct class *cla,
+				struct class_attribute *attr,
+				const char *buf, size_t count)
+{
+	u32 parsed[3];
+
+	if (likely(parse_para(buf, 3, parsed) == 3)) {
+		ge2d_set_onoff_mode(parsed[0], parsed[1], parsed[2]);
+		ge2d_log_info("onoff_mode:%u on_cnt:%u off_cnt:%u\n",
+			      parsed[0], parsed[1], parsed[2]);
+	} else {
+		ge2d_log_err("usage: echo onoff_mode on_cnt off_cnt > onoff_mode\n");
+	}
 
 	return count;
 }
@@ -430,6 +523,7 @@ static long ge2d_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 	struct config_para_ex_ion_s *ge2d_config_ex_ion;
 	struct ge2d_dmabuf_req_s ge2d_req_buf;
 	struct ge2d_dmabuf_exp_s ge2d_exp_buf;
+	struct ge2d_onoff_mode_para_s ge2d_onoff_mode;
 	int ret = 0;
 #ifdef CONFIG_COMPAT
 	struct compat_config_para_s __user *uf;
@@ -458,6 +552,7 @@ static long ge2d_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 	memset(&ge2d_config, 0, sizeof(struct config_para_s));
 	memset(&ge2d_req_buf, 0, sizeof(struct ge2d_dmabuf_req_s));
 	memset(&ge2d_exp_buf, 0, sizeof(struct ge2d_dmabuf_exp_s));
+	memset(&ge2d_onoff_mode, 0, sizeof(struct ge2d_onoff_mode_para_s));
 #ifdef CONFIG_AMLOGIC_MEDIA_GE2D_MORE_SECURITY
 	switch (cmd) {
 	case GE2D_CONFIG:
@@ -847,6 +942,15 @@ static long ge2d_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 		pr_err("ioctl not support yed.\n");
 		ret = -EINVAL;
 		goto release1;
+	case GE2D_SET_ONOFF_MODE:
+		ret = copy_from_user(&ge2d_onoff_mode, argp,
+				     sizeof(struct ge2d_onoff_mode_para_s));
+		if (ret < 0) {
+			pr_err("Error user param, %s %d\n", __func__, __LINE__);
+			ret = -EINVAL;
+			goto release1;
+		}
+		break;
 	default:
 		ret = copy_from_user(&para, argp, sizeof(struct ge2d_para_s));
 		break;
@@ -1080,6 +1184,19 @@ static long ge2d_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 	case GE2D_DETACH_DMA_FD:
 		ge2d_ioctl_detach_dma_fd(context, data_type);
 		break;
+	case GE2D_SET_ONOFF_MODE:
+		ret = ge2d_set_onoff_mode(ge2d_onoff_mode.onoff_mode,
+					  ge2d_onoff_mode.on_cnt,
+					  ge2d_onoff_mode.off_cnt);
+		break;
+	case GE2D_GET_ONOFF_MODE:
+		ge2d_get_onoff_mode(&ge2d_onoff_mode.onoff_mode,
+					  &ge2d_onoff_mode.on_cnt,
+					  &ge2d_onoff_mode.off_cnt);
+
+		ret = copy_to_user(argp, &ge2d_onoff_mode,
+				   sizeof(struct ge2d_onoff_mode_para_s));
+		break;
 	/* enqueue one cmd */
 	case GE2D_FILLRECTANGLE_ENQUEUE:
 		ge2d_log_dbg("fill rect enqueue\t");
@@ -1244,6 +1361,7 @@ static struct ge2d_ctrl_s runtime_poweroff_ctrl[] = {
 struct ge2d_power_table_s runtime_poweron_table = {1, runtime_poweron_ctrl};
 struct ge2d_power_table_s runtime_poweroff_table = {1, runtime_poweroff_ctrl};
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
 static struct ge2d_device_data_s ge2d_gxl = {
 	.ge2d_rate = 400000000,
@@ -1433,8 +1551,10 @@ static struct ge2d_device_data_s ge2d_s4 = {
 	.src2_repeat = 1,
 };
 #endif
+#endif
 
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct ge2d_device_data_s ge2d_p1 = {
 	.ge2d_rate = 667000000,
 	.src2_alp = 1,
@@ -1468,6 +1588,7 @@ static struct ge2d_device_data_s ge2d_t5w = {
 	.dst_sign_mode = 1,
 	.blk_stride_mode = 1,
 };
+#endif
 
 static struct ge2d_device_data_s ge2d_c3 = {
 	.ge2d_rate = 667000000,
@@ -1488,6 +1609,7 @@ static struct ge2d_device_data_s ge2d_c3 = {
 	.cmd_queue_mode = 1,
 };
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct ge2d_device_data_s ge2d_t5m = {
 	.ge2d_rate = 667000000,
 	.src2_alp = 1,
@@ -1543,8 +1665,49 @@ static struct ge2d_device_data_s ge2d_t3x = {
 	.blk_stride_mode = 1,
 	.cmd_queue_mode = 1,
 };
+
+static struct ge2d_device_data_s ge2d_s7 = {
+	.ge2d_rate = 500000000,
+	.src2_alp = 1,
+	.canvas_status = 2,
+	.deep_color = 1,
+	.hang_flag = 1,
+	.fifo = 1,
+	.has_self_pwr = 1,
+	.poweron_table = &runtime_poweron_table,
+	.poweroff_table = &runtime_poweroff_table,
+	.chip_type = MESON_CPU_MAJOR_ID_S7,
+	.adv_matrix = 1,
+	.src2_repeat = 1,
+	.dst_repeat = 1,
+	.dst_sign_mode = 1,
+	.blk_stride_mode = 1,
+	.cmd_queue_mode = 0,
+};
+
+static struct ge2d_device_data_s ge2d_s7d = {
+	.ge2d_rate = 500000000,
+	.src2_alp = 1,
+	.canvas_status = 2,
+	.deep_color = 1,
+	.hang_flag = 1,
+	.fifo = 1,
+	.has_self_pwr = 1,
+	.poweron_table = &runtime_poweron_table,
+	.poweroff_table = &runtime_poweroff_table,
+	.chip_type = MESON_CPU_MAJOR_ID_S7D,
+	.adv_matrix = 1,
+	.src2_repeat = 1,
+	.dst_repeat = 1,
+	.dst_sign_mode = 1,
+	.blk_stride_mode = 1,
+	.cmd_queue_mode = 0,
+};
+
+#endif
 #endif
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 static struct ge2d_device_data_s ge2d_s1a = {
 	.ge2d_rate = 500000000,
 	.src2_alp = 1,
@@ -1558,10 +1721,15 @@ static struct ge2d_device_data_s ge2d_s1a = {
 	.chip_type = MESON_CPU_MAJOR_ID_S1A,
 	.adv_matrix = 1,
 	.src2_repeat = 1,
+	.dst_repeat = 1,
+	.dst_sign_mode = 1,
+	.blk_stride_mode = 1,
 	.cmd_queue_mode = 1,
 };
+#endif
 
 static const struct of_device_id ge2d_dt_match[] = {
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
 	{
 		.compatible = "amlogic, ge2d-gxl",
@@ -1624,7 +1792,9 @@ static const struct of_device_id ge2d_dt_match[] = {
 		.data = &ge2d_s4,
 	},
 #endif
+#endif
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 	{
 		.compatible = "amlogic, ge2d-p1",
 		.data = &ge2d_p1,
@@ -1633,10 +1803,12 @@ static const struct of_device_id ge2d_dt_match[] = {
 		.compatible = "amlogic, ge2d-t5w",
 		.data = &ge2d_t5w,
 	},
+#endif
 	{
 		.compatible = "amlogic, ge2d-c3",
 		.data = &ge2d_c3,
 	},
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 	{
 		.compatible = "amlogic, ge2d-t5m",
 		.data = &ge2d_t5m,
@@ -1649,11 +1821,22 @@ static const struct of_device_id ge2d_dt_match[] = {
 		.compatible = "amlogic, ge2d-t3x",
 		.data = &ge2d_t3x,
 	},
+	{
+		.compatible = "amlogic, ge2d-s7",
+		.data = &ge2d_s7,
+	},
+	{
+		.compatible = "amlogic, ge2d-s7d",
+		.data = &ge2d_s7d,
+	},
 #endif
+#endif
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 	{
 		.compatible = "amlogic, ge2d-s1a",
 		.data = &ge2d_s1a,
 	},
+#endif
 	{},
 };
 
@@ -1699,6 +1882,36 @@ static void release_cmd_queue_buffer(struct device *dev, unsigned int cmd_cnt)
 	dma_free_coherent(dev, cmd_cnt * ONE_CMD_BUF_SIZE,
 			  cmd_queue_vaddr, cmd_queue_paddr);
 }
+
+#ifdef CONFIG_AMLOGIC_FREERTOS
+static void work_func(struct work_struct *w)
+{
+	struct timer_data_s *timer_data =
+		container_of(w, struct timer_data_s, work);
+
+	ge2d_log_dbg("ge2d %s enter\n", __func__);
+	clk_disable_unprepare(timer_data->clk_gate);
+	if (ge2d_meson_dev.has_self_pwr)
+		ge2d_runtime_pwr(0);
+
+	ge2d_irq_init(timer_data->irq);
+}
+
+static void timer_expire(struct timer_list *t)
+{
+	struct timer_data_s *timer_data = from_timer(timer_data, t, timer);
+
+	ge2d_log_dbg("ge2d %s enter\n", __func__);
+	if (freertos_is_finished()) {
+		del_timer(&timer_data->timer);
+		/* might sleep, use work to process */
+		schedule_work(&timer_data->work);
+	} else {
+		mod_timer(&timer_data->timer,
+			  jiffies + msecs_to_jiffies(TIMER_MS));
+	}
+}
+#endif
 
 static int ge2d_probe(struct platform_device *pdev)
 {
@@ -1850,14 +2063,36 @@ static int ge2d_probe(struct platform_device *pdev)
 
 	ret = ge2d_wq_init(pdev, irq, clk_gate);
 
-	clk_disable_unprepare(clk_gate);
-
 	if (ge2d_meson_dev.has_self_pwr) {
 		pm_runtime_set_autosuspend_delay(&pdev->dev,
 						 GE2D_AUTO_POWER_OFF_DELAY);
 		pm_runtime_use_autosuspend(&pdev->dev);
 		pm_runtime_enable(&pdev->dev);
 	}
+
+#ifdef CONFIG_AMLOGIC_FREERTOS
+	/* To avoid interfering with RTOS clock/power/interrupt resources,
+	 * turn on and keep power/clk first.
+	 * Poll the status of rtos,
+	 * then turn off power/clk and register interrupt.
+	 */
+	if (freertos_is_run() && !freertos_is_finished()) {
+		INIT_WORK(&timer_data.work, work_func);
+		timer_setup(&timer_data.timer, timer_expire, 0);
+		timer_data.timer.expires = jiffies + msecs_to_jiffies(TIMER_MS);
+		timer_data.clk_gate = clk_gate;
+		timer_data.irq = irq;
+		add_timer(&timer_data.timer);
+
+		if (ge2d_meson_dev.has_self_pwr)
+			ge2d_runtime_pwr(1);
+	} else {
+		ge2d_irq_init(irq);
+		clk_disable_unprepare(clk_gate);
+	}
+#else
+	clk_disable_unprepare(clk_gate);
+#endif
 
 	/* 8g memory support */
 	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(64);

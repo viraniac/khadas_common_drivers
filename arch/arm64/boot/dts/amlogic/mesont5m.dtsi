@@ -202,6 +202,15 @@
 		method = "smc";
 	};
 
+	provisionkey {
+		compatible = "amlogic, provisionkey";
+		status = "okay";
+		key-permit-default = "write";
+		//new key not need add dts if started with KEY_PROVISION_
+		KEY_PROVISION_XXX { };
+		//test_my_added_keyname { };
+	};//End provisionkey
+
 	meson_suspend:pm {
 		compatible = "amlogic, pm";
 		status = "okay";
@@ -269,6 +278,7 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-t5m";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg = <0 0xfe036000 0 0x400
 		       0 0xfe034000 0 0x400>;
 		reg_base = <0xfe036000>;
@@ -337,6 +347,8 @@
 		mbox-nums = <T5M_MBOX_NUMS>;
 		mboxids = <T5M_MBOX_AO2REE>,
 			  <T5M_MBOX_REE2AO>;
+		aocpu_sts_mboxid = <T5M_MBOX_AO2TEE>;
+		ree2aocpu_mboxid = <T5M_MBOX_REE2AO>;
 		#mbox-cells = <1>;
 		mbox-wr-same;
 	};
@@ -777,6 +789,7 @@
 				clock-names = "clk_uart";
 				xtal_tick_en = <2>;
 				fifosize = < 64 >;
+				support-sysrq = <1>;
 			};
 
 			periphs_pinctrl: pinctrl@4000 {
@@ -975,7 +988,7 @@
 			dcon_led: dcon_led@0x74000 {
 				compatible = "amlogic,led_unipolar_ctrl";
 				reg = <0x0 0x74000 0x0 0x88>;
-				interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 30 IRQ_TYPE_EDGE_RISING>;
 				status = "disabled";
 			};
 
@@ -992,12 +1005,10 @@
 
 			irblaster: meson-irblaster@fe08410c {
 				compatible = "amlogic, meson_irblaster";
-				status = "okay";
+				status = "disabled";
 				reg = <0x0 0x8410c 0x0 0x10>;
 				#irblaster-cells = <2>;
 				interrupts = <GIC_SPI 23 IRQ_TYPE_EDGE_RISING>;
-				//pinctrl-names = "default";
-				//pinctrl-0 = <&irblaster_pins2>;
 			};
 
 			eth_phy: mdio-multiplexer@28000 {
@@ -1033,12 +1044,6 @@
 						max-speed = <100>;
 					};
 				};
-			};
-
-			cpu_version {
-				status = "okay";
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				reg=<0x0 0x10220 0x0 0x140>;
 			};
 
 			hwspinlock_regs: syscon@e2c0 {
@@ -1224,6 +1229,10 @@
 			};
 			pcpd_monitor_a: pcpd_monitor@0 {
 				compatible = "amlogic, pcpda_monitor";
+				/*regbase:0xFE330000 + 0x3b0 << 2*/
+				/*size 0x28 byte*/
+				reg =<0x0 0xec0 0x0 0x28>;
+				reg-names = "pcpd_reg";
 				interrupts = <GIC_SPI 149
 					IRQ_TYPE_EDGE_RISING>;
 				interrupt-names = "irq_pcpd";
@@ -1231,6 +1240,8 @@
 			};
 			pcpd_monitor_b: pcpd_monitor@1 {
 				compatible = "amlogic, pcpdb_monitor";
+				reg =<0x0 0xf00 0x0 0x28>;
+				reg-names = "pcpd_reg";
 				interrupts = <GIC_SPI 148
 					IRQ_TYPE_EDGE_RISING>;
 				interrupt-names = "irq_pcpd";
@@ -1239,6 +1250,14 @@
 
 			pinctrl_audio: pinctrl {
 				compatible = "amlogic, audio-pinctrl";
+			};
+
+			extn:extn {
+				compatible = "amlogic, t5m-snd-extn";
+				#sound-dai-cells = <0>;
+				interrupts = <GIC_SPI 42 IRQ_TYPE_EDGE_RISING>;
+				interrupt-names = "irq_frhdmirx";
+				status = "okay";
 			};
 		};/* end of audiobus*/
 
@@ -1260,9 +1279,9 @@
 					"vpu_clk0",
 					"vpu_clk1",
 					"vpu_clk";
-			clk_level = <7>;
-			/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-			/* 4: 333.3M    5: 400.0M    6: 500.0M    7: 666.7M */
+			clk_level = <8>;
+			/* 0: 24.0M  1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+			/* 5: 333.3M    6: 400.0M    7: 500.0M    8: 666.7M */
 		};
 
 		/*if you want to use vdin just modify status to "ok"*/
@@ -1402,7 +1421,7 @@
 			#size-cells = <2>;
 			ranges = <0x0 0x0 0x0 0xfe333000 0x0 0x1000>;
 			earc: earc@0 {
-				compatible = "amlogic, t3-snd-earc";
+				compatible = "amlogic, t5m-snd-earc";
 				#sound-dai-cells = <0>;
 
 				status = "disabled";
@@ -1582,6 +1601,12 @@
 		status = "okay";
 		reg = <0x0 0xfe008000 0x0 0x400    /* ana reg */
 			0x0 0xfe000000 0x0 0x4a0>; /* clk reg */
+	};
+
+	di_process {
+		compatible = "amlogic, di_process";
+		dev_name = "di_process";
+		status = "okay";
 	};
 
 	vout_mux: vout_mux {
@@ -2337,6 +2362,7 @@
 		compatible = "amlogic,aml_mkl";
 		reg = <0x0 0xfe440200 0x0 0xf0>;
 		kl_type = <1>;
+		kl_vid_type = <1>;
 		kl_offset = <0x80 0x88 0x8c 0x90>;
 		status = "okay";
 	};
@@ -2555,21 +2581,35 @@
 
 	irblaster_pins1:irblaster_pin1 {
 		mux {
-			groups = "remote_out_d1";
+			groups = "remote_out_b";
 			function = "remote_out";
 		};
 	};
 
 	irblaster_pins2:irblaster_pin2 {
 		mux {
-			groups = "remote_out_d9";
+			groups = "remote_out_d1";
 			function = "remote_out";
 		};
 	};
 
 	irblaster_pins3:irblaster_pin3 {
 		mux {
-			groups = "remote_out_b";
+			groups = "remote_out_d9";
+			function = "remote_out";
+		};
+	};
+
+	irblaster_pins4:irblaster_pin4 {
+		mux {
+			groups = "remote_out_p6";
+			function = "remote_out";
+		};
+	};
+
+	irblaster_pins5:irblaster_pin5 {
+		mux {
+			groups = "remote_out_p9";
 			function = "remote_out";
 		};
 	};
@@ -3410,7 +3450,7 @@
 				 //"spi_ss0_h8",used as GPIOH_8
 				 "spi0_clk_h11";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3418,7 +3458,7 @@
 		mux {
 			groups = "spi0_ss0_h8";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3429,7 +3469,7 @@
 				 //"spi0_ss0_m",used as GPIOM_22
 				 "spi0_clk_m";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3440,7 +3480,7 @@
 				 //"spi_ss0_z3",used as GPIOZ_3
 				 "spi0_clk_z";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3451,7 +3491,7 @@
 				 //"spi1_ss0_h",used as GPIOH_22
 				 "spi1_clk_h";
 			function = "spi1";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 			bias-pull-up;
 		};
 	};
@@ -3460,7 +3500,7 @@
 		mux {
 			groups = "spi1_ss0_h";
 			function = "spi1";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 			bias-pull-up;
 		};
 	};
@@ -3472,7 +3512,7 @@
 				 //"spi2_ss0_c",used as GPIOC_3
 				 "spi2_clk_c";
 			function = "spi2";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3483,7 +3523,7 @@
 					//"spi2_ss0_m",used as GPIOM_3
 					"spi2_clk_m";
 			function = "spi2";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3494,7 +3534,7 @@
 						//"spi2_ss0_p",used as GPIOP_3
 						"spi2_clk_p";
 			function = "spi2";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 

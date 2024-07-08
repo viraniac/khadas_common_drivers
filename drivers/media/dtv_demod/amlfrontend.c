@@ -80,13 +80,39 @@
 #include <linux/amlogic/media/vout/vdac_dev.h>
 #include <linux/amlogic/aml_dtvdemod.h>
 
-MODULE_PARM_DESC(dvbc_new_driver, "\n\t\t use dvbc new driver to work");
+#ifdef AML_DEMOD_SUPPORT_DTMB
+unsigned char dtmb_new_driver = 1;
+MODULE_PARM_DESC(dtmb_new_driver, "");
+module_param(dtmb_new_driver, byte, 0644);
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_DVBC
+MODULE_PARM_DESC(dvbc_new_driver, "");
 static unsigned char dvbc_new_driver;
 module_param(dvbc_new_driver, byte, 0644);
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_DVBT
+static unsigned char dvbtx_auto;
+MODULE_PARM_DESC(dvbtx_auto, "");
+module_param(dvbtx_auto, byte, 0644);
+
+MODULE_PARM_DESC(dvbt2_common_plp_skip, "");
+static bool dvbt2_common_plp_skip = true;
+module_param(dvbt2_common_plp_skip, bool, 0644);
+
+MODULE_PARM_DESC(dvbt2_mplp_retune, "");
+bool dvbt2_mplp_retune;
+module_param(dvbt2_mplp_retune, bool, 0644);
+#endif
 
 int aml_demod_debug = DBG_INFO;
 module_param(aml_demod_debug, int, 0644);
-MODULE_PARM_DESC(aml_demod_debug, "set debug level (info=bit1, reg=bit2, atsc=bit4,");
+MODULE_PARM_DESC(aml_demod_debug, "");
+
+static unsigned int cma_mem_size;
+module_param(cma_mem_size, uint, 0644);
+MODULE_PARM_DESC(cma_mem_size, "");
 
 /*-----------------------------------*/
 static struct amldtvdemod_device_s *dtvdd_devp;
@@ -96,10 +122,6 @@ static DEFINE_MUTEX(amldtvdemod_device_mutex);
 #ifdef AML_DEMOD_SUPPORT_DVBC
 static int cci_thread;
 #endif
-
-static int dvb_tuner_delay = 100;
-module_param(dvb_tuner_delay, int, 0644);
-MODULE_PARM_DESC(dvb_atsc_count, "dvb_tuner_delay");
 
 #define END_SYS_DELIVERY	19
 const char *name_fe_delivery_system[] = {
@@ -143,7 +165,7 @@ struct amldtvdemod_device_s *dtvdemod_get_dev(void)
 int convert_snr(int in_snr)
 {
 	int out_snr;
-	static int calce_snr[40] = {
+	int calce_snr[40] = {
 		5, 6, 8, 10, 13,
 		16, 20, 25, 32, 40,
 		50, 63, 80, 100, 126,
@@ -151,62 +173,14 @@ int convert_snr(int in_snr)
 		504, 634, 798, 1005, 1265,
 		1592, 2005, 2524, 3177, 4000,
 		5036, 6340, 7981, 10048, 12649,
-		15924, 20047, 25238, 31773, 40000};
+		15924, 20047, 25238, 31773, 40000 };
+
 	for (out_snr = 1 ; out_snr < 40; out_snr++)
 		if (in_snr <= calce_snr[out_snr])
 			break;
 
 	return out_snr;
 }
-
-//static void dtvdemod_do_8vsb_rst(void)
-//{
-	//union atsc_cntl_reg_0x20 val;
-
-	//val.bits = atsc_read_reg_v4(ATSC_CNTR_REG_0X20);
-	//val.b.cpu_rst = 1;
-	//atsc_write_reg_v4(ATSC_CNTR_REG_0X20, val.bits);
-	//val.b.cpu_rst = 0;
-	//atsc_write_reg_v4(ATSC_CNTR_REG_0X20, val.bits);
-//}
-
-//static int amdemod_check_8vsb_rst(struct aml_dtvdemod *demod)
-//{
-	//int ret = 0;
-
-	/* for tl1/tm2, first time of pwr on,
-	 * reset after signal locked
-	 * for lock event, 0x79 is safe for reset
-	 */
-	//if (demod->atsc_rst_done == 0) {
-		//if (demod->atsc_rst_needed) {
-			//dtvdemod_do_8vsb_rst();
-			//demod->atsc_rst_done = 1;
-			//ret = 0;
-			//PR_ATSC("reset done\n");
-		//}
-
-		//if (atsc_read_reg_v4(ATSC_CNTR_REG_0X2E) >= 0x79) {
-			//demod->atsc_rst_needed = 1;
-			//ret = 0;
-			//PR_ATSC("need reset\n");
-		//} else {
-			//demod->atsc_rst_wait_cnt++;
-			//PR_ATSC("wait cnt: %d\n",
-					//demod->atsc_rst_wait_cnt);
-		//}
-
-		//if (demod->atsc_rst_wait_cnt >= 3 &&
-		    //(atsc_read_reg_v4(ATSC_CNTR_REG_0X2E) >= 0x76)) {
-			//demod->atsc_rst_done = 1;
-			//ret = 1;
-		//}
-	//} else if (atsc_read_reg_v4(ATSC_CNTR_REG_0X2E) >= 0x76) {
-		//ret = 1;
-	//}
-
-	//return ret;
-//}
 
 unsigned int demod_is_t5d_cpu(struct amldtvdemod_device_s *devp)
 {
@@ -239,12 +213,12 @@ bool dtvdemod_cma_alloc(struct amldtvdemod_device_s *devp,
 	int flags = CODEC_MM_FLAGS_CMA_FIRST | CODEC_MM_FLAGS_CMA_CLEAR |
 			CODEC_MM_FLAGS_DMA;
 
-	if (!mem_size) {
-		PR_INFO("%s: mem_size == 0.\n", __func__);
-		return false;
-	}
-
 	if (devp->cma_flag) {
+		if (!mem_size) {
+			PR_INFO("mem size 0\n");
+			return false;
+		}
+
 		/*	dma_alloc_from_contiguous*/
 		devp->venc_pages = dma_alloc_from_contiguous(&devp->this_pdev->dev,
 				mem_size >> PAGE_SHIFT, 0, 0);
@@ -252,31 +226,37 @@ bool dtvdemod_cma_alloc(struct amldtvdemod_device_s *devp,
 			devp->mem_start = page_to_phys(devp->venc_pages);
 			devp->mem_size = mem_size;
 			devp->flg_cma_allc = true;
-			PR_INFO("%s: cma mem_start = 0x%x, mem_size = 0x%x.\n",
-					__func__, devp->mem_start, devp->mem_size);
+			PR_INFO("cma mem start 0x%x, size 0x%x\n",
+					devp->mem_start, devp->mem_size);
 		} else {
-			PR_INFO("%s: cma alloc fail.\n", __func__);
+			PR_INFO("cma mem alloc fail\n");
 			ret = false;
 		}
 	} else {
-		if (delsys == SYS_ISDBT || delsys == SYS_DTMB) {
-			if (mem_size > 16 * SZ_1M)
-				mem_size = 16 * SZ_1M;
+		if (cma_mem_size && (cma_mem_size * SZ_1M) > devp->cma_mem_size) {
+			mem_size = cma_mem_size * SZ_1M;
+			PR_INFO("use user-defined size %dM\n", cma_mem_size);
 		} else {
-			if (delsys != SYS_DVBT2 && mem_size > 8 * SZ_1M)
+			if (delsys == SYS_ISDBT || delsys == SYS_DTMB)
 				mem_size = 8 * SZ_1M;
+			else if (delsys == SYS_DVBT2)
+				mem_size = 16 * SZ_1M;
+			else
+				mem_size = 0;
 		}
 
-		devp->mem_start = codec_mm_alloc_for_dma(DEMOD_DEVICE_NAME,
-			mem_size / PAGE_SIZE, 0, flags);
-		devp->mem_size = mem_size;
-		if (devp->mem_start == 0) {
-			PR_INFO("%s: codec_mm fail.\n", __func__);
-			ret = false;
-		} else {
-			devp->flg_cma_allc = true;
-			PR_INFO("%s: codec_mm mem_start = 0x%x, mem_size = 0x%x.\n",
-					__func__, devp->mem_start, devp->mem_size);
+		if (mem_size) {
+			devp->mem_start = codec_mm_alloc_for_dma(DEMOD_DEVICE_NAME,
+				mem_size / PAGE_SIZE, 0, flags);
+			devp->mem_size = mem_size;
+			if (devp->mem_start == 0) {
+				PR_INFO("codec mem fail\n");
+				ret = false;
+			} else {
+				devp->flg_cma_allc = true;
+				PR_INFO("codec mem start 0x%x, size 0x%x\n",
+						devp->mem_start, devp->mem_size);
+			}
 		}
 	}
 #endif
@@ -301,7 +281,7 @@ void dtvdemod_cma_release(struct amldtvdemod_device_s *devp)
 	devp->mem_size = 0;
 #endif
 
-	PR_DBG("demod cma release: ret %d.\n", ret);
+	PR_DBG("cma release %d\n", ret);
 }
 
 static void set_agc_pinmux(struct aml_dtvdemod *demod,
@@ -339,7 +319,7 @@ static void set_agc_pinmux(struct aml_dtvdemod *demod,
 		if (agc_name && IS_ERR_OR_NULL(demod->pin_agc)) {
 			pin = devm_pinctrl_get_select(devp->dev, agc_name);
 			if (IS_ERR_OR_NULL(pin))
-				PR_ERR("get pins fail: %s\n", agc_name);
+				PR_ERR("get pins fail %s\n", agc_name);
 			else
 				demod->pin_agc = pin;
 		}
@@ -347,7 +327,7 @@ static void set_agc_pinmux(struct aml_dtvdemod *demod,
 		if (diseqc_out_name && IS_ERR_OR_NULL(demod->pin_diseqc_out)) {
 			pin = devm_pinctrl_get_select(devp->dev, diseqc_out_name);
 			if (IS_ERR_OR_NULL(pin))
-				PR_ERR("get pins fail: %s\n", diseqc_out_name);
+				PR_ERR("get pins fail %s\n", diseqc_out_name);
 			else
 				demod->pin_diseqc_out = pin;
 		}
@@ -355,7 +335,7 @@ static void set_agc_pinmux(struct aml_dtvdemod *demod,
 		if (diseqc_in_name && IS_ERR_OR_NULL(demod->pin_diseqc_in)) {
 			pin = devm_pinctrl_get_select(devp->dev, diseqc_in_name);
 			if (IS_ERR_OR_NULL(pin))
-				PR_ERR("get pins fail: %s\n", diseqc_in_name);
+				PR_ERR("get pins fail %s\n", diseqc_in_name);
 			else
 				demod->pin_diseqc_in = pin;
 		}
@@ -380,7 +360,7 @@ static void set_agc_pinmux(struct aml_dtvdemod *demod,
 		}
 	}
 
-	PR_INFO("%s '%s' %d done.\n", __func__, agc_name, on);
+	PR_INFO("agc '%s' %d\n", agc_name, on);
 }
 
 static void vdac_clk_gate_ctrl(int status)
@@ -389,24 +369,22 @@ static void vdac_clk_gate_ctrl(int status)
 
 	if (status) {
 		if (devp->clk_gate_state) {
-			PR_INFO("clk_gate is already on\n");
 			return;
 		}
 
 		if (IS_ERR_OR_NULL(devp->vdac_clk_gate))
-			PR_INFO("%s: no vdac_clk_gate\n", __func__);
+			PR_INFO("no clk_gate\n");
 		else
 			clk_prepare_enable(devp->vdac_clk_gate);
 
 		devp->clk_gate_state = 1;
 	} else {
 		if (devp->clk_gate_state == 0) {
-			PR_INFO("clk_gate is already off\n");
 			return;
 		}
 
 		if (IS_ERR_OR_NULL(devp->vdac_clk_gate))
-			PR_INFO("%s: no vdac_clk_gate\n", __func__);
+			PR_INFO("no clk_gate\n");
 		else
 			clk_disable_unprepare(devp->vdac_clk_gate);
 
@@ -440,11 +418,6 @@ static void demod_32k_ctrl(unsigned int onoff)
 {
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
 
-	if (!unlikely(devp)) {
-		PR_ERR("%s, devp is NULL\n", __func__);
-		return;
-	}
-
 	if (devp->data->hw_ver != DTVDEMOD_HW_T3 &&
 		devp->data->hw_ver != DTVDEMOD_HW_T5M &&
 		devp->data->hw_ver != DTVDEMOD_HW_T5W &&
@@ -453,12 +426,11 @@ static void demod_32k_ctrl(unsigned int onoff)
 
 	if (onoff) {
 		if (devp->clk_demod_32k_state) {
-			PR_INFO("demod_32k is already on\n");
 			return;
 		}
 
 		if (IS_ERR_OR_NULL(devp->demod_32k)) {
-			PR_INFO("%s: no clk demod_32k\n", __func__);
+			PR_INFO("no demod_32k\n");
 		} else {
 			clk_set_rate(devp->demod_32k, 32768);
 			clk_prepare_enable(devp->demod_32k);
@@ -467,12 +439,11 @@ static void demod_32k_ctrl(unsigned int onoff)
 		devp->clk_demod_32k_state = 1;
 	} else {
 		if (devp->clk_demod_32k_state == 0) {
-			PR_INFO("demod_32k is already off\n");
 			return;
 		}
 
 		if (IS_ERR_OR_NULL(devp->demod_32k))
-			PR_INFO("%s: no clk demod_32k\n", __func__);
+			PR_INFO("no demod_32k\n");
 		else
 			clk_disable_unprepare(devp->demod_32k);
 
@@ -511,7 +482,7 @@ static bool enter_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsy
 			dvbc_create_cci_task(demod);
 #endif
 
-	if (!devp->flg_cma_allc && devp->cma_mem_size) {
+	if (!devp->flg_cma_allc && (devp->cma_mem_size || cma_mem_size)) {
 		if (!dtvdemod_cma_alloc(devp, delsys)) {
 			ret = -ENOMEM;
 			return ret;
@@ -543,7 +514,6 @@ static bool enter_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsy
 		timer_set_max(demod, D_TIMER_DETECT, demod->timeout_dvbc_ms);
 		/* reset is 4s */
 		timer_set_max(demod, D_TIMER_SET, 4000);
-		PR_DVBC("timeout is %dms\n", demod->timeout_dvbc_ms);
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_ATSC
@@ -555,8 +525,6 @@ static bool enter_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsy
 
 		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TL1))
 			timer_set_max(demod, D_TIMER_DETECT, demod->timeout_atsc_ms);
-
-		PR_ATSC("timeout is %dms\n", demod->timeout_atsc_ms);
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_J83B
@@ -567,8 +535,6 @@ static bool enter_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsy
 
 		if (cpu_after_eq(MESON_CPU_MAJOR_ID_TL1))
 			timer_set_max(demod, D_TIMER_DETECT, demod->timeout_atsc_ms);
-
-		PR_ATSC("timeout is %dms\n", demod->timeout_atsc_ms);
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_DVBT
@@ -578,27 +544,25 @@ static bool enter_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsy
 			break;
 
 		timer_set_max(demod, D_TIMER_DETECT, demod->timeout_dvbt_ms);
-		PR_DVBT("timeout is %dms\n", demod->timeout_dvbt_ms);
 		break;
 
 	case SYS_DVBT2:
 		if (devp->data->hw_ver == DTVDEMOD_HW_T5D) {
 			devp->dmc_saved = dtvdemod_dmc_reg_read(0x274);
-			PR_INFO("dmc val 0x%x\n", devp->dmc_saved);
+			PR_INFO("dmc 0x%x\n", devp->dmc_saved);
 			dtvdemod_dmc_reg_write(0x274, 0x18100000);
 		}
 
 		ret = dtvdemod_dvbt2_init(demod);
 		if (ret) {
 			if (devp->data->hw_ver == DTVDEMOD_HW_T5D) {
-				PR_INFO("resume dmc val 0x%x\n", devp->dmc_saved);
+				PR_INFO("resume dmc 0x%x\n", devp->dmc_saved);
 				dtvdemod_dmc_reg_write(0x274, devp->dmc_saved);
 			}
 			break;
 		}
 
 		timer_set_max(demod, D_TIMER_DETECT, demod->timeout_dvbt_ms);
-		PR_DVBT("timeout is %dms\n", demod->timeout_dvbt_ms);
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_ISDBT
@@ -611,7 +575,7 @@ static bool enter_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsy
 		timer_set_max(demod, D_TIMER_DETECT, 2000);
 		/*reset is 4s*/
 		timer_set_max(demod, D_TIMER_SET, 4000);
-		PR_DBG("[im]memstart is %x\n", devp->mem_start);
+
 		dvbt_isdbt_wr_reg((0x10 << 2), devp->mem_start);
 		break;
 #endif
@@ -625,7 +589,6 @@ static bool enter_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsy
 		aml_diseqc_isr_en(&devp->diseqc, true);
 		dvbs2_diseqc_init();
 		timer_set_max(demod, D_TIMER_DETECT, demod->timeout_dvbs_ms);
-		PR_DVBS("timeout is %dms\n", demod->timeout_dvbs_ms);
 		break;
 #endif
 	default:
@@ -712,8 +675,10 @@ static int leave_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsys
 
 	case SYS_ISDBT:
 	case SYS_DVBT2:
+		demod->plp_id = 0xffff;
+
 		if (devp->data->hw_ver == DTVDEMOD_HW_T5D && delsys == SYS_DVBT2) {
-			PR_INFO("resume dmc val 0x%x\n", devp->dmc_saved);
+			PR_INFO("resume dmc 0x%x\n", devp->dmc_saved);
 			dtvdemod_dmc_reg_write(0x274, devp->dmc_saved);
 		}
 
@@ -747,16 +712,17 @@ static int leave_mode(struct aml_dtvdemod *demod, enum fe_delivery_system delsys
 		demod_32k_ctrl(0);
 		set_agc_pinmux(demod, delsys, 0);
 
-		if (devp->flg_cma_allc && devp->cma_mem_size) {
+		if (devp->flg_cma_allc && (devp->cma_mem_size || cma_mem_size)) {
 			dtvdemod_cma_release(devp);
 			devp->flg_cma_allc = false;
 		}
 
-		PR_INFO("%s: really_leave.\n", __func__);
+		PR_INFO("%s:really_leave\n", __func__);
 	}
 
 	demod->inited = false;
 	demod->suspended = true;
+	demod->freq = 0;
 
 	return 0;
 }
@@ -782,6 +748,7 @@ static void delsys_exit(struct aml_dtvdemod *demod, unsigned int ldelsys,
 #endif
 	} else if ((is_meson_t5w_cpu() || is_meson_t3_cpu() ||
 		demod_is_t5d_cpu(devp)) && ldelsys == SYS_DVBT2) {
+#ifdef AML_DEMOD_SUPPORT_DVBT
 		demod_top_write_reg(DEMOD_TOP_CFG_REG_4, 0x182);
 		dvbt_t2_wr_byte_bits(0x09, 1, 4, 1);
 		demod_top_write_reg(DEMOD_TOP_CFG_REG_4, 0x97);
@@ -796,8 +763,10 @@ static void delsys_exit(struct aml_dtvdemod *demod, unsigned int ldelsys,
 
 		if (is_meson_t5w_cpu())
 			t5w_write_ambus_reg(0x3c4e, 0x1, 23, 1);
+#endif
 	} else if ((is_meson_t5w_cpu() || is_meson_t3_cpu() ||
 		demod_is_t5d_cpu(devp)) && ldelsys == SYS_ISDBT) {
+#ifdef AML_DEMOD_SUPPORT_ISDBT
 		dvbt_isdbt_wr_reg((0x2 << 2), 0x111021b);
 		dvbt_isdbt_wr_reg((0x2 << 2), 0x011021b);
 		dvbt_isdbt_wr_reg((0x2 << 2), 0x011001b);
@@ -807,6 +776,7 @@ static void delsys_exit(struct aml_dtvdemod *demod, unsigned int ldelsys,
 
 		if (is_meson_t5w_cpu())
 			t5w_write_ambus_reg(0x3c4e, 0x1, 23, 1);
+#endif
 	}
 #endif
 
@@ -830,16 +800,16 @@ static void delsys_exit(struct aml_dtvdemod *demod, unsigned int ldelsys,
 		//0x38e0[31], when read abus_en_dly = 0,
 		//then continue the following flow of closing demod.
 		abus_en_dly = front_read_reg(DEMOD_FRONT_REG38) & 0x80000000;
-		PR_INFO("%s: 0x38e0 %#x, abus_en_dly %d\n", __func__,
+		PR_INFO("0x38e0 %#x, abus_en_dly %d\n",
 					front_read_reg(DEMOD_FRONT_REG38), abus_en_dly);
 		while (abus_en_dly && retry_count--) {
 			msleep(20);
 			abus_en_dly = front_read_reg(DEMOD_FRONT_REG38) & 0x80000000;
-			PR_INFO("%s: retry_count %d 0x38e0 %#x\n", __func__, retry_count,
+			PR_INFO("retry_count %d 0x38e0 %#x\n", retry_count,
 					front_read_reg(DEMOD_FRONT_REG38));
 		}
 		if (abus_en_dly)
-			PR_ERR("%s: abus_en_dly ERROR ERROR!\n", __func__);
+			PR_ERR("abus_en_dly ERROR ERROR\n");
 
 		if (ldelsys == SYS_DVBT2) {
 			//f040 = 0x182: host only can access top regs and t2 regs
@@ -1199,8 +1169,6 @@ static const struct of_device_id meson_ddemod_match[] = {
 	{}
 };
 
-
-
 /*
  * dds_init_reg_map - physical addr map
  *
@@ -1222,7 +1190,7 @@ static int dds_init_reg_map(struct platform_device *pdev)
 	for (i = 0; i < ES_MAP_ADDR_NUM; i++) {
 		res = platform_get_resource(pdev, IORESOURCE_MEM, i);
 		if (!res) {
-			PR_ERR("%s: res %d is faile\n", __func__, i);
+			PR_ERR("res %d fail\n", i);
 			ret = -ENOMEM;
 			break;
 		}
@@ -1275,7 +1243,7 @@ int dtvdemod_set_iccfg_by_dts(struct platform_device *pdev)
 
 	ret = of_reserved_mem_device_init(&pdev->dev);
 	if (ret != 0)
-		PR_INFO("no reserved mem.\n");
+		PR_INFO("no reserved mem\n");
 
 	//dvb-s/s2 tuner agc pin direction set
 	//have "agc_pin_direction" agc_direction = 1;donot have agc_direction = 0
@@ -1328,7 +1296,7 @@ int dtvdemod_set_iccfg_by_dts(struct platform_device *pdev)
 
 	devp->this_pdev = pdev;
 	devp->cma_mem_alloc = 0;
-	PR_INFO("demod cma_flag %d, cma_mem_size %d MB.\n",
+	PR_INFO("cma_flag %d, cma_mem_size %dMB\n",
 		devp->cma_flag, (u32)devp->cma_mem_size / SZ_1M);
 #endif
 
@@ -1339,7 +1307,7 @@ int dtvdemod_set_iccfg_by_dts(struct platform_device *pdev)
 	if (ret)
 		devp->diseqc.name = NULL;
 	else
-		PR_INFO("diseqc name: %s.\n", devp->diseqc.name);
+		PR_INFO("diseqc name: %s\n", devp->diseqc.name);
 
 	/*get demod irq*/
 	ret = of_irq_get_byname(pdev->dev.of_node, "demod_isr");
@@ -1348,7 +1316,7 @@ int dtvdemod_set_iccfg_by_dts(struct platform_device *pdev)
 		ret = request_irq(devp->diseqc.irq_num, aml_diseqc_isr_handler,
 				IRQF_SHARED, "demod_diseqc_isr", (void *)devp);
 		if (ret != 0)
-			PR_INFO("request demod_diseqc_isr fail(%d).\n", ret);
+			PR_INFO("request demod_diseqc_isr fail %d\n", ret);
 
 		disable_irq(devp->diseqc.irq_num);
 		devp->diseqc.irq_en = false;
@@ -1374,11 +1342,11 @@ static void dtvdemod_clktree_probe(struct device *dev)
 
 	devp->vdac_clk_gate = devm_clk_get(dev, "vdac_clk_gate");
 	if (!IS_ERR_OR_NULL(devp->vdac_clk_gate))
-		PR_INFO("%s: clk vdac_clk_gate probe ok.\n", __func__);
+		PR_INFO("vdac_clk_gate probe ok\n");
 
 	devp->demod_32k = devm_clk_get(dev, "demod_32k");
 	if (!IS_ERR_OR_NULL(devp->demod_32k))
-		PR_INFO("%s: clk demod_32k probe ok.\n", __func__);
+		PR_INFO("demod_32k probe ok\n");
 }
 
 static void dtvdemod_clktree_remove(struct device *dev)
@@ -1401,19 +1369,19 @@ static int dtvdemod_request_firmware(const char *file_name, char *buf, int size)
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
 
 	if (!buf) {
-		pr_err("%s fw buf is NULL\n", __func__);
+		pr_err("fw buf NULL\n");
 		ret = -ENOMEM;
 		goto err;
 	}
 
 	ret = request_firmware(&fw, file_name, devp->dev);
 	if (ret < 0) {
-		pr_err("%d can't load the %s.\n", ret, file_name);
+		pr_err("load the '%s' error %d\n", file_name, ret);
 		goto err;
 	}
 
 	if (fw->size > size) {
-		pr_err("not enough memory size for fw.\n");
+		pr_err("not enough mem for fw\n");
 		ret = -ENOMEM;
 		goto release;
 	}
@@ -1421,9 +1389,9 @@ static int dtvdemod_request_firmware(const char *file_name, char *buf, int size)
 	memcpy(buf, (char *)fw->data + offset, fw->size - offset);
 	ret = fw->size;
 
-	PR_DBGL("dtvdemod_request_firmware:\n");
+	PR_DBGL("fw:\n");
 	for (i = 0; i < 100; i++)
-		PR_DBGL("[%d] = 0x%x\n", i, fw->data[i]);
+		PR_DBGL("[%d] 0x%x\n", i, fw->data[i]);
 release:
 	release_firmware(fw);
 err:
@@ -1436,7 +1404,7 @@ static int fw_check_sum(char *buf, unsigned int len)
 
 	crc = crc32_le(~0U, buf, len);
 
-	PR_INFO("firmware crc result : 0x%x, len: %d\n", crc ^ ~0U, len);
+	PR_INFO("fw crc:0x%x, len:%d\n", crc ^ ~0U, len);
 
 	/* return fw->head.checksum != (crc ^ ~0U) ? 0 : 1; */
 	return 0;
@@ -1477,15 +1445,9 @@ static void dtvdemod_fw_dwork(struct work_struct *work)
 	struct amldtvdemod_device_s *devp =
 		container_of(dwork, struct amldtvdemod_device_s, fw_dwork);
 
-	if (!devp) {
-		pr_info("%s, dwork error !!!\n", __func__);
-		return;
-	}
-
 	ret = dtvdemod_download_firmware(devp);
-
 	if ((ret < 0) && (cnt < 10))
-		schedule_delayed_work(&devp->fw_dwork, 5 * HZ);
+		schedule_delayed_work(&devp->fw_dwork, 3 * HZ);
 	else
 		cancel_delayed_work(&devp->fw_dwork);
 
@@ -1506,11 +1468,11 @@ static void blind_scan_work(struct work_struct *work)
 	}
 
 	if (!demod) {
-		PR_ERR("%s: demod == NULL.\n", __func__);
+		PR_ERR("%s:demod NULL\n", __func__);
 		return;
 	}
 	if (demod->last_delsys == SYS_UNDEFINED) {
-		PR_ERR("%s: err: delsys not set!\n", __func__);
+		PR_ERR("%s:delsys not set\n", __func__);
 		return;
 	}
 
@@ -1560,7 +1522,7 @@ static int aml_dtvdemod_probe(struct platform_device *pdev)
 
 	match = of_match_device(meson_ddemod_match, &pdev->dev);
 	if (match == NULL) {
-		PR_ERR("%s,no matched table\n", __func__);
+		PR_ERR("no matched table\n");
 		goto fail_ic_config;
 	}
 	devp->data = (struct meson_ddemod_data *)match->data;
@@ -1599,6 +1561,8 @@ static int aml_dtvdemod_probe(struct platform_device *pdev)
 
 	if (devp->data->hw_ver >= DTVDEMOD_HW_T5D) {
 		pm_runtime_enable(devp->dev);
+		if (pm_runtime_get_sync(devp->dev) < 0)
+			pr_err("failed to set pwr\n");
 
 		devp->fw_buf = kzalloc(FW_BUFF_SIZE, GFP_KERNEL);
 		if (!devp->fw_buf)
@@ -1610,7 +1574,7 @@ static int aml_dtvdemod_probe(struct platform_device *pdev)
 			dtvdd_devp->data->hw_ver != DTVDEMOD_HW_TXHD2 &&
 			dtvdd_devp->data->hw_ver != DTVDEMOD_HW_S1A) {
 			INIT_DELAYED_WORK(&devp->fw_dwork, dtvdemod_fw_dwork);
-			schedule_delayed_work(&devp->fw_dwork, 10 * HZ);
+			schedule_delayed_work(&devp->fw_dwork, 5 * HZ);
 		}
 
 		/* workqueue for blind scan process */
@@ -1619,21 +1583,22 @@ static int aml_dtvdemod_probe(struct platform_device *pdev)
 	}
 
 	demod_attach_register_cb(AM_DTV_DEMOD_AMLDTV, aml_dtvdm_attach);
-	PR_INFO("%s: version: %s (%s), T2 fw version: %s. ok.\n",
+	PR_INFO("%s: version: %s (%s), T2 fw version: %s. ok\n",
 			__func__, AMLDTVDEMOD_VER, DTVDEMOD_VER, AMLDTVDEMOD_T2_FW_VER);
 
 	return 0;
+
 fail_ic_config:
-	PR_ERR("ic config error.\n");
+	PR_ERR("ic config error\n");
 fail_class_create_file:
-	PR_ERR("dtvdemod class file create error.\n");
+	PR_ERR("class file create error\n");
 	class_destroy(devp->clsp);
 fail_create_class:
-	PR_ERR("dtvdemod class create error.\n");
+	PR_ERR("class create error\n");
 	kfree(devp);
 fail_alloc_region:
-	PR_ERR("dtvdemod alloc error.\n");
-	PR_ERR("dtvdemod_init fail.\n");
+	PR_ERR("alloc error\n");
+	PR_ERR("%s:fail\n", __func__);
 
 	return ret;
 }
@@ -1658,6 +1623,7 @@ static int __exit aml_dtvdemod_remove(struct platform_device *pdev)
 
 	if (devp->data->hw_ver >= DTVDEMOD_HW_T5D) {
 		kfree(devp->fw_buf);
+		pm_runtime_put_sync(devp->dev);
 		pm_runtime_disable(devp->dev);
 	}
 
@@ -1669,7 +1635,7 @@ static int __exit aml_dtvdemod_remove(struct platform_device *pdev)
 
 	dtvdd_devp = NULL;
 
-	PR_INFO("%s:remove.\n", __func__);
+	PR_INFO("%s ok\n", __func__);
 
 	mutex_unlock(&amldtvdemod_device_mutex);
 
@@ -1701,7 +1667,10 @@ static void aml_dtvdemod_shutdown(struct platform_device *pdev)
 			delsys_exit(demod, demod->last_delsys, SYS_UNDEFINED);
 	}
 
-	PR_INFO("%s OK.\n", __func__);
+	if (devp->data->hw_ver >= DTVDEMOD_HW_T5D)
+		pm_runtime_force_suspend(devp->dev);
+
+	PR_INFO("%s ok\n", __func__);
 
 	mutex_unlock(&devp->lock);
 
@@ -1727,7 +1696,7 @@ static int aml_dtvdemod_suspend(struct platform_device *pdev,
 
 	ret = dtvdemod_leave_mode(devp);
 
-	PR_INFO("%s state event %d, ret %d, OK\n", __func__, state.event, ret);
+	PR_INFO("%s event %d, ret %d ok\n", __func__, state.event, ret);
 
 	mutex_unlock(&devp->lock);
 
@@ -1738,7 +1707,7 @@ static int aml_dtvdemod_suspend(struct platform_device *pdev,
 
 static int aml_dtvdemod_resume(struct platform_device *pdev)
 {
-	PR_INFO("%s is called\n", __func__);
+	PR_INFO("%s ok\n", __func__);
 
 	return 0;
 }
@@ -1757,12 +1726,11 @@ static int dtvdemod_leave_mode(struct amldtvdemod_device_s *devp)
 		 * But need to reinitialize it.
 		 */
 		delsys = demod->last_delsys;
-		PR_INFO("%s, delsys = %s\n", __func__, name_fe_delivery_system[delsys]);
 		if (delsys != SYS_UNDEFINED) {
 #ifdef AML_DEMOD_SUPPORT_DVBS
 			if ((delsys == SYS_DVBS || delsys == SYS_DVBS2) &&
 					devp->singlecable_param.version)
-				PR_INFO("singlecable ODU_poweroff.\n");//TODO
+				PR_INFO("singlecable ODU_poweroff\n");//TODO
 #endif
 			delsys_exit(demod, delsys, SYS_UNDEFINED);
 		}
@@ -1790,7 +1758,7 @@ static __maybe_unused int dtv_demod_pm_suspend(struct device *dev)
 
 	ret = dtvdemod_leave_mode(devp);
 
-	PR_INFO("%s ret %d, OK.\n", __func__, ret);
+	PR_INFO("%s ret %d, OK\n", __func__, ret);
 
 	mutex_unlock(&devp->lock);
 
@@ -1816,7 +1784,7 @@ static __maybe_unused int dtv_demod_pm_resume(struct device *dev)
 	/* download fw again after STR in case sram was power down */
 	devp->fw_wr_done = 0;
 
-	PR_INFO("%s OK.\n", __func__);
+	PR_INFO("%s ok\n", __func__);
 
 	mutex_unlock(&devp->lock);
 
@@ -1827,14 +1795,14 @@ static __maybe_unused int dtv_demod_pm_resume(struct device *dev)
 
 static int __maybe_unused dtv_demod_runtime_suspend(struct device *dev)
 {
-	PR_INFO("%s OK.\n", __func__);
+	PR_INFO("%s ok\n", __func__);
 
 	return 0;
 }
 
 static int __maybe_unused dtv_demod_runtime_resume(struct device *dev)
 {
-	PR_INFO("%s OK.\n", __func__);
+	PR_INFO("%s ok\n", __func__);
 
 	return 0;
 }
@@ -1863,12 +1831,10 @@ static struct platform_driver aml_dtvdemod_driver = {
 
 int __init aml_dtvdemod_init(void)
 {
-	if (platform_driver_register(&aml_dtvdemod_driver)) {
-		pr_err("failed to register amldtvdemod driver module\n");
+	if (platform_driver_register(&aml_dtvdemod_driver))
 		return -ENODEV;
-	}
 
-	PR_INFO("%s ok.\n", __func__);
+	PR_INFO("%s ok\n", __func__);
 
 	return 0;
 }
@@ -1876,10 +1842,10 @@ int __init aml_dtvdemod_init(void)
 void __exit aml_dtvdemod_exit(void)
 {
 	platform_driver_unregister(&aml_dtvdemod_driver);
-	PR_INFO("%s ok.\n", __func__);
+	PR_INFO("%s ok\n", __func__);
 }
 
-static int delsys_set(struct dvb_frontend *fe, unsigned int delsys)
+int delsys_set(struct dvb_frontend *fe, unsigned int delsys)
 {
 	struct aml_dtvdemod *demod = (struct aml_dtvdemod *)fe->demodulator_priv;
 	enum fe_delivery_system ldelsys = demod->last_delsys;
@@ -1911,7 +1877,7 @@ static int delsys_set(struct dvb_frontend *fe, unsigned int delsys)
 	}
 
 	if (!support) {
-		PR_INFO("[id %d] delsys:%d is not support!\n", demod->id, cdelsys);
+		PR_INFO("[id %d] delsys %d not support\n", demod->id, cdelsys);
 		return 0;
 	}
 
@@ -1972,7 +1938,7 @@ static int delsys_set(struct dvb_frontend *fe, unsigned int delsys)
 
 	if (cdelsys == SYS_ANALOG) {
 		if (get_dtvpll_init_flag()) {
-			PR_INFO("delsys not support : %d\n", cdelsys);
+			PR_INFO("delsys %d not support\n", cdelsys);
 			delsys_exit(demod, ldelsys, SYS_UNDEFINED);
 		}
 
@@ -1984,7 +1950,7 @@ static int delsys_set(struct dvb_frontend *fe, unsigned int delsys)
 			delsys_exit(demod, ldelsys, cdelsys);
 
 		if (enter_mode(demod, cdelsys)) {
-			PR_INFO("enter_mode failed,leave!\n");
+			PR_INFO("enter_mode failed\n");
 			if (demod->inited)
 				delsys_exit(demod, cdelsys, SYS_UNDEFINED);
 
@@ -1993,14 +1959,14 @@ static int delsys_set(struct dvb_frontend *fe, unsigned int delsys)
 	}
 
 	if (!get_dtvpll_init_flag()) {
-		PR_INFO("pll is not set!\n");
+		PR_INFO("pll not set\n");
 		delsys_exit(demod, cdelsys, SYS_UNDEFINED);
 
 		return 0;
 	}
 
 	demod->last_delsys = cdelsys;
-	PR_INFO("[id %d] info fe type:%d.\n", demod->id, fe->ops.info.type);
+	PR_INFO("[id %d] fe type:%d\n", demod->id, fe->ops.info.type);
 
 	if (fe->ops.tuner_ops.set_config && !is_T_T2_switch)
 		fe->ops.tuner_ops.set_config(fe, NULL);
@@ -2016,28 +1982,27 @@ static int is_not_active(struct dvb_frontend *fe)
 	enum fe_delivery_system ldelsys = demod->last_delsys;
 
 	if (!get_dtvpll_init_flag()) {
-		PR_INFO("%s: [id %d] dtvpll uninit.\n", __func__, demod->id);
+		PR_INFO("[id %d] dtvpll uninit\n", demod->id);
 
 		return 1;
 	}
 
 	if (ldelsys == SYS_UNDEFINED) {
-		PR_INFO("%s: [id %d] ldelsys == SYS_UNDEFINED.\n",
-			__func__, demod->id);
+		PR_INFO("[id %d] ldelsys SYS_UNDEFINED\n", demod->id);
 
 		return 2;
 	}
 
 	if (ldelsys != cdelsys) {
-		PR_INFO("%s: [id %d] ldelsys(%d) != cdelsys(%d).\n",
-			__func__, demod->id, ldelsys, cdelsys);
+		PR_INFO("[id %d] ldelsys(%d) != cdelsys(%d)\n",
+			demod->id, ldelsys, cdelsys);
 
 		return 3;
 	}
 
 	if (!devp->demod_thread) {
-		PR_INFO("%s: [id %d] devp->demod_thread(%d).\n",
-			__func__, demod->id, devp->demod_thread);
+		PR_INFO("[id %d] devp->demod_thread(%d)\n",
+			demod->id, devp->demod_thread);
 
 		return 4;
 	}
@@ -2056,11 +2021,7 @@ static int aml_dtvdm_init(struct dvb_frontend *fe)
 	demod->last_delsys = SYS_UNDEFINED;
 	fe->ops.info.type = 0xFF; /* undefined */
 
-	if (devp->data->hw_ver >= DTVDEMOD_HW_T5D)
-		if (pm_runtime_get_sync(devp->dev))
-			PR_INFO("[%s] pm get sync ERROR.\n", __func__);
-
-	PR_INFO("%s [id %d] OK.\n", __func__, demod->id);
+	PR_INFO("%s [id %d] OK\n", __func__, demod->id);
 
 	mutex_unlock(&devp->lock);
 
@@ -2078,17 +2039,11 @@ static int aml_dtvdm_sleep(struct dvb_frontend *fe)
 	delsys = demod->last_delsys;
 
 	if (get_dtvpll_init_flag()) {
-		PR_INFO("%s\n", __func__);
-
 		if (delsys != SYS_UNDEFINED)
 			delsys_exit(demod, delsys, SYS_UNDEFINED);
 	}
 
-	if (devp->data->hw_ver >= DTVDEMOD_HW_T5D) {
-		if (pm_runtime_put_sync(devp->dev))
-			PR_INFO("[%s] pm put sync ERROR !\n", __func__);
-	}
-	PR_INFO("%s [id %d] OK.\n", __func__, demod->id);
+	PR_INFO("%s [id %d] OK\n", __func__, demod->id);
 
 	mutex_unlock(&devp->lock);
 
@@ -2108,9 +2063,7 @@ static int aml_dtvdm_set_parameters(struct dvb_frontend *fe)
 	delsys = demod->last_delsys;
 	c = &fe->dtv_property_cache;
 
-	PR_DBGL("%s [id %d] delsys %d %s.\n", __func__,
-			demod->id, delsys, name_fe_delivery_system[delsys]);
-	PR_DBGL("[id %d] delsys=%d freq=%d,symbol_rate=%d,bw=%d,modulation=%d,inversion=%d.\n",
+	PR_DBGL("[id %d] delsys=%d,freq=%d,sr=%d,bw=%d,modul=%d,invert=%d\n",
 		demod->id, c->delivery_system, c->frequency,
 		c->symbol_rate, c->bandwidth_hz, c->modulation,
 		c->inversion);
@@ -2201,9 +2154,8 @@ static int aml_dtvdm_get_frontend(struct dvb_frontend *fe,
 			p->delivery_system = delsys;
 		}
 
-		PR_DVBS("%s [id %d] delsys %d,freq %d,srate %d\n",
-				__func__, demod->id, delsys,
-				p->frequency, p->symbol_rate);
+		PR_DVBS("get delsys %d,freq %d,srate %d\n",
+				delsys, p->frequency, p->symbol_rate);
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_DVBC
@@ -2213,7 +2165,7 @@ static int aml_dtvdm_get_frontend(struct dvb_frontend *fe,
 			p->frequency = demod->blind_result_frequency;
 			p->symbol_rate = demod->blind_result_symbol_rate;
 			p->delivery_system = delsys;
-			PR_DVBC("%s [id %d] delsys %d,freq %d,srate %d\n", __func__,
+			PR_DVBC("get [id %d] delsys %d,freq %d,srate %d\n",
 					demod->id, delsys, p->frequency, p->symbol_rate);
 		} else {
 			ret = gxtv_demod_dvbc_get_frontend(fe);
@@ -2369,14 +2321,17 @@ static int aml_dtvdm_read_status(struct dvb_frontend *fe,
 		break;
 #ifdef AML_DEMOD_SUPPORT_DTMB
 	case SYS_DTMB:
-		ret = gxtv_demod_dtmb_read_status(fe, status);
+		if (dtmb_new_driver)
+			*status = demod->last_status;
+		else
+			ret = gxtv_demod_dtmb_read_status(fe, status);
 		break;
 #endif
 	default:
 		break;
 	}
 
-	PR_DBG("%s: [id %d]: delsys %d, status 0x%x, ret %d.\n",
+	PR_DBG("%s: [id %d] delsys %d status 0x%x ret %d\n",
 			__func__, demod->id, delsys, *status, ret);
 
 	mutex_unlock(&devp->lock);
@@ -2699,12 +2654,11 @@ static void aml_dtvdm_release(struct dvb_frontend *fe)
 	}
 
 	if (get_dtvpll_init_flag()) {
-		PR_INFO("%s\n", __func__);
 		if (delsys != SYS_UNDEFINED)
 			delsys_exit(demod, delsys, SYS_UNDEFINED);
 	}
 
-	PR_INFO("%s [id %d] OK.\n", __func__, demod->id);
+	PR_INFO("%s [id %d] OK\n", __func__, demod->id);
 
 	mutex_unlock(&devp->lock);
 }
@@ -2716,7 +2670,6 @@ static int aml_dtvdm_tune(struct dvb_frontend *fe, bool re_tune,
 	struct amldtvdemod_device_s *devp = (struct amldtvdemod_device_s *)demod->priv;
 	enum fe_delivery_system delsys = SYS_UNDEFINED;
 	int ret = 0;
-	static int flg; /*debug only*/
 
 	mutex_lock(&devp->lock);
 
@@ -2736,9 +2689,6 @@ static int aml_dtvdm_tune(struct dvb_frontend *fe, bool re_tune,
 		return -ECANCELED;
 	}
 
-	if ((flg > 0) && (flg < 5))
-		PR_INFO("%s [id %d]\n", __func__, demod->id);
-
 	switch (delsys) {
 #ifdef AML_DEMOD_SUPPORT_DVBS
 	case SYS_DVBS:
@@ -2757,11 +2707,17 @@ static int aml_dtvdm_tune(struct dvb_frontend *fe, bool re_tune,
 #endif
 #ifdef AML_DEMOD_SUPPORT_DVBT
 	case SYS_DVBT:
-		ret = dvbt_tune(fe, re_tune, mode_flags, delay, status);
+		if (dvbtx_auto)
+			ret = dvbtx_tune(fe, re_tune, mode_flags, delay, status);
+		else
+			ret = dvbt_tune(fe, re_tune, mode_flags, delay, status);
 		break;
 
 	case SYS_DVBT2:
-		ret = dvbt2_tune(fe, re_tune, mode_flags, delay, status);
+		if (dvbtx_auto)
+			ret = dvbtx_tune(fe, re_tune, mode_flags, delay, status);
+		else
+			ret = dvbt2_tune(fe, re_tune, mode_flags, delay, status);
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_ISDBT
@@ -2773,22 +2729,22 @@ static int aml_dtvdm_tune(struct dvb_frontend *fe, bool re_tune,
 	case SYS_ATSC:
 	case SYS_ATSCMH:
 		ret = gxtv_demod_atsc_tune(fe, re_tune, mode_flags, delay, status);
-		flg++;
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_J83B
 	case SYS_DVBC_ANNEX_B:
 		ret = gxtv_demod_atsc_j83b_tune(fe, re_tune, mode_flags, delay, status);
-		flg++;
 		break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_DTMB
 	case SYS_DTMB:
-		ret = gxtv_demod_dtmb_tune(fe, re_tune, mode_flags, delay, status);
+		if (dtmb_new_driver)
+			ret = dtmb_tune(fe, re_tune, mode_flags, delay, status);
+		else
+			ret = gxtv_demod_dtmb_tune(fe, re_tune, mode_flags, delay, status);
 		break;
 #endif
 	default:
-		flg = 0;
 		break;
 	}
 
@@ -2806,7 +2762,7 @@ static int aml_dtvdm_set_property(struct dvb_frontend *fe,
 	u32 delsys = SYS_UNDEFINED;
 
 	mutex_lock(&devp->lock);
-	PR_DBG("%s: cmd %d %d\n", __func__, tvp->cmd, tvp->u.data);
+	PR_DBG("%s: cmd %d data %d\n", __func__, tvp->cmd, tvp->u.data);
 
 	if (is_not_active(fe) && tvp->cmd != DTV_DELIVERY_SYSTEM) {
 		mutex_unlock(&devp->lock);
@@ -2821,33 +2777,38 @@ static int aml_dtvdm_set_property(struct dvb_frontend *fe,
 		break;
 
 	case DTV_DVBT2_PLP_ID:
-		demod->plp_id = tvp->u.data;
-		PR_INFO("[id %d] DTV_DVBT2_PLP_ID, %d\n", demod->id, demod->plp_id);
+#ifdef AML_DEMOD_SUPPORT_DVBT
+		if (dvbt2_mplp_retune || demod_is_t5d_cpu(devp)) {
+			demod->plp_id = tvp->u.data;
+		} else {
+			if (tvp->u.data != demod->plp_id) {
+				demod->plp_id = tvp->u.data;
+				if (demod->en_detect)
+					dtvdemod_set_plpid(demod->plp_id);
+			}
+		}
+		PR_INFO("[id %d] plp_id %d\n", demod->id, demod->plp_id);
+#endif
 		break;
 
 	case DTV_BLIND_SCAN_MIN_FRE:
 		devp->blind_min_fre = tvp->u.data;
-		PR_INFO("DTV_BLIND_SCAN_MIN_FRE: %d\n", devp->blind_min_fre);
 		break;
 
 	case DTV_BLIND_SCAN_MAX_FRE:
 		devp->blind_max_fre = tvp->u.data;
-		PR_INFO("DTV_BLIND_SCAN_MAX_FRE: %d\n", devp->blind_max_fre);
 		break;
 
 	case DTV_BLIND_SCAN_MIN_SRATE:
 		devp->blind_min_srate = tvp->u.data;
-		PR_INFO("DTV_BLIND_SCAN_MIN_SRATE: %d\n", devp->blind_min_srate);
 		break;
 
 	case DTV_BLIND_SCAN_MAX_SRATE:
 		devp->blind_max_srate = tvp->u.data;
-		PR_INFO("DTV_BLIND_SCAN_MAX_SRATE: %d\n", devp->blind_max_srate);
 		break;
 
 	case DTV_BLIND_SCAN_FRE_RANGE:
 		devp->blind_fre_range = tvp->u.data;
-		PR_INFO("DTV_BLIND_SCAN_FRE_RANGE: %d\n", devp->blind_fre_range);
 		break;
 
 	case DTV_BLIND_SCAN_FRE_STEP:
@@ -2857,13 +2818,10 @@ static int aml_dtvdm_set_property(struct dvb_frontend *fe,
 
 		if (!devp->blind_fre_step)
 			devp->blind_fre_step = 2000;/* 2M */
-
-		PR_INFO("DTV_BLIND_SCAN_FRE_STEP: %d\n", devp->blind_fre_step);
 		break;
 
 	case DTV_BLIND_SCAN_TIMEOUT:
 		devp->blind_timeout = tvp->u.data;
-		PR_INFO("DTV_BLIND_SCAN_TIMEOUT: %d\n", devp->blind_timeout);
 		break;
 
 	case DTV_START_BLIND_SCAN:
@@ -2874,7 +2832,7 @@ static int aml_dtvdm_set_property(struct dvb_frontend *fe,
 		PR_INFO("DTV_START_BLIND_SCAN\n");
 		devp->blind_scan_stop = 0;
 		schedule_work(&devp->blind_scan_work);
-		PR_INFO("schedule workqueue for blind scan, return\n");
+		PR_INFO("schedule blind scan workqueue\n");
 		break;
 
 	case DTV_CANCEL_BLIND_SCAN:
@@ -2932,7 +2890,6 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 	struct isdbt_tmcc_info tmcc_info;
 #endif
 	s16 strength = 0;
-	int ret = 0;
 
 	mutex_lock(&devp->lock);
 
@@ -2968,8 +2925,8 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 				tvp->reserved[0] = QPSK;
 			}
 
-			PR_DVBS("[id %d] get delsys:%d,modulation:%d.\n",
-					demod->id, tvp->u.data, tvp->reserved[0]);
+			PR_DVBS("get delsys:%d,modul:%d\n",
+					tvp->u.data, tvp->reserved[0]);
 #endif
 		} else if (demod->last_delsys == SYS_DVBT2 &&
 			demod->last_status == 0x1F) {
@@ -3004,8 +2961,8 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 
 			tvp->reserved[2] = demod->real_para.fef_info;
 
-			PR_DVBT("[id %d] get delsys:%d,modulation:%d,code_rate:%d,fef_info:%d.\n",
-				demod->id, tvp->u.data, tvp->reserved[0],
+			PR_DVBT("get delsys:%d,modul:%d,code_rate:%d,fef_info:%d\n",
+				tvp->u.data, tvp->reserved[0],
 				tvp->reserved[1], tvp->reserved[2]);
 
 		} else if (demod->last_delsys == SYS_DVBT &&
@@ -3037,8 +2994,8 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 
 			tvp->reserved[2] = demod->real_para.tps_cell_id;
 
-			PR_DVBT("[id %d] get delsys:%d,modulation:%d,code_rate:%d,cell_id:%d.\n",
-					demod->id, tvp->u.data,
+			PR_DVBT("get delsys:%d,modul:%d,code_rate:%d,cell_id:%d\n",
+					tvp->u.data,
 					tvp->reserved[0], tvp->reserved[1], tvp->reserved[2]);
 		} else if ((demod->last_delsys == SYS_DVBC_ANNEX_A ||
 			demod->last_delsys == SYS_DVBC_ANNEX_C) &&
@@ -3046,12 +3003,13 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 			tvp->reserved[0] = demod->real_para.modulation;
 			tvp->reserved[1] = demod->real_para.symbol;
 
-			PR_DVBC("[id %d] get delsys:%d,modulation:%d,symbol:%d.\n",
+			PR_DVBC("[id %d] get delsys:%d,modul:%d,symbol:%d\n",
 				demod->id, tvp->u.data, tvp->reserved[0], tvp->reserved[1]);
 		}
 		break;
 
 	case DTV_DVBT2_PLP_ID:
+#ifdef AML_DEMOD_SUPPORT_DVBT
 		/* plp nums & ids */
 		tvp->u.buffer.reserved1[0] = demod->real_para.plp_num;
 		if (tvp->u.buffer.reserved2 && demod->real_para.plp_num > 0) {
@@ -3062,18 +3020,25 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 				for (i = 0; i < demod->real_para.plp_num; i++) {
 					if ((demod->real_para.plp_common >> i) & 1)
 						common_cnt++;
-					plp_ids[i] = i + common_cnt;
+					if (dvbt2_common_plp_skip)
+						plp_ids[i] = i + common_cnt;
+					else
+						plp_ids[i] = i;
 				}
-				tvp->u.buffer.reserved1[0] -= common_cnt;
+
+				if (dvbt2_common_plp_skip)
+					tvp->u.buffer.reserved1[0] -= common_cnt;
+
 				if (copy_to_user(tvp->u.buffer.reserved2,
 					plp_ids, tvp->u.buffer.reserved1[0]))
-					PR_ERR("copy plp ids to user err\n");
+					PR_ERR("copy plp error\n");
 
 				kfree(plp_ids);
 			}
 		}
-		PR_INFO("[id %d] get plp num = %d, common = 0x%llx\n",
-			demod->id, tvp->u.buffer.reserved1[0], demod->real_para.plp_common);
+		PR_INFO("get plp num %d, common 0x%llx\n",
+			tvp->u.buffer.reserved1[0], demod->real_para.plp_common);
+#endif
 		break;
 
 	case DTV_STAT_CNR:
@@ -3083,8 +3048,7 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 
 		c->cnr = tvp->u.st;
 
-		PR_DBG("demod id [%d] [cnr %d dBx1000].\n",
-				demod->id, demod->real_para.snr * 100);
+		PR_DBG("cnr %d dBx1000\n", demod->real_para.snr * 100);
 		break;
 
 	case DTV_TS_INPUT:
@@ -3111,30 +3075,30 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 #ifdef AML_DEMOD_SUPPORT_DVBS
 		case SYS_DVBS:
 		case SYS_DVBS2:
-			ret = dtvdemod_dvbs_read_signal_strength(fe, &strength);
+			dtvdemod_dvbs_read_signal_strength(fe, &strength);
 			break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_DVBC
 		case SYS_DVBC_ANNEX_A:
 		case SYS_DVBC_ANNEX_C:
-			ret = gxtv_demod_dvbc_read_signal_strength(fe, &strength);
+			gxtv_demod_dvbc_read_signal_strength(fe, &strength);
 			break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_DVBT
 		case SYS_DVBT:
 		case SYS_DVBT2:
-			ret = gxtv_demod_dvbt_read_signal_strength(fe, &strength);
+			gxtv_demod_dvbt_read_signal_strength(fe, &strength);
 			break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_ISDBT
 		case SYS_ISDBT:
-			ret = gxtv_demod_isdbt_read_signal_strength(fe, &strength);
+			gxtv_demod_isdbt_read_signal_strength(fe, &strength);
 			break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_ATSC
 		case SYS_ATSC:
 		case SYS_ATSCMH:
-			ret = gxtv_demod_atsc_read_signal_strength(fe, &strength);
+			gxtv_demod_atsc_read_signal_strength(fe, &strength);
 			break;
 #endif
 #ifdef AML_DEMOD_SUPPORT_J83B
@@ -3144,7 +3108,7 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 #endif
 #ifdef AML_DEMOD_SUPPORT_DTMB
 		case SYS_DTMB:
-			ret = gxtv_demod_dtmb_read_signal_strength(fe, &strength);
+			gxtv_demod_dtmb_read_signal_strength(fe, &strength);
 			break;
 #endif
 		default:
@@ -3157,8 +3121,7 @@ static int aml_dtvdm_get_property(struct dvb_frontend *fe,
 
 		c->strength = tvp->u.st;
 
-		PR_DBG("demod id [%d] [strength %lld dBx1000].\n",
-				demod->id, tvp->u.st.stat[0].svalue);
+		PR_DBG("strength %lld dBx1000\n", tvp->u.st.stat[0].svalue);
 
 		break;
 
@@ -3175,7 +3138,7 @@ static struct dvb_frontend_ops aml_dtvdm_ops = {
 	.delsys = {SYS_UNDEFINED},
 	.info = {
 		/*in aml_fe, it is 'amlogic dvb frontend' */
-		.name = "",
+		.name = "AML",
 		.caps = FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 |
 			FE_CAN_FEC_5_6 | FE_CAN_FEC_7_8 | FE_CAN_FEC_AUTO |
 			FE_CAN_QPSK | FE_CAN_QAM_16 | FE_CAN_QAM_64 |
@@ -3208,7 +3171,7 @@ struct dvb_frontend *aml_dtvdm_attach(const struct demod_config *config)
 	struct aml_dtvdemod *demod = NULL;
 
 	if (IS_ERR_OR_NULL(devp)) {
-		pr_err("%s: error devp is NULL\n", __func__);
+		pr_err("devp NULL\n");
 
 		return NULL;
 	}
@@ -3219,9 +3182,6 @@ struct dvb_frontend *aml_dtvdm_attach(const struct demod_config *config)
 		devp->data->hw_ver != DTVDEMOD_HW_S4D && devp->index > 0) ||
 		(devp->data->hw_ver == DTVDEMOD_HW_S4 && devp->index > 1) ||
 		(devp->data->hw_ver == DTVDEMOD_HW_S4D && devp->index > 1)) {
-		pr_err("%s: Had attached (%d), only S4 and S4D support 2 attach.\n",
-				__func__, devp->index);
-
 		mutex_unlock(&amldtvdemod_device_mutex);
 
 		return NULL;
@@ -3229,8 +3189,6 @@ struct dvb_frontend *aml_dtvdm_attach(const struct demod_config *config)
 
 	demod = kzalloc(sizeof(*demod), GFP_KERNEL);
 	if (!demod) {
-		pr_err("%s: kzalloc for demod fail.\n", __func__);
-
 		mutex_unlock(&amldtvdemod_device_mutex);
 
 		return NULL;
@@ -3240,15 +3198,27 @@ struct dvb_frontend *aml_dtvdm_attach(const struct demod_config *config)
 
 	demod->id = devp->index;
 	demod->act_dtmb = false;
+
+#if defined AML_DEMOD_SUPPORT_ATSC || defined AML_DEMOD_SUPPORT_J83B
 	demod->timeout_atsc_ms = TIMEOUT_ATSC;
+#endif
+#ifdef AML_DEMOD_SUPPORT_DVBT
 	demod->timeout_dvbt_ms = TIMEOUT_DVBT;
+#endif
+#ifdef AML_DEMOD_SUPPORT_DVBS
 	demod->timeout_dvbs_ms = TIMEOUT_DVBS;
+#endif
+#ifdef AML_DEMOD_SUPPORT_DVBC
 	demod->timeout_dvbc_ms = TIMEOUT_DVBC;
+#endif
+
 	demod->timeout_ddr_leave = TIMEOUT_DDR_LEAVE;
 	demod->last_qam_mode = QAM_MODE_NUM;
 	demod->last_lock = -1;
 	demod->inited = false;
 	demod->suspended = true;
+	demod->freq = 0;
+	demod->plp_id = 0xfff;
 
 	/* select dvbc module for s4 and S4D */
 	if (devp->data->hw_ver == DTVDEMOD_HW_S4 ||
@@ -3441,7 +3411,7 @@ struct dvb_frontend *aml_dtvdm_attach(const struct demod_config *config)
 
 		default:
 			ic_is_supportted = 0;
-			PR_ERR("%s: error unsupported ic=%d\n", __func__, ic_version);
+			PR_ERR("unsupported ic %d\n", ic_version);
 			kfree(demod);
 			mutex_unlock(&amldtvdemod_device_mutex);
 
@@ -3461,7 +3431,7 @@ struct dvb_frontend *aml_dtvdm_attach(const struct demod_config *config)
 
 	devp->index++;
 
-	PR_INFO("%s [id = %d, total attach: %d] OK.\n",
+	PR_INFO("%s id %d, total %d OK\n",
 			__func__, demod->id, devp->index);
 
 	mutex_unlock(&amldtvdemod_device_mutex);

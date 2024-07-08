@@ -12,6 +12,7 @@
 
 /* half for valid vic, half for vic with y420*/
 #define VIC_MAX_NUM 512
+#define SVD_VIC_MAX_NUM 128
 #define VESA_MAX_TIMING 64
 #define Y420_VIC_MAX_NUM 32 /* vic numbers for y420 */
 
@@ -275,8 +276,8 @@ struct hdmi_timing {
 
 	unsigned short h_pol; /*hsync_polarity*/
 	unsigned short v_pol; /*vsync_polarity*/
-	unsigned short h_pict;
-	unsigned short v_pict;
+	unsigned short h_pict; /* aspect ratio */
+	unsigned short v_pict; /* aspect ratio */
 	unsigned short h_pixel;
 	unsigned short v_pixel;
 

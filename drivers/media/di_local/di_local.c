@@ -45,6 +45,8 @@
 #include <linux/amlogic/media/vpu/vpu.h>	//VPU_MEM_POWER_ON
 #include "../deinterlace/di_pqa.h"
 #include <linux/amlogic/media/di/di_interface.h>
+#include <linux/amlogic/media/di/di.h>
+
 
 /*for di_ext_ops*/
 /*#include <linux/amlogic/media/video_sink/video.h> */
@@ -251,6 +253,15 @@ int di_release_keep_buf(struct di_buffer *buffer)
 }
 EXPORT_SYMBOL(di_release_keep_buf);
 
+int di_set_buffer_num(unsigned int post, unsigned int pre)
+{
+	if (dil_api && dil_api->set_buffer_num)
+		return dil_api->set_buffer_num(post, pre);
+	PR_ERR("%s:not attach\n", __func__);
+	return 0;
+}
+EXPORT_SYMBOL(di_set_buffer_num);
+
 int di_get_output_buffer_num(int index)
 {
 	if (dil_api && dil_api->new_get_output_buffer_num)
@@ -275,8 +286,8 @@ int pvpp_display(struct vframe_s *vfm,
 {
 	int ret = -1;
 
-	if (dil_api && dil_api->pre_vpp_link_display) {
-		ret = dil_api->pre_vpp_link_display(vfm, in_para, out_para);
+	if (dil_api && dil_api->pvpp_link_display) {
+		ret = dil_api->pvpp_link_display(vfm, in_para, out_para);
 		return ret;
 	}
 	PR_ERR("%s:not attach\n", __func__);
@@ -286,26 +297,26 @@ EXPORT_SYMBOL(pvpp_display);
 
 int pvpp_check_vf(struct vframe_s *vfm)
 {
-	if (dil_api && dil_api->pre_vpp_link_check_vf)
-		return dil_api->pre_vpp_link_check_vf(vfm);
+	if (dil_api && dil_api->pvpp_link_check_vf)
+		return dil_api->pvpp_link_check_vf(vfm);
 	PR_ERR("%s:not attach\n", __func__);
 	return -1;
 }
 EXPORT_SYMBOL(pvpp_check_vf);
 
-int pvpp_check_act(void)
+int pvpp_check_act(bool interlace)
 {
-	if (dil_api && dil_api->pre_vpp_link_check_act)
-		return dil_api->pre_vpp_link_check_act();
+	if (dil_api && dil_api->pvpp_link_check_act)
+		return dil_api->pvpp_link_check_act(interlace);
 	PR_ERR("%s:not attach\n", __func__);
 	return -1;
 }
 EXPORT_SYMBOL(pvpp_check_act);
 
-int pvpp_sw(bool on)
+int pvpp_sw(bool on, bool interlace)
 {
-	if (dil_api && dil_api->pre_vpp_link_sw)
-		return dil_api->pre_vpp_link_sw(on);
+	if (dil_api && dil_api->pvpp_link_sw)
+		return dil_api->pvpp_link_sw(on, interlace);
 	PR_ERR("%s:not attach\n", __func__);
 	return -1;
 }
@@ -313,8 +324,8 @@ EXPORT_SYMBOL(pvpp_sw);
 
 u32 di_api_get_plink_instance_id(void)
 {
-	if (dil_api && dil_api->pre_vpp_get_ins_id)
-		return dil_api->pre_vpp_get_ins_id();
+	if (dil_api && dil_api->pvpp_get_ins_id)
+		return dil_api->pvpp_get_ins_id();
 	PR_ERR("%s:not attach\n", __func__);
 	return 0;
 }
@@ -352,6 +363,15 @@ bool dim_get_pre_link(void)
 }
 EXPORT_SYMBOL(dim_get_pre_link);
 
+bool di_vfm_info(struct afbcd_info *vfm_info)
+{
+	if (dil_api && dil_api->get_vfm_info)
+		return dil_api->get_vfm_info(vfm_info);
+	else
+		return false;
+}
+EXPORT_SYMBOL(di_vfm_info);
+
 int di_s_bypass_ch(int index, bool on)
 {
 	if (dil_api && dil_api->s_bypass_ch)
@@ -359,6 +379,14 @@ int di_s_bypass_ch(int index, bool on)
 	return DI_ERR_UNDEFINED;
 }
 EXPORT_SYMBOL(di_s_bypass_ch);
+
+bool dim_get_post_link(void)
+{
+	if (dil_api && dil_api->is_post_link)
+		return dil_api->is_post_link();
+	return 0;
+}
+EXPORT_SYMBOL(dim_get_post_link);
 
 /***************************************
  * reserved mem for di *

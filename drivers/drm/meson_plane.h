@@ -48,6 +48,7 @@ struct am_osd_plane {
 	struct drm_property *occupied_property;
 	struct drm_property *prop_sec_en;
 	struct drm_property *palette;
+	struct drm_property *unsupport_nonafbc;
 	bool osd_occupied;
 	u32 palette_id;
 	/*max fb property*/
@@ -62,6 +63,10 @@ struct am_osd_plane {
 	u32 dump_size;
 	bool bflg;
 	u32 *receive_palette;
+	int osd_permanent_blank;
+
+	/* sysfs debug*/
+	u16 pixel_blend_debug;
 };
 
 struct am_video_plane {
@@ -124,4 +129,7 @@ void meson_video_set_vfmmode(struct device_node *of_node,
 int am_meson_dmabuf_export_sync_file_ioctl(struct drm_device *dev,
 	void *data, struct drm_file *file_priv);
 #endif
+int meson_plane_mute_ioctl(struct drm_device *dev,
+	void *data, struct drm_file *file_priv);
+
 #endif

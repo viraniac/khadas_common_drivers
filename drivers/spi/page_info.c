@@ -216,7 +216,6 @@ static void page_info_init_from_mtd(struct mtd_info *mtd, u8 cmd, u32 fip_size, 
 		goto _cal_sum;
 
 	ecc_steps = mtd->writesize >> 9;
-	page_info->host_cfg.n2m_cmd = (DEFAULT_ECC_MODE & (~0x3F)) | ecc_steps;
 	page_info->host_cfg.frequency_index = 0xFF;
 	page_info->dev_cfg1.ca_lanes = 0;
 	page_info->dev_cfg1.cs_deselect_time = 0xFF;
@@ -299,14 +298,23 @@ EXPORT_SYMBOL_GPL(page_info_pre_init);
 bool page_info_is_page(int page)
 {
 	enum PAGE_INFO_V page_info_ver;
+	bool is_info_page = 0;
 
 	page_info_ver = get_page_info_version();
 	if (page_info_ver == PAGE_INFO_V1)
-		return unlikely(((page % 128) == 31) && (page < 1024));
+		is_info_page = unlikely(((page % 128) == 31) && (page < 1024));
 	else if (page_info_ver == PAGE_INFO_V2 || page_info_ver == PAGE_INFO_V3)
-		return unlikely(!(page % 128) && (page < 1024));
-	else
-		return 0;
+		is_info_page = unlikely(!(page % 128) && (page < 1024));
+
+#if IS_ENABLED(CONFIG_AMLOGIC_SPI_NFC)
+	if (spi_nfc_need_infopage_force_hostecc()) {
+		if (is_info_page)
+			spi_nfc_set_ecc(0);
+		else
+			spi_nfc_set_ecc(1);
+	}
+#endif
+	return is_info_page;
 }
 EXPORT_SYMBOL_GPL(page_info_is_page);
 

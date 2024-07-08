@@ -27,6 +27,7 @@
 #include <linux/amlogic/aml_spi_nand.h>
 #include <linux/amlogic/aml_storage.h>
 #include <linux/amlogic/aml_spi_mem.h>
+#include <linux/amlogic/nand_encryption.h>
 
 #define NAND_BLOCK_GOOD	0
 #define NAND_BLOCK_BAD	1
@@ -56,6 +57,53 @@ struct meson_spinand {
 };
 
 struct meson_spinand *meson_spinand_global;
+
+int meson_spinand_rsv_erase(struct mtd_info *mtd, struct erase_info *einfo)
+{
+	int ret;
+
+	ret = nanddev_mtd_erase(mtd, einfo);
+
+	return ret;
+}
+
+int meson_spinand_rsv_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
+{
+	return spinand_mtd_write_unlock(mtd, to, ops);
+}
+
+int meson_spinand_rsv_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
+{
+	return spinand_mtd_read_unlock(mtd, from, ops);
+}
+
+int meson_spinand_rsv_isbad(struct mtd_info *mtd, loff_t offs)
+{
+	struct meson_spinand *meson_spinand = meson_spinand_global;
+	int eraseblock;
+	u8 status;
+
+	eraseblock = (int)(offs >> (ffs(mtd->erasesize) - 1));
+	status = meson_spinand->block_status[eraseblock];
+
+	return status ? 1 : 0;
+}
+
+int meson_spinand_rsv_get_device(struct mtd_info *mtd)
+{
+	struct spinand_device *spinand = mtd_to_spinand(mtd);
+
+	mutex_lock(&spinand->lock);
+
+	return 0;
+}
+
+void meson_spinand_rsv_release_device(struct mtd_info *mtd)
+{
+	struct spinand_device *spinand = mtd_to_spinand(mtd);
+
+	mutex_unlock(&spinand->lock);
+}
 
 void spinand_get_tpl_info(u32 *fip_size, u32 *fip_copies)
 {
@@ -193,6 +241,14 @@ int meson_spinand_init(struct spinand_device *spinand, struct mtd_info *mtd)
 	mtd->erasesize_shift = meson_spinand->erasesize_shift;
 	mtd->writesize_shift = ffs(mtd->writesize) - 1;
 
+	meson_spinand->rsv->mtd = mtd;
+	meson_spinand->rsv->rsv_ops._erase = meson_spinand_rsv_erase;
+	meson_spinand->rsv->rsv_ops._write_oob = meson_spinand_rsv_write_oob;
+	meson_spinand->rsv->rsv_ops._read_oob = meson_spinand_rsv_read_oob;
+	meson_spinand->rsv->rsv_ops._block_markbad = NULL;
+	meson_spinand->rsv->rsv_ops._block_isbad = meson_spinand_rsv_isbad;
+	meson_spinand->rsv->rsv_ops._get_device = meson_spinand_rsv_get_device;
+	meson_spinand->rsv->rsv_ops._release_device = meson_spinand_rsv_release_device;
 	meson_rsv_init(mtd, meson_spinand->rsv);
 
 	err = meson_spinand_bbt_check(mtd);
@@ -325,6 +381,24 @@ static void meson_partition_relocate(struct mtd_info *mtd,
 #endif
 }
 
+#ifdef CONFIG_NAND_ENCRYPTION
+static void mtd_loop_encrypted_partition(struct mtd_info *mtd)
+{
+	struct mtd_info *child, *master = mtd_get_master(mtd);
+	struct mtd_partition part, *ppart;
+
+	ppart = &part;
+	mutex_lock(&master->master.partitions_lock);
+	list_for_each_entry(child, &mtd->partitions, part.node) {
+		ppart->offset = child->part.offset;
+		ppart->size = child->part.size;
+		ppart->name = child->name;
+		set_region_encrypted(mtd, ppart, true);
+	}
+	mutex_unlock(&master->master.partitions_lock);
+}
+#endif
+
 static const char * const meson_mtd_types[] = {
 	"cmdlinepart",
 	NULL
@@ -336,13 +410,20 @@ int meson_add_mtd_partitions(struct mtd_info *mtd)
 	struct mtd_partition *part;
 	loff_t offset;
 	u32 rsv_block_num = meson_rsv_get_block_cnt(NAND_RSV_INDEX);
-	int i = 0;
+	int i = 0, ret;
 
 	pdata = meson_partition_parse_platform_data(mtd_get_of_node(mtd));
 	if (!pdata) {
 		pr_err("no partition in dts, init partition from env!\n");
 		mtd->name = "aml-nand";
-		return mtd_device_parse_register(mtd, meson_mtd_types, NULL, NULL, 0);
+		ret = mtd_device_parse_register(mtd, meson_mtd_types, NULL, NULL, 0);
+		if (ret)
+			return ret;
+#ifdef CONFIG_NAND_ENCRYPTION
+		aml_nand_param_check_and_layout_init(mtd);
+		mtd_loop_encrypted_partition(mtd);
+#endif
+		return 0;
 	}
 
 	/* bootloader */
@@ -393,6 +474,9 @@ int meson_add_mtd_partitions(struct mtd_info *mtd)
 		part->offset = offset;
 		meson_partition_relocate(mtd, part);
 		offset += part->size;
+#ifdef CONFIG_NAND_ENCRYPTION
+		set_region_encrypted(mtd, part, true);
+#endif
 		if (offset > mtd->size)
 			goto meson_add_mtd_partitions_err;
 	}
@@ -401,6 +485,9 @@ int meson_add_mtd_partitions(struct mtd_info *mtd)
 	part++;
 	part->offset = offset;
 	part->size = mtd->size - offset;
+#ifdef CONFIG_NAND_ENCRYPTION
+	set_region_encrypted(mtd, part, true);
+#endif
 
 	return mtd_device_register(mtd, pdata->part, pdata->part_num);
 

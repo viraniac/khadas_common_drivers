@@ -19,7 +19,7 @@ void set21_s1a_hpll_clk_out(u32 frac_rate, u32 clk)
 	case 5940000:
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL0, 0x31204F7);
 		if (frac_rate)
-			hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, 0x8148);
+			hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, 0x8168);
 		else
 			hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, 0x00010000);
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL2, 0x01000000);
@@ -269,8 +269,8 @@ void set21_s1a_hpll_clk_out(u32 frac_rate, u32 clk)
 		HDMITX_INFO("HPLL: 0x%x\n", hd21_read_reg(ANACTRL_HDMIPLL_CTRL0));
 		break;
 	case 4115866:
-		hd21_write_reg(ANACTRL_HDMIPLL_CTRL0, 0x030004a8);
-		hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, 0xfd00);
+		hd21_write_reg(ANACTRL_HDMIPLL_CTRL0, 0x030004ab);
+		hd21_write_reg(ANACTRL_HDMIPLL_CTRL1, 0x0000fd22);
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL2, 0x01000000);
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL3, 0x40218000);
 		hd21_write_reg(ANACTRL_HDMIPLL_CTRL4, 0x05501000);
@@ -507,5 +507,14 @@ void set21_phy_by_mode_s1a(u32 mode)
 		hd21_write_reg(ANACTRL_HDMIPHY_CTRL0, 0x9fe36284);
 		hd21_write_reg(ANACTRL_HDMIPHY_CTRL3, 0x5af6fc1b);
 		break;
+	}
+}
+
+void hdmitx_s1a_clock_gate_ctrl(bool en)
+{
+	if (!en) {
+		hd21_set_reg_bits(ANACTRL_HDMIPLL_CTRL0, 0, 29, 1);
+		usleep_range(49, 51);
+		hd21_set_reg_bits(ANACTRL_HDMIPLL_CTRL0, 0, 28, 1);
 	}
 }

@@ -44,6 +44,7 @@
 #define DSC_STATE_FREE      0
 #define DSC_STATE_READY     3
 #define DSC_STATE_GO        4
+#define DSC_OPEN_TIMES		32
 
 struct dsc_channel {
 	struct aml_dsc *dsc;
@@ -129,9 +130,11 @@ static struct dsc_pid_table *_get_dsc_pid_table(int index, int dsc_type)
 	return &table[index];
 }
 
-static int _malloc_dsc_table_index(int dsc_type)
+static int _malloc_dsc_table_index(int dsc_type, int sid, int pid)
 {
 	int i = 0;
+	int k = 0;
+	int free_count = 0;
 	struct dsc_pid_table *table;
 
 	if (dsc_type == CA_DSC_COMMON_TYPE)
@@ -146,7 +149,22 @@ static int _malloc_dsc_table_index(int dsc_type)
 		return -1;
 #endif
 
-	for (i = 0; i < MAX_DSC_PID_TABLE_NUM; i++) {
+	if (pid != -1) {
+		for (i = 0; i < MAX_DSC_PID_TABLE_NUM; i++) {
+			if (table[i].used == 1 &&
+				table[i].sid == sid &&
+				table[i].pid == pid) {
+				k = i;
+			} else {
+				if (i > k && table[i].used == 0)
+					free_count++;
+			}
+		}
+		if (free_count == 0)
+			k = 0;
+	}
+
+	for (i = k; i < MAX_DSC_PID_TABLE_NUM; i++) {
 		if (table[i].used == 0) {
 			table[i].used = 1;
 			table[i].valid = 0;
@@ -267,7 +285,7 @@ static int _dsc_chan_alloc(struct aml_dsc *dsc,
 	ch->dsc_type = dsc_type;
 	ch->algo = algo;
 
-	index = _malloc_dsc_table_index(dsc_type);
+	index = _malloc_dsc_table_index(dsc_type, ch->sid, pid);
 	if (index == -1) {
 		dprint("%s _malloc_dsc_table_index fail\n", __func__);
 		vfree(ch);
@@ -342,7 +360,7 @@ static int _dsc_chan_set_key(struct dsc_channel *ch,
 
 	if (parity == CA_KEY_00_TYPE || parity == CA_KEY_00_IV_TYPE) {
 		if (ch->index00 == -1) {
-			ch->index00 = _malloc_dsc_table_index(ch->dsc_type);
+			ch->index00 = _malloc_dsc_table_index(ch->dsc_type, -1, -1);
 			if (ch->index00 == -1) {
 				dprint("%s _malloc_dsc_table_index fail\n",
 				       __func__);
@@ -794,9 +812,9 @@ static const struct file_operations dvb_dsc_fops = {
 
 static struct dvb_device dvbdev_dsc = {
 	.priv = NULL,
-	.users = 1,
-	.readers = 1,
-	.writers = 1,
+	.users = DSC_OPEN_TIMES,
+	.readers = DSC_OPEN_TIMES,
+	.writers = DSC_OPEN_TIMES,
 	.fops = &dvb_dsc_fops,
 };
 
@@ -825,6 +843,8 @@ int dsc_set_sid(int id, int sid)
 
 	if (!advb->dsc[id])
 		return -1;
+	if (advb->dsc[id]->sid == sid)
+		return 0;
 	advb->dsc[id]->sid = sid;
 	dsc = advb->dsc[id];
 	if (dsc->dev) {

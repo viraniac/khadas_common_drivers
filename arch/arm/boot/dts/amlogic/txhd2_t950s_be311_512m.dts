@@ -230,6 +230,11 @@
 			pmsg-size = <0x20000>;
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0>;
+		};
+
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
 			reg = <0x04f00000 0x00100000>;
@@ -255,7 +260,7 @@
 		/*  POST PROCESS MANAGER */
 		ppmgr_reserved:linux,ppmgr {
 			compatible = "shared-dma-pool";
-			size = <0x0 0x0>;
+			size = <0x0>;
 		};
 
 		picdec_cma_reserved:linux,picdec {
@@ -288,8 +293,8 @@
 
 		lcd_tcon_reserved:linux,lcd_tcon {
 			compatible = "amlogic, lcd_tcon";
-			reg = <0x1f000000 0x00800000>;
-			no-map;
+			reg = <0x1f000000 0x00402840>;
+			//no-map;
 		};
 
 		/*  vdin0 CMA pool */
@@ -300,7 +305,7 @@
 		 * 1920x1080x2x5 = 20 M
 		 */
 		/*	size = <0x0 0x01400000>;*/
-		/*	alignment = <0x0 0x400000>;*/
+		/*	alignment = <0x400000>;*/
 		/*};*/
 		/*  vdin1 CMA pool */
 		vdin1_cma_reserved:linux,vdin1_cma {
@@ -308,10 +313,10 @@
 			reusable;
 			/* up to 1280x720 yuv422 8bit and 4 buffers
 			 * 1280x720x2x4 = 8 M
-			 * size = <0x0 0x800000>;
+			 * size = <0x800000>;
 			 */
-			size = <0x0 0x800000>;
-			alignment = <0x0 0x400000>;
+			size = <0x800000>;
+			alignment = <0x400000>;
 			alloc-ranges = <0x0 0x3f000000>;
 		};
 
@@ -319,7 +324,7 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			/* ion_codec_mm max can alloc size 80M */
-			size = <0x7400000>;
+			size = <0x7c00000>;
 			alignment = <0x400000>;
 			linux,contiguous-region;
 		};
@@ -469,15 +474,6 @@
 			0x0 0x0
 			0xff680000 0xffff>;
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -667,6 +663,8 @@
 		status = "okay";
 		amlvideo2_id = <1>;
 		cma_mode = <1>;
+		/*all NV21 1:720P 2:1080P 3:4K*/
+		codec_mm_alloc = <1>;
 	};
 
 	/* for external keypad */

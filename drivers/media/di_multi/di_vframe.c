@@ -115,11 +115,11 @@ void nins_used2idle_one(struct di_ch_s *pch, struct dim_nins_s *ins)
  *	*pvf
  *	vf_copy
  **************************************/
-
+#define DIM_K_VFM_IN_DCT_LIMIT	3
 static bool nins_m_in_vf(struct di_ch_s *pch)
 {
 	struct buf_que_s *pbufq;
-	unsigned int in_nub, free_nub;
+	unsigned int in_nub, free_nub, dct_nub, dct_nub_tmp;
 	int i;
 	unsigned int ch;
 	struct vframe_s *vf;
@@ -137,13 +137,24 @@ static bool nins_m_in_vf(struct di_ch_s *pch)
 
 	in_nub		= qbufp_count(pbufq, QBF_NINS_Q_CHECK);
 	free_nub	= qbufp_count(pbufq, QBF_NINS_Q_IDLE);
+	dct_nub		= qbufp_count(pbufq, QBF_NINS_Q_DCT);
+	dct_nub_tmp = dct_nub;
 
-	if (in_nub >= DIM_K_VFM_IN_LIMIT	||
-	    (free_nub < (DIM_K_VFM_IN_LIMIT - in_nub))) {
+	if ((in_nub + dct_nub) >= DIM_K_VFM_IN_DCT_LIMIT	||
+	    (free_nub < (DIM_K_VFM_IN_DCT_LIMIT - in_nub - dct_nub))) {
 		return false;
 	}
 
-	for (i = 0; i < (DIM_K_VFM_IN_LIMIT - in_nub); i++) {
+	for (i = 0; i < (DIM_K_VFM_IN_DCT_LIMIT - in_nub - dct_nub); i++) {
+		if (dct_nub_tmp > 0) {
+			pins = nins_move(pch, QBF_NINS_Q_DCT, QBF_NINS_Q_CHECK);
+			if (pins) {
+				dct_nub_tmp--;
+				continue;
+			} else {
+				dct_nub_tmp = 0;
+			}
+		}
 		vf = pw_vf_peek(ch);
 		if (!vf)
 			break;
@@ -195,7 +206,6 @@ static bool nins_m_in_vf(struct di_ch_s *pch)
 	return true;
 }
 
-#define DIM_K_VFM_IN_DCT_LIMIT	3
 static bool nins_m_in_vf_dct(struct di_ch_s *pch)
 {
 	struct buf_que_s *pbufq;
@@ -577,12 +587,20 @@ static void  di_ori_event_set_3D(int type, void *data, unsigned int channel)
 #endif
 }
 
+static void  di_ori_event_set_fcc(unsigned int channel)
+{
+	struct div2_mm_s *mm = dim_mm_get(channel);
+
+	mm->fcc_value = 2;
+	pr_info("%s: ch[%d] %d\n", __func__, channel, mm->fcc_value);
+}
+
 /*************************/
 /************************************/
 /************************************/
 struct vframe_s *di_vf_l_get(unsigned int channel)
 {
-	vframe_t *vframe_ret = NULL;
+	struct vframe_s *vframe_ret = NULL;
 //	struct di_buf_s *di_buf = NULL;
 	struct di_ch_s *pch;
 
@@ -868,6 +886,7 @@ int di_vf_l_states(struct vframe_states *states, unsigned int channel)
 	if (dimp_get(edi_mp_di_dbg_mask) & 0x1) {
 		di_pr_info("di-pre-ready-num:%d\n", psumx->b_pre_ready);
 		di_pr_info("di-display-num:%d\n", psumx->b_display);
+		di_pr_info("di-pst-link-num:%d\n", psumx->b_pst_link);
 	}
 	return 0;
 }
@@ -903,10 +922,12 @@ static int di_receiver_event_fun(int type, void *data, void *arg)
 	int ret = 0;
 	struct di_ch_s *pch;
 	char *provider_name = (char *)data;
+	struct div2_mm_s *mm = NULL;
 
 	ch = *(int *)arg;
 	pch = get_chdata(ch);
 	pvfm = get_dev_vframe(ch);
+	mm = dim_mm_get(ch);
 
 	if (type <= VFRAME_EVENT_PROVIDER_CMD_MAX	&&
 	    di_receiver_event_cmd[type]) {
@@ -931,6 +952,8 @@ static int di_receiver_event_fun(int type, void *data, void *arg)
 		dim_trig_unreg(ch);
 		dim_api_unreg(DIME_REG_MODE_VFM, pch);
 		mutex_unlock(&pch->itf.lock_reg);
+		if (mm->fcc_value != 0)
+			mm->fcc_value--;
 		break;
 	case VFRAME_EVENT_PROVIDER_REG:
 
@@ -980,6 +1003,9 @@ static int di_receiver_event_fun(int type, void *data, void *arg)
 	case VFRAME_EVENT_PROVIDER_FR_HINT:
 	case VFRAME_EVENT_PROVIDER_FR_END_HINT:
 		vf_notify_receiver(pvfm->name, type, data);
+		break;
+	case VFRAME_EVENT_PROVIDER_FCC:
+		di_ori_event_set_fcc(ch);
 		break;
 
 	default:
@@ -1196,8 +1222,8 @@ static struct vframe_s *di_vf_peek(void *arg)
 
 	if (di_is_pause(ch))
 		return NULL;
-	if (pch->itf.pre_vpp_link && dpvpp_vf_ops())
-		return dpvpp_vf_ops()->peek(pch->itf.p_itf);
+	if (pch->itf.p_vpp_link && dpvpp_vf_ops(pch->link_mode))
+		return dpvpp_vf_ops(pch->link_mode)->peek(pch->itf.p_itf);
 	if (is_bypss2_complete(ch)) {
 		vfm = dim_nbypass_peek(pch);
 		if (vfm)
@@ -1224,8 +1250,8 @@ static struct vframe_s *di_vf_get(void *arg)
 		return NULL;
 
 	di_pause_step_done(ch);
-	if (pch->itf.pre_vpp_link && dpvpp_vf_ops())
-		return dpvpp_vf_ops()->get(pch->itf.p_itf);
+	if (pch->itf.p_vpp_link && dpvpp_vf_ops(pch->link_mode))
+		return dpvpp_vf_ops(pch->link_mode)->get(pch->itf.p_itf);
 
 	/*pvfm = get_dev_vframe(ch);*/
 
@@ -1266,8 +1292,8 @@ static void di_vf_put(struct vframe_s *vf, void *arg)
 		return;
 	}
 
-	if (pch->itf.pre_vpp_link && dpvpp_vf_ops()) {
-		dpvpp_vf_ops()->put(vf, pch->itf.p_itf);
+	if (pch->itf.p_vpp_link && dpvpp_vf_ops(pch->link_mode)) {
+		dpvpp_vf_ops(pch->link_mode)->put(vf, pch->itf.p_itf);
 		return;
 	}
 	if (is_bypss2_complete(ch)) {
@@ -1300,8 +1326,8 @@ static int di_vf_states(struct vframe_states *states, void *arg)
 	if (!states)
 		return -1;
 	pch = get_chdata(ch);
-	if (pch->itf.pre_vpp_link && dpvpp_vf_ops()) {
-		dpvpp_vf_ops()->vf_states(states, pch->itf.p_itf);
+	if (pch->itf.p_vpp_link && dpvpp_vf_ops(pch->link_mode)) {
+		dpvpp_vf_ops(pch->link_mode)->vf_states(states, pch->itf.p_itf);
 		return 0;
 	}
 

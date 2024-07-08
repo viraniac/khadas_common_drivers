@@ -32,6 +32,8 @@
 #include <dt-bindings/mailbox/t3x-mbox.h>
 #include <dt-bindings/mailbox/s5-mbox.h>
 #include <dt-bindings/mailbox/s1a-mbox.h>
+#include <dt-bindings/mailbox/s7-mbox.h>
+#include <dt-bindings/mailbox/s7d-mbox.h>
 #include "meson_mbox_fifo.h"
 #include "meson_mbox_comm.h"
 
@@ -361,6 +363,9 @@ static int mbox_fifo_parse_dt(struct platform_device *pdev, struct aml_chan_priv
 	u32 irq_nums = 0;
 	u32 mbox_nums = 0;
 	u32 mboxid = 0;
+	u32 spt_ao_alive_det = 0;
+	u32 ao_sts_mboxid = 0;
+	u32 ree2ao_mboxid = 0;
 	int idx = 0;
 	int err = 0;
 
@@ -420,6 +425,20 @@ static int mbox_fifo_parse_dt(struct platform_device *pdev, struct aml_chan_priv
 	aml_chan = devm_kzalloc(dev, sizeof(*aml_chan) * mbox_nums, GFP_KERNEL);
 	if (IS_ERR(aml_chan))
 		return PTR_ERR(aml_chan);
+
+	err = of_property_read_u32(dev->of_node,
+			"aocpu_sts_mboxid", &ao_sts_mboxid);
+	if (err) {
+		dev_err(dev, "Do not support aocpu alive detection %d\n", err);
+	} else {
+		err = of_property_read_u32(dev->of_node,
+				"ree2aocpu_mboxid", &ree2ao_mboxid);
+		if (err)
+			dev_err(dev, "failed to get ree2aocpu mbox id, %d\n", err);
+		else
+			spt_ao_alive_det = 1;
+	}
+
 	for (idx = 0; idx < mbox_nums; idx++) {
 		err = of_property_read_u32_index(dev->of_node, "mboxids",
 						 idx, &mboxid);
@@ -434,6 +453,9 @@ static int mbox_fifo_parse_dt(struct platform_device *pdev, struct aml_chan_priv
 		aml_chan[idx].mbox_fsts_addr = mbox_fsts_base + CTL_OFFSET(mboxid);
 		aml_chan[idx].mbox_irqsts_addr = mbox_irq_base + IRQ_STS_OFFSET(irqctlr);
 		aml_chan[idx].mbox_irqclr_addr = mbox_irq_base + IRQ_CLR_OFFSET(irqclr);
+		if (spt_ao_alive_det && mboxid == ree2ao_mboxid)
+			aml_chan[idx].aocpu_tick_cnt_addr = mbox_rd_base +
+				PAYLOAD_OFFSET(ao_sts_mboxid);
 		mutex_init(&aml_chan[idx].mutex);
 		aml_chan[idx].tx_complete = NULL;
 	}
@@ -533,6 +555,7 @@ static int mbox_fifo_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 struct mbox_domain sc2_mbox_domains[] = {
 	[SC2_DSPA2REE0] = MBOX_DOMAIN(SC2_DSPA2REE0, SC2_MBOX_DSPA2REE, 0),
 	[SC2_REE2DSPA0] = MBOX_DOMAIN(SC2_REE2DSPA0, SC2_MBOX_REE2DSPA, 0),
@@ -658,6 +681,22 @@ static struct mbox_domain_data s5_mbox_domains_data __initdata = {
 	.domain_counts = ARRAY_SIZE(s5_mbox_domains),
 };
 
+struct mbox_domain s7_mbox_domains[] = {
+	[S7_AO2REE]    = MBOX_DOMAIN(S7_AO2REE, S7_MBOX_AO2REE, 0),
+	[S7_REE2AO0]   = MBOX_DOMAIN(S7_REE2AO0, S7_MBOX_REE2AO, 0),
+	[S7_REE2AO1]   = MBOX_DOMAIN(S7_REE2AO1, S7_MBOX_REE2AO, 0),
+	[S7_REE2AO2]   = MBOX_DOMAIN(S7_REE2AO2, S7_MBOX_REE2AO, 0),
+	[S7_REE2AO3]   = MBOX_DOMAIN(S7_REE2AO3, S7_MBOX_REE2AO, 0),
+	[S7_REE2AO4]   = MBOX_DOMAIN(S7_REE2AO4, S7_MBOX_REE2AO, 0),
+	[S7_REE2AO5]   = MBOX_DOMAIN(S7_REE2AO5, S7_MBOX_REE2AO, 0),
+};
+
+static struct mbox_domain_data s7_mbox_domains_data __initdata = {
+	.mbox_domains = s7_mbox_domains,
+	.domain_counts = ARRAY_SIZE(s7_mbox_domains),
+};
+#endif
+
 struct mbox_domain s1a_mbox_domains[] = {
 	[S1A_AO2REE]    = MBOX_DOMAIN(S1A_AO2REE, S1A_MBOX_AO2REE, 0),
 	[S1A_REE2AO0]   = MBOX_DOMAIN(S1A_REE2AO0, S1A_MBOX_REE2AO, 0),
@@ -666,6 +705,7 @@ struct mbox_domain s1a_mbox_domains[] = {
 	[S1A_REE2AO3]   = MBOX_DOMAIN(S1A_REE2AO3, S1A_MBOX_REE2AO, 0),
 	[S1A_REE2AO4]   = MBOX_DOMAIN(S1A_REE2AO4, S1A_MBOX_REE2AO, 0),
 	[S1A_REE2AO5]   = MBOX_DOMAIN(S1A_REE2AO5, S1A_MBOX_REE2AO, 0),
+	[S1A_REE2AO6]   = MBOX_DOMAIN(S1A_REE2AO6, S1A_MBOX_REE2AO, 0),
 };
 
 static struct mbox_domain_data s1a_mbox_domains_data __initdata = {
@@ -673,7 +713,26 @@ static struct mbox_domain_data s1a_mbox_domains_data __initdata = {
 	.domain_counts = ARRAY_SIZE(s1a_mbox_domains),
 };
 
+struct mbox_domain s7d_mbox_domains[] = {
+	[S7D_AO2REE]    = MBOX_DOMAIN(S7D_AO2REE, S7D_MBOX_AO2REE, 0),
+	[S7D_REE2AO0]   = MBOX_DOMAIN(S7D_REE2AO0, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO1]   = MBOX_DOMAIN(S7D_REE2AO1, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO2]   = MBOX_DOMAIN(S7D_REE2AO2, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO3]   = MBOX_DOMAIN(S7D_REE2AO3, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO4]   = MBOX_DOMAIN(S7D_REE2AO4, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO5]   = MBOX_DOMAIN(S7D_REE2AO5, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO6]   = MBOX_DOMAIN(S7D_REE2AO6, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO7]   = MBOX_DOMAIN(S7D_REE2AO7, S7D_MBOX_REE2AO, 0),
+	[S7D_REE2AO8]   = MBOX_DOMAIN(S7D_REE2AO8, S7D_MBOX_REE2AO, 0),
+};
+
+static struct mbox_domain_data s7d_mbox_domains_data __initdata = {
+	.mbox_domains = s7d_mbox_domains,
+	.domain_counts = ARRAY_SIZE(s7d_mbox_domains),
+};
+
 static const struct of_device_id mbox_of_match[] = {
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	{
 		.compatible = "amlogic, t3-mbox-fifo",
 		.data = &t3_mbox_domains_data,
@@ -703,8 +762,17 @@ static const struct of_device_id mbox_of_match[] = {
 		.data = &s5_mbox_domains_data,
 	},
 	{
+		.compatible = "amlogic, s7-mbox-fifo",
+		.data = &s7_mbox_domains_data,
+	},
+#endif
+	{
 		.compatible = "amlogic, s1a-mbox-fifo",
 		.data = &s1a_mbox_domains_data,
+	},
+	{
+		.compatible = "amlogic, s7d-mbox-fifo",
+		.data = &s7d_mbox_domains_data,
 	},
 	{},
 };

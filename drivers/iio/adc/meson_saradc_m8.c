@@ -6,7 +6,7 @@
 #include "meson_saradc.h"
 
 #define MESON_SAR_ADC_REG3					0x0c
-	#define MESON_SAR_ADC_REG3_CTRL_CHAN7_MUX_SEL_MASK	GENMASK(25, 23)
+	#define MESON_SAR_ADC_REG3_CTRL_TEST_MUX_SEL_MASK	GENMASK(25, 23)
 	#define MESON_SAR_ADC_REG3_CTRL_CONT_RING_COUNTER_EN	BIT(27)
 
 #define MESON_SAR_ADC_FIFO_RD					0x18
@@ -109,6 +109,18 @@ static struct iio_chan_spec meson_m8_sar_adc_and_temp_iio_channels[] = {
 };
 #endif
 
+void meson_m8_sar_adc_disable_ring(struct meson_sar_adc_priv *priv)
+{
+	int regval;
+
+	regval = FIELD_PREP(MESON_SAR_ADC_REG3_CTRL_CONT_RING_COUNTER_EN,
+			    priv->param->disable_ring_counter);
+
+	regmap_update_bits(priv->regmap, MESON_SAR_ADC_REG3,
+			   MESON_SAR_ADC_REG3_CTRL_CONT_RING_COUNTER_EN,
+			   regval);
+}
+
 static int meson_m8_sar_adc_extra_init(struct iio_dev *indio_dev)
 {
 	int regval;
@@ -142,12 +154,7 @@ static int meson_m8_sar_adc_extra_init(struct iio_dev *indio_dev)
 			   MESON_SAR_ADC_REG11_EOC, regval);
 
 	/* disable internal ring counter */
-	regval = FIELD_PREP(MESON_SAR_ADC_REG3_CTRL_CONT_RING_COUNTER_EN,
-			    priv->param->disable_ring_counter);
-
-	regmap_update_bits(priv->regmap, MESON_SAR_ADC_REG3,
-			   MESON_SAR_ADC_REG3_CTRL_CONT_RING_COUNTER_EN,
-			   regval);
+	meson_m8_sar_adc_disable_ring(priv);
 
 	/* to select the VDDA if the vref is optional */
 	regval = FIELD_PREP(MESON_SAR_ADC_REG11_VREF_SEL, VDDA_AS_VREF);
@@ -175,24 +182,24 @@ static int meson_m8_sar_adc_extra_init(struct iio_dev *indio_dev)
 	return 0;
 }
 
-static void meson_m8_sar_adc_set_ch7_mux(struct iio_dev *indio_dev,
-					 enum meson_sar_adc_chan7_mux_sel sel)
+void meson_m8_sar_adc_set_test_input(struct iio_dev *indio_dev,
+				     enum meson_sar_adc_test_input_sel sel)
 {
 	unsigned int regval;
 	struct meson_sar_adc_priv *priv = iio_priv(indio_dev);
 
-	regval = FIELD_PREP(MESON_SAR_ADC_REG3_CTRL_CHAN7_MUX_SEL_MASK, sel);
+	regval = FIELD_PREP(MESON_SAR_ADC_REG3_CTRL_TEST_MUX_SEL_MASK, sel);
 	regmap_update_bits(priv->regmap, MESON_SAR_ADC_REG3,
-			   MESON_SAR_ADC_REG3_CTRL_CHAN7_MUX_SEL_MASK, regval);
+			   MESON_SAR_ADC_REG3_CTRL_TEST_MUX_SEL_MASK, regval);
 
-	priv->chan7_mux_sel = sel;
+	priv->test_input_sel = sel;
 
 	usleep_range(10, 20);
 }
 
-static int meson_m8_sar_adc_read_fifo(struct iio_dev *indio_dev,
-				      const struct iio_chan_spec *chan,
-				      bool chk_channel)
+int meson_m8_sar_adc_read_fifo(struct iio_dev *indio_dev,
+			       const struct iio_chan_spec *chan,
+			       bool chk_channel)
 {
 	int fifo_chan;
 	unsigned int regval;
@@ -214,7 +221,7 @@ static int meson_m8_sar_adc_read_fifo(struct iio_dev *indio_dev,
 }
 
 /* enable chnl regs which save the sampling value for individual channel */
-static void meson_m8_sar_adc_enable_chnl(struct iio_dev *indio_dev, bool en)
+void meson_m8_sar_adc_enable_chnl(struct iio_dev *indio_dev, bool en)
 {
 	struct meson_sar_adc_priv *priv = iio_priv(indio_dev);
 
@@ -223,8 +230,8 @@ static void meson_m8_sar_adc_enable_chnl(struct iio_dev *indio_dev, bool en)
 			   en ? MESON_SAR_ADC_REG11_CHNL_REGS_EN : 0);
 }
 
-static int meson_m8_sar_adc_read_chnl(struct iio_dev *indio_dev,
-				      const struct iio_chan_spec *chan)
+int meson_m8_sar_adc_read_chnl(struct iio_dev *indio_dev,
+			       const struct iio_chan_spec *chan)
 {
 	int grp_off;
 	int chan_off;
@@ -288,7 +295,7 @@ static void meson_m8_sar_adc_select_temp(struct iio_dev *indio_dev,
 
 static const struct meson_sar_adc_diff_ops meson_m8_diff_ops = {
 	.extra_init = meson_m8_sar_adc_extra_init,
-	.set_ch7_mux = meson_m8_sar_adc_set_ch7_mux,
+	.set_test_input = meson_m8_sar_adc_set_test_input,
 	.read_fifo = meson_m8_sar_adc_read_fifo,
 	.enable_chnl = meson_m8_sar_adc_enable_chnl,
 	.read_chnl = meson_m8_sar_adc_read_chnl,
@@ -296,7 +303,7 @@ static const struct meson_sar_adc_diff_ops meson_m8_diff_ops = {
 	.select_temp = meson_m8_sar_adc_select_temp,
 };
 
-static const struct regmap_config meson_sar_adc_regmap_config_g12a = {
+const struct regmap_config meson_sar_adc_regmap_config_g12a = {
 	.reg_bits = 8,
 	.val_bits = 32,
 	.reg_stride = 4,
@@ -317,6 +324,12 @@ static const struct regmap_config meson_sar_adc_regmap_config_meson8 = {
 	.reg_stride = 4,
 	.max_register = MESON_SAR_ADC_DELTA_10,
 };
+
+static const struct meson_sar_adc_calib meson_sar_adc_calib_gxbb = {
+	.test_upper = TEST_MUX_VDD_MUL3_DIV4,
+	.test_lower = TEST_MUX_VDD_DIV4,
+	.test_channel = 7,
+};
 #endif
 
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
@@ -328,7 +341,7 @@ const struct meson_sar_adc_param meson_sar_adc_meson8_param __initconst = {
 	.temperature_trimming_bits = 4,
 	.temperature_multiplier = 18 * 10000,
 	.temperature_divider = 1024 * 10 * 85,
-	.calib_enable = true,
+	.calib = &meson_sar_adc_calib_gxbb,
 	.dops = &meson_m8_diff_ops,
 	.channels = meson_m8_sar_adc_and_temp_iio_channels,
 	.num_channels = ARRAY_SIZE(meson_m8_sar_adc_and_temp_iio_channels),
@@ -341,7 +354,7 @@ const struct meson_sar_adc_param meson_sar_adc_meson8b_param __initconst = {
 	.bandgap_en_mask = BIT(10),
 	.regmap_config = &meson_sar_adc_regmap_config_meson8,
 	.resolution = 10,
-	.calib_enable = true,
+	.calib = &meson_sar_adc_calib_gxbb,
 	.dops = &meson_m8_diff_ops,
 	.channels = meson_m8_sar_adc_iio_channels,
 	.num_channels = ARRAY_SIZE(meson_m8_sar_adc_iio_channels),
@@ -356,7 +369,7 @@ const struct meson_sar_adc_param meson_sar_adc_gxbb_param __initconst = {
 	.resolution = 10,
 	.vrefp_select = 1,
 	.vcm_select = 1,
-	.calib_enable = true,
+	.calib = &meson_sar_adc_calib_gxbb,
 	.dops = &meson_m8_diff_ops,
 	.channels = meson_m8_sar_adc_iio_channels,
 	.num_channels = ARRAY_SIZE(meson_m8_sar_adc_iio_channels),
@@ -372,7 +385,7 @@ const struct meson_sar_adc_param meson_sar_adc_gxl_param __initconst = {
 	.disable_ring_counter = 1,
 	.vrefp_select = 1,
 	.vcm_select = 1,
-	.calib_enable = true,
+	.calib = &meson_sar_adc_calib_gxbb,
 	.dops = &meson_m8_diff_ops,
 	.channels = meson_m8_sar_adc_iio_channels,
 	.num_channels = ARRAY_SIZE(meson_m8_sar_adc_iio_channels),

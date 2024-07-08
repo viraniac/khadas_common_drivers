@@ -225,6 +225,12 @@ static unsigned long freertos_allow_coreup(void)
 		      0, 0, 0, 0, 0, 0, &res);
 	return res.a0;
 }
+
+unsigned long freertos_is_run(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(freertos_is_run);
 #endif
 
 //////////temporary walk around method///////////
@@ -689,24 +695,22 @@ static int aml_rtos_probe(struct platform_device *pdev)
 						sizeof(struct xrtosinfo_t));
 #endif
 	if (rtosinfo) {
+	#if IS_ENABLED(CONFIG_AMLOGIC_FREERTOS_T7)
+		if (rtosinfo->rtos_run_flag == RTOS_RUN_FLAG) {
+	#else
+		if (1) {
+	#endif
+			if (class_register(&freertos_class)) {
+				pr_err("regist freertos_class failed\n");
+				return -EINVAL;
+			}
+		}
+		aml_rtos_logbuf_init();
 		freertos_do_finish(1);
 	} else {
 		pr_err("map freertos info failed\n");
-		goto finish;
 	}
-#if IS_ENABLED(CONFIG_AMLOGIC_FREERTOS_T7)
-	if (rtosinfo->rtos_run_flag == RTOS_RUN_FLAG) {
-#else
-	if (1) {
-#endif
-		if (class_register(&freertos_class)) {
-			pr_err("regist freertos_class failed\n");
-			return -EINVAL;
-		}
-	}
-	aml_rtos_logbuf_init();
 
-finish:
 	return 0;
 }
 

@@ -335,9 +335,8 @@ static void init_leds_data(void)
 		init_leds_mode(1);
 	} else if (platform_id == 8) {
 		init_leds_mode(13);
-	} else {
-		init_leds_mode(6);
 	}
+
 }
 
 static int aw9523_i2c_write(struct meson_aw9523 *aw9523,
@@ -392,13 +391,17 @@ static void aw9523_set_brightness(struct led_classdev *cdev,
 static int aw9523_parse_dt(struct device *dev, struct meson_aw9523 *aw9523,
 				struct device_node *np)
 {
-	int ret = -1;
+	int ret;
 
 	aw9523->reset_gpio = of_get_named_gpio(np, "reset-gpio", 0);
-	if (gpio_is_valid(aw9523->reset_gpio))
+	if (gpio_is_valid(aw9523->reset_gpio)) {
 		ret = devm_gpio_request(dev, aw9523->reset_gpio, "reset-gpio");
-	if (ret < 0)
-		dev_dbg(dev, "using SW reset\n");
+		if (ret) {
+			dev_err(dev, "failed to request gpio\n");
+			return ret;
+		}
+		gpio_direction_output(aw9523->reset_gpio, 1);
+	}
 
 	return 0;
 }
@@ -798,7 +801,7 @@ static void aw9523b_late_resume(struct early_suspend *h)
 {
 	unsigned char color_data[AW9523_MAX_IO] = { 0 };
 
-	memset(color_data, 0xaa, AW9523_MAX_IO);
+	memset(color_data, 0x00, AW9523_MAX_IO);
 	aw9523_i2c_writes(aw9523->i2c, REG_DIM00, AW9523_MAX_IO, color_data);
 	pr_debug("Tiger]aw9523b early resume\n");
 }

@@ -18,13 +18,13 @@ enum meson_sar_adc_vref_sel {
 	VDDA_AS_VREF = 1,
 };
 
-enum meson_sar_adc_chan7_mux_sel {
-	CHAN7_MUX_VSS = 0x0,
-	CHAN7_MUX_VDD_DIV4 = 0x1,
-	CHAN7_MUX_VDD_DIV2 = 0x2,
-	CHAN7_MUX_VDD_MUL3_DIV4 = 0x3,
-	CHAN7_MUX_VDD = 0x4,
-	CHAN7_MUX_CH7_INPUT = 0x7,
+enum meson_sar_adc_test_input_sel {
+	TEST_MUX_VSS = 0x0,
+	TEST_MUX_VDD_DIV4 = 0x1,
+	TEST_MUX_VDD_DIV2 = 0x2,
+	TEST_MUX_VDD_MUL3_DIV4 = 0x3,
+	TEST_MUX_VDD = 0x4,
+	TEST_MUX_CHANN_INPUT = 0x7,
 };
 
 enum meson_sar_adc_sampling_mode {
@@ -35,8 +35,8 @@ enum meson_sar_adc_sampling_mode {
 
 struct meson_sar_adc_diff_ops {
 	int (*extra_init)(struct iio_dev *indio_dev);
-	void (*set_ch7_mux)(struct iio_dev *indio_dev,
-			    enum meson_sar_adc_chan7_mux_sel sel);
+	void (*set_test_input)(struct iio_dev *indio_dev,
+			       enum meson_sar_adc_test_input_sel sel);
 	int (*read_fifo)(struct iio_dev *indio_dev,
 			 const struct iio_chan_spec *chan, bool chk_channel);
 	void (*enable_chnl)(struct iio_dev *indio_dev, bool en);
@@ -51,6 +51,12 @@ struct meson_sar_adc_diff_ops {
 				    const struct iio_chan_spec *chan, bool en);
 	int (*tuning_clock)(struct iio_dev *indio_dev,
 			    enum meson_sar_adc_sampling_mode mode);
+};
+
+struct meson_sar_adc_calib {
+	enum meson_sar_adc_test_input_sel test_upper;
+	enum meson_sar_adc_test_input_sel test_lower;
+	int test_channel;
 };
 
 /* struct meson_sar_adc_param - describe the differences of different platform
@@ -96,7 +102,7 @@ struct meson_sar_adc_param {
 	u8					vrefp_select;
 	u8					vcm_select;
 	u8					adc_eoc;
-	u8					calib_enable;
+	const struct meson_sar_adc_calib	*calib;
 };
 
 struct meson_sar_adc_priv {
@@ -119,10 +125,11 @@ struct meson_sar_adc_priv {
 	int					ticks_per_period;
 	int					active_channel_cnt;
 	u8					*datum_buf;
-	u8					chan7_mux_sel;
+	u8					test_input_sel;
 	u32					continuous_sample_count;
 	struct completion			done;
 	u32					*continuous_sample_buffer;
+	u8					calib_ready;
 };
 
 extern const struct meson_sar_adc_param meson_sar_adc_meson8_param __initconst;
@@ -133,3 +140,4 @@ extern const struct meson_sar_adc_param meson_sar_adc_txlx_param __initconst;
 extern const struct meson_sar_adc_param meson_sar_adc_g12a_param __initconst;
 extern const struct meson_sar_adc_param meson_sar_adc_c2_param __initconst;
 extern const struct meson_sar_adc_param meson_sar_adc_txhd2_param __initconst;
+extern const struct meson_sar_adc_param meson_sar_adc_s7_param __initconst;

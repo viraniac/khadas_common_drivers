@@ -61,12 +61,17 @@ enum cvbs_cpu_type {
 	CVBS_CPU_TYPE_S4D    = 10,
 	CVBS_CPU_TYPE_T5W    = 11,
 	CVBS_CPU_TYPE_S1A    = 12,
+	CVBS_CPU_TYPE_S7     = 13,
+	CVBS_CPU_TYPE_S7D    = 14,
 };
 
 struct meson_cvbsout_data {
 	enum cvbs_cpu_type cpu_id;
 	const char *name;
 	unsigned int vdac_vref_adj;
+	/* not used on new chips, only used for old
+	 * chips which have no efuse for gsw store
+	 */
 	unsigned int vdac_gsw;
 	unsigned int reg_vid_pll_clk_div;
 	unsigned int reg_vid_clk_div;
@@ -111,6 +116,8 @@ struct cvbs_drv_s {
 
 	/*DRM related*/
 	int drm_cvbs_id;
+	/* for external video mute */
+	bool video_mute;
 };
 
 static  DEFINE_MUTEX(cvbs_mutex);

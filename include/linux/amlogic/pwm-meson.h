@@ -21,6 +21,7 @@
 
 #define MESON_NUM_PWMS		2
 #define MESON_DOUBLE_NUM_PWMS	4
+#define MESON_SEPARATED_DOUBLE_NUM_PWMS	2
 #define DEFAULT_CLK		24000000
 #define OSIN_CLK		24000000
 #define FCLK_DIV4_CLK	500000000
@@ -120,6 +121,8 @@ struct meson_pwm_data {
 	unsigned int num_parents;
 	unsigned int double_channel;
 	unsigned int extern_clk;
+	bool channel_separated;
+	bool even_channel;
 };
 
 struct meson_pwm_channel {
@@ -147,6 +150,10 @@ struct meson_pwm {
 	 */
 	spinlock_t lock;
 	struct regmap *regmap_base;
+#ifdef CONFIG_HIBERNATION
+#define PWM_REG_NUMS			8
+	u32 regs_restore[PWM_REG_NUMS];
+#endif
 };
 
 /*the functions only use for meson pwm driver*/

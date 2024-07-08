@@ -3,6 +3,8 @@ RAMDISK_MODULES_LOAD_LIST=(
 	amlogic-uart
 	amlogic-hwspinlock
 	amlogic-gkitool
+	amlogic-cpuinfo
+	user_fault
 	amlogic-memory-debug
 	amlogic-secmon
 	amlogic-clk
@@ -13,9 +15,9 @@ RAMDISK_MODULES_LOAD_LIST=(
 	amlogic-mailbox
 	amlogic-pwm
 	pwm-regulator
+	gpio-regulator.ko
 	amlogic-reset
 	amlogic-power
-	amlogic-cpuinfo
 	amlogic-cpufreq
 	amlogic-efuse-unifykey
 	amlogic-mmc
@@ -29,13 +31,13 @@ RAMDISK_MODULES_LOAD_LIST=(
 	videobuf-core.ko
 	dvb-core.ko
 	amlogic-pm.ko
+	amlogic-adc.ko
 	amlogic-input.ko
 	amlogic-regulator.ko
 	amlogic-watchdog.ko
 	aml-dvb.ko
 	aml_media.ko
 	amlogic-camera.ko
-	amlogic-adc.ko
 	amlogic-rtc-virtual.ko
 	amlogic-thermal.ko
 	amlogic-usb.ko
@@ -56,6 +58,7 @@ VENDOR_MODULES_LOAD_LAST_LIST=(
 )
 
 RECOVERY_MODULES_LOAD_LIST=(
+	i2c-dev.ko
 	dwc_otg.ko
 )
 

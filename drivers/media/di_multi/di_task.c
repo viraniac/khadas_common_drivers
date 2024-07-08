@@ -153,14 +153,6 @@ void task_polling_cmd(void)
 		if (!task_get_cmd(&cmdbyte.cmd32))
 			break;
 		switch (cmdbyte.b.id) {
-		case ECMD_PV_LINK_REG:
-			if (get_datal()->dvs_prevpp.ops)
-				get_datal()->dvs_prevpp.ops->reg(NULL);
-			break;
-		case ECMD_PV_LINK_UNREG:
-			if (get_datal()->dvs_prevpp.ops)
-				get_datal()->dvs_prevpp.ops->unreg(NULL);
-			break;
 		default:
 			break;
 		}
@@ -216,11 +208,15 @@ void task_polling_cmd_keep(unsigned int ch, unsigned int top_sts)
 //ary 2020-12-09	ulong flags = 0;
 	struct di_ch_s *pch;
 	struct di_mng_s *pbm;// = get_bufmng();
+	struct div2_mm_s *mm;
 
 //	if (pbm->cma_flg_run)
 //		return;
-	if (top_sts == EDI_TOP_STATE_READY) {
-		pch = get_chdata(ch);
+	pch = get_chdata(ch);
+	if (IS_ERR_OR_NULL(pch))
+		return;
+	if (top_sts == EDI_TOP_STATE_READY ||
+	    top_sts == EDI_TOP_STATE_PSTVPP_LINK) {
 		mem_cfg_realloc(pch);
 		mem_cfg_pst(pch);//2020-12-17
 		//mem_cfg_realloc_wait(pch);
@@ -228,9 +224,18 @@ void task_polling_cmd_keep(unsigned int ch, unsigned int top_sts)
 		if (!atomic_read(&pbm->trig_unreg[ch]))
 			sct_polling(pch, 2);
 	}
-	if (top_sts != EDI_TOP_STATE_IDLE	&&
-	    top_sts != EDI_TOP_STATE_READY	&&
-	    top_sts != EDI_TOP_STATE_BYPASS)
+
+	/*unreg->reg->release buf to di: the buf will not free until get new vf.
+	 *so FCC switch channel, the other two channel not work but also has di buffer.
+	 *We need free the buffer when EDI_TOP_STATE_REG_STEP1 (reg but no vf)
+	 */
+	mm = dim_mm_get(ch);
+	if (top_sts != EDI_TOP_STATE_IDLE &&
+	    top_sts != EDI_TOP_STATE_READY &&
+	    top_sts != EDI_TOP_STATE_BYPASS &&
+	    top_sts != EDI_TOP_STATE_PSTVPP_LINK &&
+	    (top_sts != EDI_TOP_STATE_REG_STEP1 || !mm->fcc_value ||
+	     !pch->sts_keep))
 		return;
 
 //ary 2020-12-09	spin_lock_irqsave(&plist_lock, flags);
@@ -322,23 +327,11 @@ restart:
 
 		if (down_interruptible(&tsk->sem))
 			break;
-#ifdef MARK_HIS
-		if (tsk->reinitialise) {
-			/*dvb_frontend_init(fe);*/
 
-			tsk->reinitialise = 0;
-		}
-#endif
 		di_dbg_task_flg = 2;
 		task_polling_cmd();
 		di_dbg_task_flg = 3;
 		dip_chst_process_ch();
-#ifdef DIM_PLINK_ENABLE_CREATE
-		if (dpvpp_ops()		&&
-		    dpvpp_is_allowed()	&&
-		    (!dpvpp_is_insert() || dpvpp_is_en_polling()))
-			dpvpp_ops()->parser(NULL);
-#endif /* DIM_PLINK_ENABLE_CREATE */
 		di_dbg_task_flg = 4;
 		if (get_reg_flag_all())
 			dip_hw_process();

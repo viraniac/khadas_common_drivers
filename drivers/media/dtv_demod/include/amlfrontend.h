@@ -143,6 +143,29 @@
 /*  V3.5.016 optimize dvbs rssi for rt720 */
 /*  V3.5.017 increase the speed of dvbc blind scanning */
 /*  V3.5.018 optimize dvbs blind scan progress */
+/*  V3.5.019 fix dvbt lock failed in weak signal */
+/*  V3.5.020 fix pm runtime error */
+/*  V3.5.021 optimize the ddr size of cma(max 40M reduced to 16M) */
+/*  V3.5.022 delsys code isolation */
+/*  V3.5.023 fix no timeout when dvbc signal is abnormal */
+/*  V3.5.024 fix dvbs diseqc timing */
+/*  V3.5.025 fix dvbc blind scan init issue */
+/*  V3.5.026 support dtmb 6M BW */
+/*  V3.5.027 Support switching auto between dvb-t and t2 */
+/*  V3.5.028 fix not lock signal in dvbt2 DTG161 case */
+/*  V3.5.029 fix atsc-c signal strength issue */
+/*  V3.5.030 fix dvbt overflow when 6M 1/4 and other param */
+/*  V3.5.031 calibrate dvbc signal strength read from R842 */
+/*  V3.5.032 rebuild dtmb driver */
+/*  V3.5.033 remove more print logs */
+/*  V3.5.034 fix incorrect cfo calculation results and add t2 info */
+/*  V3.5.035 fix crash caused by accessing T2 registers on T5D */
+/*  V3.5.036 fix T5D switch to dvbt2 unlock(sync from 5.4/4.9) */
+/*  V3.5.037 fix dvbt2 mplp id list and mplp tune(execpt T5D) */
+/*  V3.5.038 fix compile error when remove dvbt2 module */
+/*  V3.5.039 fix aml_demod_ioctl and dump adc issue */
+/*  V3.5.040 fix coverity errors */
+/*  V3.5.041 fix occasional failure to lock dvbt signal */
 /****************************************************/
 /****************************************************************/
 /*               AMLDTVDEMOD_VER  Description:                  */
@@ -159,28 +182,49 @@
 /*->The last four digits indicate the release time              */
 /****************************************************************/
 #define KERNEL_4_9_EN		1
-#define AMLDTVDEMOD_VER "V3.5.18"
-#define DTVDEMOD_VER	"2023/11/1: optimize dvbs blind scan progress"
-#define AMLDTVDEMOD_T2_FW_VER "V1558.20230628"
+#define AMLDTVDEMOD_VER "V3.5.041"
+#define DTVDEMOD_VER	"2024/05/10: fix occasional failure to lock dvbt signal"
+#define AMLDTVDEMOD_T2_FW_VER "v1430.20240326"
 #define DEMOD_DEVICE_NAME  "dtvdemod"
 
+#if defined AML_DEMOD_SUPPORT_ATSC || defined AML_DEMOD_SUPPORT_J83B
 #define THRD_TUNER_STRENGTH_ATSC (-87)
-#define THRD_TUNER_STRENGTH_J83 (-76)
-/* tested on BTC, sensitivity of demod is -100dBm */
-#define THRD_TUNER_STRENGTH_DVBT (-101)
-#define THRD_TUNER_STRENGTH_DVBS (-79)
-#define THRD_TUNER_STRENGTH_DTMB (-100)
-#define THRD_TUNER_STRENGTH_DVBC (-87)
-#define THRD_TUNER_STRENGTH_ISDBT (-90)
-
 #define TIMEOUT_ATSC		3000
 #define TIMEOUT_ATSC_STD	1500
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_J83B
+#define THRD_TUNER_STRENGTH_J83 (-76)
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_DVBT
+/* tested on BTC, sensitivity of demod is -100dBm */
+#define THRD_TUNER_STRENGTH_DVBT (-101)
 #define TIMEOUT_DVBT		3000
-#define TIMEOUT_DVBS		2000
-#define TIMEOUT_DVBC		3000
 #define TIMEOUT_DVBT2		5000
-#define TIMEOUT_DDR_LEAVE	50
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_DVBS
+#define THRD_TUNER_STRENGTH_DVBS (-79)
+#define TIMEOUT_DVBS		2000
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_DTMB
+#define THRD_TUNER_STRENGTH_DTMB (-100)
+#define TIMEOUT_DTMB		2500
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_DVBC
+#define THRD_TUNER_STRENGTH_DVBC (-87)
+#define TIMEOUT_DVBC		3000
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_ISDBT
+#define THRD_TUNER_STRENGTH_ISDBT (-90)
 #define TIMEOUT_ISDBT		3000
+#endif
+
+#define TIMEOUT_DDR_LEAVE	50
 
 enum qam_md_e {
 	QAM_MODE_16,
@@ -360,12 +404,6 @@ struct aml_dtvdemod {
 
 	struct dvb_frontend frontend;
 
-	/* only for tm2,first time of pwr on,reset after signal locked begin */
-	unsigned int atsc_rst_needed;
-	unsigned int atsc_rst_done;
-	unsigned int atsc_rst_wait_cnt;
-	/* only for tm2,first time of pwr on,reset after signal locked end */
-
 	unsigned int symbol_rate_manu;
 	unsigned int sr_val_hw;
 	unsigned int sr_val_hw_stable;
@@ -379,12 +417,18 @@ struct aml_dtvdemod {
 	enum fe_modulation atsc_mode;
 	struct aml_demod_para para_demod;
 	unsigned int timeout_atsc_ms;
+#ifdef AML_DEMOD_SUPPORT_DVBT
 	unsigned int timeout_dvbt_ms;
+#endif
+#ifdef AML_DEMOD_SUPPORT_DVBS
 	unsigned int timeout_dvbs_ms;
+#endif
 	unsigned int time_start;
 	unsigned int time_passed;
 	enum fe_status last_status;
+#ifdef AML_DEMOD_SUPPORT_DVBC
 	unsigned int timeout_dvbc_ms;
+#endif
 	int autoflags;
 	int auto_flags_trig;
 	unsigned int p1_peak;
@@ -533,20 +577,26 @@ int convert_snr(int in_snr);
 
 struct amldtvdemod_device_s *dtvdemod_get_dev(void);
 
+#if defined AML_DEMOD_SUPPORT_ISDBT || defined AML_DEMOD_SUPPORT_DVBT
 static inline void __iomem *gbase_dvbt_isdbt(void)
 {
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
 
 	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_dvbt_isdbt;
 }
+#endif
 
+#ifdef AML_DEMOD_SUPPORT_DVBT
 static inline void __iomem *gbase_dvbt_t2(void)
 {
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
 
 	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_dvbt_t2;
 }
+#endif
 
+#if defined AML_DEMOD_SUPPORT_DVBS || defined AML_DEMOD_SUPPORT_DVBC || \
+	defined AML_DEMOD_SUPPORT_J83B
 static inline void __iomem *gbase_dvbs(void)
 {
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
@@ -567,33 +617,40 @@ static inline void __iomem *gbase_dvbc_2(void)
 
 	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_dvbc_2;
 }
+#endif
 
+#ifdef AML_DEMOD_SUPPORT_DTMB
 static inline void __iomem *gbase_dtmb(void)
 {
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
 
 	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_dtmb;
 }
+#endif
 
+#if defined AML_DEMOD_SUPPORT_ATSC || defined AML_DEMOD_SUPPORT_J83B
 static inline void __iomem *gbase_atsc(void)
 {
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
 
 	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_atsc;
 }
+#endif
+
+#ifdef AML_DEMOD_SUPPORT_ISDBT
+static inline void __iomem *gbase_isdbt(void)
+{
+	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
+
+	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_isdbt;
+}
+#endif
 
 static inline void __iomem *gbase_demod(void)
 {
 	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
 
 	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_demod_top;
-}
-
-static inline void __iomem *gbase_isdbt(void)
-{
-	struct amldtvdemod_device_s *devp = dtvdemod_get_dev();
-
-	return devp->reg_v[ES_MAP_ADDR_DEMOD].v + devp->data->regoff.off_isdbt;
 }
 
 static inline void __iomem *gbase_front(void)

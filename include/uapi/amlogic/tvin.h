@@ -188,6 +188,18 @@ enum tvin_sig_fmt_e {
 	TVIN_SIG_FMT_HDMI_5120X2880 = 0x463,
 	TVIN_SIG_FMT_HDMI_2560X2880 = 0x464,
 	TVIN_SIG_FMT_HDMI_720X240 = 0x465,
+	TVIN_SIG_FMT_HDMI_360X480I = 0x466,
+	TVIN_SIG_FMT_HDMI_360X576I = 0x467,
+	TVIN_SIG_FMT_HDMI_360X480P = 0x468,
+	TVIN_SIG_FMT_HDMI_360X576P = 0x469,
+	TVIN_SIG_FMT_HDMI_2560X1080P_24HZ = 0x46a,
+	TVIN_SIG_FMT_HDMI_2560X1080P_25HZ = 0x46b,
+	TVIN_SIG_FMT_HDMI_2560X1080P_30HZ = 0x46c,
+	TVIN_SIG_FMT_HDMI_2560X1080P_50HZ = 0x46d,
+	TVIN_SIG_FMT_HDMI_2560X1080P_60HZ = 0x46e,
+	TVIN_SIG_FMT_HDMI_2560X1080P_100HZ = 0x46f,
+	TVIN_SIG_FMT_HDMI_2560X1080P_120HZ = 0x470,
+	TVIN_SIG_FMT_HDMI_3840X1080P_60HZ = 0x471,
 	TVIN_SIG_FMT_HDMI_MAX,
 	TVIN_SIG_FMT_HDMI_THRESHOLD = 0x600,
 	/* Video Formats */
@@ -351,9 +363,13 @@ struct tvin_info_s {
 	 *	"smpte170m", "smpte240m", "YCgCo", "bt2020nc", "bt2020c"
 	 */
 	unsigned int signal_type;
+
 	/*
-	 * 0:xvYCC601  1:xvYCC709    2:sYCC601            3:Adobe ycc601
-	 * 4:Adobe rgb 5:BT2020(ycc) 6:BT2020(rgb or yuv) 7:reserved
+	 * bit[8-11]:modify to avi_colorimetry 00:NULL  01:SMPTE_ST_170    10:BT_709
+	 * bit[12-15] modify to avi_ext_colorimetry 00:XVYCC_601  01:XVYCC_709  10:SYCC_601
+	 * 11:OPYCC_601  100:OP_RGB  101:BT_2020_YCC  110:BI_2020_RGBORYCC
+	 * 111:SMPTE_ST_2113_P3D65RGB  1000:SMPTE_ST_2113_P3DCIRGB
+	 * 1001:BT_2100
 	 */
 	unsigned int input_colorimetry;
 	enum tvin_aspect_ratio_e aspect_ratio;
@@ -498,6 +514,12 @@ struct vdin_vrr_freesync_param_s {
 	__u8 native_color_en;
 };
 
+struct vdin_qms_param_s {
+	__u8 qms_en;
+	unsigned int qms_fr;
+	__u8 qms_base_fr;
+};
+
 struct vdin_hist_s {
 	__kernel_long_t sum;
 	int width;
@@ -532,7 +554,7 @@ enum tvin_cn_type_e {
 };
 
 struct tvin_latency_s {
-	__u8 allm_mode;
+	__u8 allm_mode; /* bit0:hdmi allm, bit1:dv allm*/
 	__u8 it_content;
 	enum tvin_cn_type_e cn_type;
 };
@@ -541,6 +563,12 @@ struct tvin_latency_s {
 struct vdin_set_canvas_s {
 	int fd;
 	int index;
+};
+
+struct vdin_pip_s {
+	__u8 en;
+	int main_port;
+	int sub_port;
 };
 
 enum tvin_sg_chg_flg {
@@ -555,7 +583,8 @@ enum tvin_sg_chg_flg {
 	TVIN_SIG_CHG_VS_FRQ	= 0x80,
 	TVIN_SIG_CHG_DV_ALLM	= 0x100,
 	TVIN_SIG_CHG_AFD	= 0x200,/*aspect ratio*/
-	TVIN_SIG_CHG_VRR        = 0x1000, /*vrr*/
+	TVIN_SIG_CHG_VRR        = 0x1000, /* gaming-vrr */
+	TVIN_SIG_CHG_QMS        = 0x2000, /* qms-vrr */
 	TVIN_SIG_CHG_CLOSE_FE	= 0x40000000,	/*closed frontend*/
 	TVIN_SIG_CHG_STS	= 0x80000000,	/*sm state change*/
 };
@@ -610,6 +639,8 @@ enum tvin_sg_chg_flg {
 #define TVIN_IOC_G_VRR_STATUS		_IOR(_TM_T, 0x53, struct vdin_vrr_freesync_param_s)
 #define TVIN_IOC_G_VDIN_STATUS         _IOR(_TM_T, 0x54, unsigned int)
 #define TVIN_IOC_G_IMAX_STATUS         _IOR(_TM_T, 0x55, bool)
+#define TVIN_IOC_S_PIP			_IOW(_TM_T, 0x56, struct vdin_pip_s)
+#define TVIN_IOC_G_QMS_STATUS		_IOR(_TM_T, 0x57, struct vdin_qms_param_s)
 
 #define TVIN_IOC_S_CANVAS_RECOVERY  _IO(_TM_T, 0x0a)
 /* TVAFE */

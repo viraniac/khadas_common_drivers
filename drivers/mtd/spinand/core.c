@@ -20,6 +20,7 @@
 #include <linux/amlogic/aml_spi_nand.h>
 #include <linux/amlogic/aml_spi_mem.h>
 #include <linux/amlogic/aml_pageinfo.h>
+#include <linux/amlogic/nand_encryption.h>
 
 static int spinand_read_reg_op(struct spinand_device *spinand, u8 reg, u8 *val)
 {
@@ -365,6 +366,11 @@ static int spinand_read_from_cache_op(struct spinand_device *spinand,
 	void *buf = NULL;
 	u16 column = 0;
 	ssize_t ret;
+#ifdef CONFIG_NAND_ENCRYPTION
+	struct encrypt_partition *encrypt_region;
+	unsigned int i, row = nanddev_pos_to_row(nand, &req->pos);
+	unsigned char *temp_buf;
+#endif
 
 	if (req->mode == MTD_OPS_RAW)
 		spi_mem_set_xfer_flag(SPI_XFER_RAW);
@@ -402,6 +408,20 @@ static int spinand_read_from_cache_op(struct spinand_device *spinand,
 			return -EIO;
 		}
 
+#ifdef CONFIG_NAND_ENCRYPTION
+		encrypt_region = is_need_encrypted(row * nanddev_page_size(nand));
+		if (!column && encrypt_region) {
+			temp_buf = buf;
+			for (i = 0; i < nanddev_page_size(nand); i++) {
+				if (temp_buf[i] != 0xff) {
+					nand_decrypt_page(encrypt_region,
+							  nanddev_page_size(nand),
+							  temp_buf, row);
+					break;
+				}
+			}
+		}
+#endif
 		nbytes -= ret;
 		column += ret;
 		buf += ret;
@@ -435,6 +455,10 @@ static int spinand_write_to_cache_op(struct spinand_device *spinand,
 	unsigned int nbytes, column = 0;
 	void *buf = spinand->databuf;
 	ssize_t ret;
+#ifdef CONFIG_NAND_ENCRYPTION
+	struct encrypt_partition *encrypt_region;
+	unsigned int row = nanddev_pos_to_row(nand, &req->pos);
+#endif
 
 	/*
 	 * Looks like PROGRAM LOAD (AKA write cache) does not necessarily reset
@@ -449,9 +473,17 @@ static int spinand_write_to_cache_op(struct spinand_device *spinand,
 	nbytes = nanddev_page_size(nand) + nanddev_per_page_oobsize(nand);
 	memset(spinand->databuf, 0xff, nanddev_page_size(nand));
 
-	if (req->datalen)
-		memcpy(spinand->databuf + req->dataoffs, req->databuf.out,
-		       req->datalen);
+	if (req->datalen) {
+		memcpy(spinand->databuf + req->dataoffs,
+		       req->databuf.out, req->datalen);
+#ifdef CONFIG_NAND_ENCRYPTION
+		encrypt_region = is_need_encrypted(row * nanddev_page_size(nand));
+		if (encrypt_region)
+			nand_encrypt_page(encrypt_region,
+					  nanddev_page_size(nand),
+					  spinand->databuf, row);
+#endif
+	}
 
 	if (req->ooblen) {
 		if (req->mode == MTD_OPS_AUTO_OOB) {
@@ -696,9 +728,10 @@ static int spinand_write_page(struct spinand_device *spinand,
 		last_req = *req;
 	}
 	/* information page is in front of BL2 */
-	if (page < SPI_NAND_BOOT_TOTAL_PAGES && version != PAGE_INFO_V1)
+	if (page < SPI_NAND_BOOT_TOTAL_PAGES && version != PAGE_INFO_V1) {
 		nanddev_pos_next_page(nand, &last_req.pos);
-
+		page_info_is_page(nanddev_pos_to_row(nand, &last_req.pos));
+	}
 	return _spinand_write_page(spinand, &last_req);
 }
 
@@ -748,6 +781,48 @@ static int spinand_mtd_read(struct mtd_info *mtd, loff_t from,
 	return ret ? ret : max_bitflips;
 }
 
+int spinand_mtd_read_unlock(struct mtd_info *mtd, loff_t from,
+			    struct mtd_oob_ops *ops)
+{
+	struct spinand_device *spinand = mtd_to_spinand(mtd);
+	struct nand_device *nand = mtd_to_nanddev(mtd);
+	unsigned int max_bitflips = 0;
+	struct nand_io_iter iter;
+	bool disable_ecc = false;
+	bool ecc_failed = false;
+	int ret = 0;
+
+	if (ops->mode == MTD_OPS_RAW || !spinand->eccinfo.ooblayout)
+		disable_ecc = true;
+
+	nanddev_io_for_each_page(nand, NAND_PAGE_READ, from, ops, &iter) {
+		if (disable_ecc)
+			iter.req.mode = MTD_OPS_RAW;
+
+		ret = spinand_select_target(spinand, iter.req.pos.target);
+		if (ret)
+			return ret;
+
+		ret = spinand_read_page(spinand, &iter.req);
+		if (ret < 0 && ret != -EBADMSG)
+			return ret;
+
+		if (ret == -EBADMSG)
+			ecc_failed = true;
+		else
+			max_bitflips = max_t(unsigned int, max_bitflips, ret);
+
+		ret = 0;
+		ops->retlen += iter.req.datalen;
+		ops->oobretlen += iter.req.ooblen;
+	}
+
+	if (ecc_failed && !ret)
+		return -EBADMSG;
+
+	return max_bitflips >= mtd->bitflip_threshold ? -EUCLEAN : 0;
+}
+
 static int spinand_mtd_write(struct mtd_info *mtd, loff_t to,
 			     struct mtd_oob_ops *ops)
 {
@@ -779,6 +854,37 @@ static int spinand_mtd_write(struct mtd_info *mtd, loff_t to,
 	}
 
 	mutex_unlock(&spinand->lock);
+
+	return ret;
+}
+
+int spinand_mtd_write_unlock(struct mtd_info *mtd, loff_t to,
+			     struct mtd_oob_ops *ops)
+{
+	struct spinand_device *spinand = mtd_to_spinand(mtd);
+	struct nand_device *nand = mtd_to_nanddev(mtd);
+	struct nand_io_iter iter;
+	bool disable_ecc = false;
+	int ret = 0;
+
+	if (ops->mode == MTD_OPS_RAW || !mtd->ooblayout)
+		disable_ecc = true;
+
+	nanddev_io_for_each_page(nand, NAND_PAGE_WRITE, to, ops, &iter) {
+		if (disable_ecc)
+			iter.req.mode = MTD_OPS_RAW;
+
+		ret = spinand_select_target(spinand, iter.req.pos.target);
+		if (ret)
+			break;
+
+		ret = spinand_write_page(spinand, &iter.req);
+		if (ret)
+			break;
+
+		ops->retlen += iter.req.datalen;
+		ops->oobretlen += iter.req.ooblen;
+	}
 
 	return ret;
 }
@@ -982,6 +1088,7 @@ static const struct spinand_manufacturer *spinand_manufacturers[] = {
 	&paragon_spinand_manufacturer,
 	&toshiba_spinand_manufacturer,
 	&winbond_spinand_manufacturer,
+	&dosilicon_spinand_manufacturer,
 };
 
 static int spinand_manufacturer_match(struct spinand_device *spinand,
@@ -1336,7 +1443,7 @@ static int spinand_init(struct spinand_device *spinand)
 	/* Propagate ECC information to mtd_info */
 	mtd->ecc_strength = nanddev_get_ecc_conf(nand)->strength;
 	mtd->ecc_step_size = nanddev_get_ecc_conf(nand)->step_size;
-	mtd->bitflip_threshold = mtd->ecc_strength;
+	mtd->bitflip_threshold = DIV_ROUND_UP(mtd->ecc_strength * 3, 4);
 
 	return 0;
 

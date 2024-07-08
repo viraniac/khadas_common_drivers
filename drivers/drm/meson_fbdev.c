@@ -12,6 +12,7 @@
 #include <drm/drm_atomic_helper.h>
 #include <linux/dma-buf.h>
 #include <linux/amlogic/ion.h>
+#include <linux/sysrq.h>
 
 #include "meson_drv.h"
 #include "meson_gem.h"
@@ -23,6 +24,19 @@
 #define PREFERRED_BPP		32
 #define PREFERRED_DEPTH	32
 #define MESON_DRM_MAX_CONNECTOR	2
+#define MAX_RETRY_CNT 20
+
+//static bool drm_leak_fbdev_smem = false;
+//used for double buffer, one buffer is 100
+static int drm_fbdev_overalloc = 200;
+static u32 rdma_chk_addr[] = {
+	VIU_OSD1_TCOLOR_AG3,
+	VIU_OSD2_TCOLOR_AG3,
+	VIU_OSD3_TCOLOR_AG3,
+};
+
+static LIST_HEAD(kernel_fb_helper_list);
+static DEFINE_MUTEX(kernel_fb_helper_lock);
 
 static int am_meson_fbdev_alloc_fb_gem(struct fb_info *info)
 {
@@ -224,7 +238,8 @@ am_meson_drm_fbdev_setcolreg(unsigned int regno, unsigned int red, unsigned int 
 static int am_meson_drm_fbdev_ioctl(struct fb_info *info,
 				    unsigned int cmd, unsigned long arg)
 {
-	int ret = 0;
+	int ret = 0, crtc_index = 0, i = 0;
+	u32 val;
 	void __user *argp = (void __user *)arg;
 	struct fb_dmabuf_export fbdma;
 	struct drm_fb_helper *helper = info->par;
@@ -240,14 +255,31 @@ static int am_meson_drm_fbdev_ioctl(struct fb_info *info,
 		meson_fb = container_of(helper->fb, struct am_meson_fb, base);
 		fbdma.fd = dma_buf_fd(meson_fb->bufp[0]->dmabuf, O_CLOEXEC);
 		fbdma.flags = O_CLOEXEC;
+		dma_buf_get(fbdma.fd);
 		ret = copy_to_user(argp, &fbdma, sizeof(fbdma)) ? -EFAULT : 0;
 	} else if (cmd == FBIO_WAITFORVSYNC) {
-		if (plane->crtc) {
-			drm_wait_one_vblank(helper->dev, plane->crtc->index);
-		} else if (fbdev->modeset.crtc) {
-			drm_wait_one_vblank(helper->dev, fbdev->modeset.crtc->index);
-			MESON_DRM_FBDEV("crtc is not set for plane [%d]\n", plane->index);
+		if (plane->crtc)
+			crtc_index = plane->crtc->index;
+		else if (fbdev->modeset.crtc)
+			crtc_index = fbdev->modeset.crtc->index;
+		else
+			crtc_index = 0;
+
+		drm_wait_one_vblank(helper->dev, crtc_index);
+		val = meson_drm_read_reg(rdma_chk_addr[plane->index]);
+
+		while (i < MAX_RETRY_CNT && val != frame_seq[plane->index]) {
+			usleep_range(2000, 2500);
+			i++;
+			val = meson_drm_read_reg(rdma_chk_addr[plane->index]);
 		}
+
+		if (i == MAX_RETRY_CNT)
+			DRM_ERROR("%s timeout, frame seq %u-%u\n", __func__,
+				  frame_seq[plane->index], val);
+
+		MESON_DRM_FBDEV("wait for vsync last for %d ms, %u-%u\n", i * 2,
+			  frame_seq[plane->index], val);
 	}
 
 	MESON_DRM_FBDEV("%s CMD   [%x] - [%d] OUT\n", __func__, cmd, plane->index);
@@ -387,8 +419,9 @@ int am_meson_drm_fb_helper_set_par(struct fb_info *info)
 
 	DRM_INFO("%s IN\n", __func__);
 	if (var->bits_per_pixel != fb->format->depth ||
-	    var->xres_virtual != fb->width ||
-	    var->yres_virtual != fb->height) {
+		var->xres_virtual != fb->width ||
+		var->yres_virtual != fb->height) {
+		fbdev->vscreen_info_changed = true;
 		/*realloc framebuffer, free old then alloc new gem*/
 		sizes.fb_height = var->yres_virtual;
 		sizes.fb_width = var->xres_virtual;
@@ -409,6 +442,7 @@ int am_meson_drm_fb_helper_set_par(struct fb_info *info)
 			break;
 		}
 
+		bytes_per_pixel = DIV_ROUND_UP(sizes.surface_bpp, 8);
 		mode_cmd.width = sizes.surface_width;
 		mode_cmd.height = sizes.surface_height;
 		mode_cmd.pixel_format = drm_mode_legacy_fb_format(sizes.surface_bpp, depth);
@@ -421,7 +455,6 @@ int am_meson_drm_fb_helper_set_par(struct fb_info *info)
 
 		fb->width = sizes.fb_width;
 		fb->height = sizes.fb_height;
-		bytes_per_pixel = DIV_ROUND_UP(sizes.surface_bpp, 8);
 		fb->pitches[0] =  ALIGN(fb->width * bytes_per_pixel, 64);
 		fb->format = drm_get_format_info(dev, &mode_cmd);
 
@@ -476,6 +509,12 @@ static int am_meson_drm_fb_pan_display(struct fb_var_screeninfo *var,
 		return 0;
 	}
 
+	if (fbdev->vscreen_info_changed) {
+		fbdev->vscreen_info_changed = false;
+		DRM_INFO("%s, skip set_par's pan display\n", __func__);
+		return 0;
+	}
+
 	drm_modeset_lock_all(dev);
 	MESON_DRM_FBDEV("%s IN [%d]\n", __func__, plane->index);
 
@@ -525,7 +564,7 @@ retry:
 		plane_state->zpos = fbdev->zorder;
 	}
 	/* fix alpha */
-	plane_state->pixel_blend_mode = DRM_MODE_BLEND_COVERAGE;
+	plane_state->pixel_blend_mode = DRM_MODE_BLEND_PREMULTI;
 
 	MESON_DRM_FBDEV("update fb [%x-%x, %x-%x]-%d->[%d-%d]",
 		plane_state->src_x, plane_state->src_y,
@@ -576,16 +615,22 @@ int am_meson_drm_fb_blank(int blank, struct fb_info *info)
 	struct drm_fb_helper *helper = info->par;
 	struct meson_drm_fbdev *fbdev = container_of(helper, struct meson_drm_fbdev, base);
 	struct drm_device *dev = helper->dev;
+	struct meson_drm *priv = dev->dev_private;
 	int ret = 0;
 
 	if (blank == 0) {
 		MESON_DRM_FBDEV("meson_fbdev[%s] goto UNBLANK.\n", fbdev->plane->name);
 		fbdev->blank = false;
 		ret = am_meson_drm_fb_pan_display(&info->var, info);
+		drm_wait_one_vblank(dev, 0);
 	} else {
 		MESON_DRM_FBDEV("meson_fbdev[%s-%p] goto blank.\n",
 			fbdev->plane->name, fbdev->plane->fb);
 		drm_modeset_lock_all(dev);
+		if (priv->pan_async_commit_ran) {
+			DRM_INFO("Force to wait one vblank!\n");
+			drm_wait_one_vblank(dev, 0);
+		}
 		drm_atomic_helper_disable_plane(fbdev->plane, dev->mode_config.acquire_ctx);
 		drm_modeset_unlock_all(dev);
 
@@ -784,6 +829,359 @@ static struct device_attribute fbdev_device_attrs[] = {
 	__ATTR(force_free_mem, 0644, show_force_free_mem, store_force_free_mem),
 };
 
+static void meson_setup_crtcs_fb(struct drm_fb_helper *fb_helper)
+{
+	struct drm_client_dev *client = &fb_helper->client;
+	struct drm_connector_list_iter conn_iter;
+	struct fb_info *info = fb_helper->fbdev;
+	unsigned int rotation, sw_rotations = 0;
+	struct drm_connector *connector;
+	struct drm_mode_set *modeset;
+
+	mutex_lock(&client->modeset_mutex);
+	drm_client_for_each_modeset(modeset, client) {
+		if (!modeset->num_connectors)
+			continue;
+
+		modeset->fb = fb_helper->fb;
+
+		if (drm_client_rotation(modeset, &rotation))
+			/* Rotating in hardware, fbcon should not rotate */
+			sw_rotations |= DRM_MODE_ROTATE_0;
+		else
+			sw_rotations |= rotation;
+	}
+	mutex_unlock(&client->modeset_mutex);
+
+	drm_connector_list_iter_begin(fb_helper->dev, &conn_iter);
+	drm_client_for_each_connector_iter(connector, &conn_iter) {
+		/* use first connected connector for the physical dimensions */
+		if (connector->status == connector_status_connected) {
+			info->var.width = connector->display_info.width_mm;
+			info->var.height = connector->display_info.height_mm;
+			break;
+		}
+	}
+	drm_connector_list_iter_end(&conn_iter);
+
+	switch (sw_rotations) {
+	case DRM_MODE_ROTATE_0:
+		info->fbcon_rotate_hint = FB_ROTATE_UR;
+		break;
+	case DRM_MODE_ROTATE_90:
+		info->fbcon_rotate_hint = FB_ROTATE_CCW;
+		break;
+	case DRM_MODE_ROTATE_180:
+		info->fbcon_rotate_hint = FB_ROTATE_UD;
+		break;
+	case DRM_MODE_ROTATE_270:
+		info->fbcon_rotate_hint = FB_ROTATE_CW;
+		break;
+	default:
+		/*
+		 * Multiple bits are set / multiple rotations requested
+		 * fbcon cannot handle separate rotation settings per
+		 * output, so fallback to unrotated.
+		 */
+		info->fbcon_rotate_hint = FB_ROTATE_UR;
+	}
+}
+
+#ifdef CONFIG_MAGIC_SYSRQ
+/* emergency restore, don't bother with error reporting */
+static void meson_fb_helper_restore_work_fn(struct work_struct *ignored)
+{
+	struct drm_fb_helper *helper;
+
+	mutex_lock(&kernel_fb_helper_lock);
+	list_for_each_entry(helper, &kernel_fb_helper_list, kernel_fb_list) {
+		struct drm_device *dev = helper->dev;
+
+		if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
+			continue;
+
+		mutex_lock(&helper->lock);
+		drm_client_modeset_commit_locked(&helper->client);
+		mutex_unlock(&helper->lock);
+	}
+	mutex_unlock(&kernel_fb_helper_lock);
+}
+
+static DECLARE_WORK(drm_fb_helper_restore_work, meson_fb_helper_restore_work_fn);
+
+static void meson_fb_helper_sysrq(int dummy1)
+{
+	schedule_work(&drm_fb_helper_restore_work);
+}
+
+static const struct sysrq_key_op sysrq_drm_fb_helper_restore_op = {
+	.handler = meson_fb_helper_sysrq,
+	.help_msg = "force-fb(v)",
+	.action_msg = "Restore framebuffer console",
+};
+#else
+static const struct sysrq_key_op sysrq_drm_fb_helper_restore_op = { };
+#endif
+
+static int meson_fb_helper_single_fb_probe(struct drm_fb_helper *fb_helper,
+					 int preferred_bpp)
+{
+	struct drm_client_dev *client = &fb_helper->client;
+	struct drm_device *dev = fb_helper->dev;
+	struct drm_mode_config *config = &dev->mode_config;
+	int ret = 0;
+	int crtc_count = 0;
+	struct drm_connector_list_iter conn_iter;
+	struct drm_fb_helper_surface_size sizes;
+	struct drm_connector *connector;
+	struct drm_mode_set *mode_set;
+	int best_depth = 0;
+
+	memset(&sizes, 0, sizeof(struct drm_fb_helper_surface_size));
+	sizes.surface_depth = 24;
+	sizes.surface_bpp = 32;
+	sizes.fb_width = (u32)-1;
+	sizes.fb_height = (u32)-1;
+
+	/*
+	 * If driver picks 8 or 16 by default use that for both depth/bpp
+	 * to begin with
+	 */
+	if (preferred_bpp != sizes.surface_bpp) {
+		sizes.surface_depth = preferred_bpp;
+		sizes.surface_bpp = preferred_bpp;
+	}
+
+	drm_connector_list_iter_begin(fb_helper->dev, &conn_iter);
+	drm_client_for_each_connector_iter(connector, &conn_iter) {
+		struct drm_cmdline_mode *cmdline_mode;
+
+		cmdline_mode = &connector->cmdline_mode;
+
+		if (cmdline_mode->bpp_specified) {
+			switch (cmdline_mode->bpp) {
+			case 8:
+				sizes.surface_depth = 8;
+				sizes.surface_bpp = 8;
+				break;
+			case 15:
+				sizes.surface_depth = 15;
+				sizes.surface_bpp = 16;
+				break;
+			case 16:
+				sizes.surface_depth = 16;
+				sizes.surface_bpp = 16;
+				break;
+			case 24:
+				sizes.surface_depth = 24;
+				sizes.surface_bpp = 24;
+				break;
+			case 32:
+				sizes.surface_depth = 24;
+				sizes.surface_bpp = 32;
+				break;
+			}
+			break;
+		}
+	}
+	drm_connector_list_iter_end(&conn_iter);
+
+	/*
+	 * If we run into a situation where, for example, the primary plane
+	 * supports RGBA5551 (16 bpp, depth 15) but not RGB565 (16 bpp, depth
+	 * 16) we need to scale down the depth of the sizes we request.
+	 */
+	mutex_lock(&client->modeset_mutex);
+	drm_client_for_each_modeset(mode_set, client) {
+		struct drm_crtc *crtc = mode_set->crtc;
+		struct drm_plane *plane = crtc->primary;
+		int j;
+
+		drm_dbg_kms(dev, "test CRTC %u primary plane\n", drm_crtc_index(crtc));
+
+		for (j = 0; j < plane->format_count; j++) {
+			const struct drm_format_info *fmt;
+			struct drm_mode_fb_cmd2 cmd;
+
+			cmd.pixel_format = plane->format_types[j];
+			/* drm_format_info do not support parser private format,
+			 * but drm_get_format_info can do it, so replaced it with
+			 * drm_get_format_info.
+			 */
+			fmt = drm_get_format_info(fb_helper->dev, &cmd);
+
+			/*
+			 * Do not consider YUV or other complicated formats
+			 * for framebuffers. This means only legacy formats
+			 * are supported (fmt->depth is a legacy field) but
+			 * the framebuffer emulation can only deal with such
+			 * formats, specifically RGB/BGA formats.
+			 */
+			if (fmt->depth == 0)
+				continue;
+
+			/* We found a perfect fit, great */
+			if (fmt->depth == sizes.surface_depth) {
+				best_depth = fmt->depth;
+				break;
+			}
+
+			/* Skip depths above what we're looking for */
+			if (fmt->depth > sizes.surface_depth)
+				continue;
+
+			/* Best depth found so far */
+			if (fmt->depth > best_depth)
+				best_depth = fmt->depth;
+		}
+	}
+	if (sizes.surface_depth != best_depth && best_depth) {
+		drm_info(dev, "requested bpp %d, scaled depth down to %d",
+			 sizes.surface_bpp, best_depth);
+		sizes.surface_depth = best_depth;
+	}
+
+	/* first up get a count of crtcs now in use and new min/maxes width/heights */
+	crtc_count = 0;
+	drm_client_for_each_modeset(mode_set, client) {
+		struct drm_display_mode *desired_mode;
+		int x, y, j;
+		/* in case of tile group, are we the last tile vert or horiz?
+		 * If no tile group you are always the last one both vertically
+		 * and horizontally
+		 */
+		bool lastv = true, lasth = true;
+
+		desired_mode = mode_set->mode;
+
+		if (!desired_mode)
+			continue;
+
+		crtc_count++;
+
+		x = mode_set->x;
+		y = mode_set->y;
+
+		sizes.surface_width  = max_t(u32, desired_mode->hdisplay + x, sizes.surface_width);
+		sizes.surface_height = max_t(u32, desired_mode->vdisplay + y, sizes.surface_height);
+
+		for (j = 0; j < mode_set->num_connectors; j++) {
+			struct drm_connector *connector = mode_set->connectors[j];
+
+			if (connector->has_tile &&
+			    desired_mode->hdisplay == connector->tile_h_size &&
+			    desired_mode->vdisplay == connector->tile_v_size) {
+				lasth = (connector->tile_h_loc == (connector->num_h_tile - 1));
+				lastv = (connector->tile_v_loc == (connector->num_v_tile - 1));
+				/* cloning to multiple tiles is just crazy-talk, so: */
+				break;
+			}
+		}
+
+		if (lasth)
+			sizes.fb_width  = min_t(u32, desired_mode->hdisplay + x, sizes.fb_width);
+		if (lastv)
+			sizes.fb_height = min_t(u32, desired_mode->vdisplay + y, sizes.fb_height);
+	}
+	mutex_unlock(&client->modeset_mutex);
+
+	if (crtc_count == 0 || sizes.fb_width == -1 || sizes.fb_height == -1) {
+		drm_info(dev, "Cannot find any crtc or sizes\n");
+
+		/* First time: disable all crtc's.. */
+		if (!fb_helper->deferred_setup)
+			drm_client_modeset_commit(client);
+		return -EAGAIN;
+	}
+
+	/* Handle our overallocation */
+	sizes.surface_height *= drm_fbdev_overalloc;
+	sizes.surface_height /= 100;
+	if (sizes.surface_height > config->max_height) {
+		drm_dbg_kms(dev, "Fbdev over-allocation too large; clamping height to %d\n",
+			    config->max_height);
+		sizes.surface_height = config->max_height;
+	}
+
+	/* push down into drivers */
+	ret = (*fb_helper->funcs->fb_probe)(fb_helper, &sizes);
+	if (ret < 0)
+		return ret;
+
+	strcpy(fb_helper->fb->comm, "[fbcon]");
+	return 0;
+}
+
+static int
+__meson_fb_helper_initial_config_and_unlock(struct drm_fb_helper *fb_helper,
+					  int bpp_sel)
+{
+	struct drm_device *dev = fb_helper->dev;
+	struct fb_info *info;
+	unsigned int width, height;
+	int ret;
+
+	width = dev->mode_config.max_width;
+	height = dev->mode_config.max_height;
+
+	drm_client_modeset_probe(&fb_helper->client, width, height);
+	ret = meson_fb_helper_single_fb_probe(fb_helper, bpp_sel);
+	if (ret < 0) {
+		if (ret == -EAGAIN) {
+			fb_helper->preferred_bpp = bpp_sel;
+			fb_helper->deferred_setup = true;
+			ret = 0;
+		}
+		mutex_unlock(&fb_helper->lock);
+
+		return ret;
+	}
+	meson_setup_crtcs_fb(fb_helper);
+
+	fb_helper->deferred_setup = false;
+
+	info = fb_helper->fbdev;
+	info->var.pixclock = 0;
+	/* Shamelessly allow physical address leaking to userspace */
+#if IS_ENABLED(CONFIG_DRM_FBDEV_LEAK_PHYS_SMEM)
+	if (!drm_leak_fbdev_smem)
+#endif
+		/* don't leak any physical addresses to userspace */
+		info->flags |= FBINFO_HIDE_SMEM_START;
+
+	/* Need to drop locks to avoid recursive deadlock in
+	 * register_framebuffer. This is ok because the only thing left to do is
+	 * register the fbdev emulation instance in kernel_fb_helper_list.
+	 */
+	mutex_unlock(&fb_helper->lock);
+
+	ret = register_framebuffer(info);
+	if (ret < 0)
+		return ret;
+
+	drm_info(dev, "fb%d: %s frame buffer device\n",
+		 info->node, info->fix.id);
+
+	mutex_lock(&kernel_fb_helper_lock);
+	if (list_empty(&kernel_fb_helper_list))
+		register_sysrq_key('v', &sysrq_drm_fb_helper_restore_op);
+
+	list_add(&fb_helper->kernel_fb_list, &kernel_fb_helper_list);
+	mutex_unlock(&kernel_fb_helper_lock);
+
+	return 0;
+}
+
+int meson_fb_helper_initial_config(struct drm_fb_helper *fb_helper, int bpp_sel)
+{
+	int ret;
+
+	mutex_lock(&fb_helper->lock);
+	ret = __meson_fb_helper_initial_config_and_unlock(fb_helper, bpp_sel);
+
+	return ret;
+}
+
 struct meson_drm_fbdev *am_meson_create_drm_fbdev(struct drm_device *dev,
 					    struct drm_plane *plane)
 {
@@ -815,7 +1213,7 @@ struct meson_drm_fbdev *am_meson_create_drm_fbdev(struct drm_device *dev,
 		goto err_free;
 	}
 
-	ret = drm_fb_helper_initial_config(helper, bpp);
+	ret = meson_fb_helper_initial_config(helper, bpp);
 	if (ret < 0) {
 		dev_err(dev->dev, "Failed to set initial hw config - %d.\n",
 			ret);
@@ -836,6 +1234,7 @@ struct meson_drm_fbdev *am_meson_create_drm_fbdev(struct drm_device *dev,
 	}
 
 	fbdev->blank = false;
+	fbdev->vscreen_info_changed = false;
 
 	DRM_INFO("create fbdev success.\n");
 	return fbdev;

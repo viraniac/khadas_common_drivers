@@ -22,6 +22,9 @@
 #define MHz	1000000
 #define KHz	1000
 
+#define IRQ_EN_ALL	3
+#define IRQ_EN_HDCP 1
+
 #define HHI_GCLK_MPEG0			(0x50  <<  2) /* (0xC883C000 + 0x140) */
 #define HHI_HDMIRX_CLK_CNTL		0x200 /* (0xC883C000 + 0x200)  */
 #define MODET_CLK_EN			_BIT(24)
@@ -182,7 +185,10 @@
 #define TOP_INTR_STAT                    0x00A
 #define TOP_INTR_STAT_CLR                0x00B
 #define TOP_VID_CNTL                     0x00C
+	#define VID_FMT_OVERRIDE	_BIT(11)
+	#define VID_FMT_VAL		MSK(3, 8)
 #define TOP_VID_STAT                     0x00D
+	#define TOP_VID_FMT		MSK(4, 20)
 #define TOP_ACR_CNTL_STAT                0x00E
 #define TOP_ACR_AUDFIFO                  0x00F
 #define TOP_ARCTX_CNTL                   0x010
@@ -344,6 +350,7 @@
 #define	TOP_AXI_STAT_0					0x083
 #define	TOP_MISC_STAT0					0x084
 #define	TOP_MISC_STAT0_T3X				0x083
+#define HDMIRX_TOP_PXL_BIST				0x086
 #define TOP_OVID_OVERRIDE0				0x090
 #define TOP_OVID_OVERRIDE1				0x091
 #define TOP_OVID_OVERRIDE2				0x092
@@ -1272,7 +1279,10 @@
 
 /*t7/t3*/
 #define RX_CLK_CTRL			(0x4A << 2)
+#define CLK_2M_EN			_BIT(24)
+#define CLK_5M_EN			_BIT(8)
 #define RX_CLK_CTRL1		(0x4B << 2)
+#define HDCP2X_ECLK_EN		_BIT(24)
 #define RX_CLK_CTRL2		(0x4C << 2)
 #define RX_CLK_CTRL3		(0x4D << 2)
 	#define METER_CLK_EN				_BIT(8)
@@ -1624,6 +1634,7 @@
 #define  RX_DEPACK_INTR0_MASK_DP2_IVCRX        0x00001131
 #define RX_DEPACK_INTR1_DP2_IVCRX        0x00001132
 #define  RX_DEPACK_INTR1_MASK_DP2_IVCRX        0x00001133
+#define INTR2_BIT0_AVI		0x1
 #define INTR2_BIT1_SPD		0x2
 #define INTR2_BIT2_AUD		0x4
 #define INTR2_BIT4_UNREC	0x10
@@ -3132,10 +3143,11 @@ enum measure_clk_src_e {
 enum phy_frq_band {
 	PHY_BW_0 = 0,	/*45Mhz*/
 	PHY_BW_1,		/*77Mhz*/
-	PHY_BW_2,		/*155Mhz*/
-	PHY_BW_3,		/*340Mhz*/
-	PHY_BW_4,		/*525Mhz*/
-	PHY_BW_5,		/*600Mhz*/
+	PHY_BW_2,		/*115Mhz*/
+	PHY_BW_3,		/*155Mhz*/
+	PHY_BW_4,		/*340Mhz*/
+	PHY_BW_5,		/*525Mhz*/
+	PHY_BW_6,		/*600Mhz*/
 	PHY_BW_NULL = 0xf,
 };
 
@@ -3229,6 +3241,7 @@ extern int frl_scrambler_en;
 extern u32 frl_sync_cnt;
 extern int force_clk_stable;
 extern int audio_debug;
+extern int edid_auto_debug;
 extern int clk_msr_param;
 extern int fpll_clk_sel;
 void hdmirx_set_vp_mapping(enum colorspace_e cs, u8 port);
@@ -3324,6 +3337,7 @@ void rx_hdcp_init(void);
 void hdmirx_phy_pddq(unsigned int enable);
 void rx_get_video_info(u8 port);
 void hdmirx_set_video_mute(bool mute, u8 port);
+void rx_clr_gcp_avmute(u8 port);
 void hdmirx_config_video(u8 port);
 void hdmirx_config_audio(u8 port);
 void set_dv_ll_mode(bool en, u8 port);
@@ -3371,7 +3385,7 @@ void rx_get_audio_N_CTS(u32 *N, u32 *CTS, u8 port);
 void rx_run_eq(u8 port);
 bool rx_eq_done(u8 port);
 bool is_tmds_valid(u8 port);
-void hdmirx_top_irq_en(int en, int lvl, u8 port);
+void hdmirx_top_irq_en(u8 en, u8 port);
 void rx_phy_rt_cal(void);
 bool is_ft_trim_done(void);
 void aml_phy_get_trim_val(void);
@@ -3388,7 +3402,9 @@ void aml_phy_iq_skew_monitor(void);
 void aml_eq_eye_monitor(u8 port);
 void aml_phy_power_off(void);
 void rx_dig_clk_en(bool en);
-void rx_mute_vpp(void);
+void rx_clr_scdc(u8 port);
+void scdc_dwork_handler(struct work_struct *work);
+void rx_mute_vpp(u8 port);
 
 /* tl1 tl2 extern */
 void dump_reg_phy_tl1_tm2(void);
@@ -3415,13 +3431,14 @@ u32 rd_reg_clk_ctl(u32 offset);
 
 unsigned int hdmirx_rd_amlphy(unsigned int addr);
 unsigned int hdmirx_rd_amlphy_t3x(unsigned int addr, u8 port);
-void hdmirx_irq_hdcp_enable(bool enable, u8 port);
 u8 rx_get_avmute_sts(u8 port);
+void wr_reg_ana_ctl(u32 offset, u32 val);
 u8 hdmirx_rd_cor(u32 addr, u8 port);
 void hdmirx_wr_cor(u32 addr, u8 data, u8 port);
 bool hdmirx_poll_cor(u32 addr, u8 exp_data, u8 mask, u32 max_try, u8 port);
 u8 hdmirx_rd_bits_cor(u32 addr, u32 mask, u8 port);
 void hdmirx_wr_bits_cor(u32 addr, u32 mask, u8 value, u8 port);
+void hdmirx_wr_top_common_1(u32 addr, u32 data);
 
 void rx_hdcp_22_sent_reauth(u8 port);
 void rx_hdcp_14_sent_reauth(u8 port);
@@ -3433,7 +3450,7 @@ void hdmirx_output_en(bool en);
 void hdmirx_hbr2spdif(u8 val, u8 port);
 void rx_hdcp_monitor(u8 port);
 bool rx_sw_scramble_en(void);
-bool rx_special_func_en(void);
+bool rx_special_func_en(u8 port);
 void rx_afifo_monitor(u8 port);
 void rx_ddc_active_monitor(u8 port);
 void rx_clkmsr_monitor(void);
@@ -3464,7 +3481,8 @@ int rx_get_hdcp_auth_sts(u8 port);
 void rx_set_color_bar(bool en, unsigned int lvl, u8 port);
 void reset_pcs(u8 port);
 bool is_earc_hpd_low(void);
-void rx_mute_vpp(void);
+void rx_mute_vpp(u8 port);
+int aml_phy_get_def_trim_value(void);
 
 /* t3x  */
 void hdmi_tx_rx_frl_training_main(u8 port);
@@ -3476,5 +3494,7 @@ void cor_init(u8 port);
 void vdin_set_black_pattern(bool mute);
 void rx_set_term_value(unsigned char port, bool value);
 void rx_emp_hw_enable(bool enable);
+bool rx_is_need_edid_reset(u8 port);
+bool rx_is_phy_power_off(u8 port);
 
 #endif

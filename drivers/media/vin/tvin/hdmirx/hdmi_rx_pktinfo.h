@@ -64,18 +64,6 @@ enum vsi_type {
 	VSI_TYPE_MAX
 };
 
-#define WHITE_LIST_SIZE 25
-enum spec_dev_e {
-	/* following devices need to switch to edid2.0 */
-	SPEC_DEV_PS5,
-	SPEC_DEV_XBOX,
-	SPEC_DEV_PS,
-	SPEC_DEV_XBOX_SERIES,
-	/* following devices need to get SPD earlier */
-	SPEC_DEV_PANASONIC,
-	SPEC_DEV_CNT
-};
-
 enum pkt_length_e {
 	E_PKT_LENGTH_4 = 0x04,
 	E_PKT_LENGTH_5 = 0x05,
@@ -776,68 +764,6 @@ struct vsi_infoframe_st {
 	} __packed sbpkt;
 } __packed;
 
-/* AVI infoFrame packet - 0x82 */
-struct avi_infoframe_st {
-	u8 pkttype;
-	u8 version;
-	u8 length;
-	/*PB0*/
-	u8 checksum;
-	union cont_u {
-		struct v1_st {
-			/*byte 1*/
-			u8 scaninfo:2;			/* S1,S0 */
-			u8 barinfo:2;			/* B1,B0 */
-			u8 activeinfo:1;		/* A0 */
-			u8 colorindicator:2;	/* Y1,Y0 */
-			u8 rev0:1;
-			/*byte 2*/
-			u8 fmt_ration:4;		/* R3-R0 */
-			u8 pic_ration:2;		/* M1-M0 */
-			u8 colorimetry:2;		/* C1-C0 */
-			/*byte 3*/
-			u8 pic_scaling:2;		/* SC1-SC0 */
-			u8 rev1:6;
-			/*byte 4*/
-			u8 rev2:8;
-			/*byte 5*/
-			u8 rev3:8;
-		} __packed v1;
-		struct v4_st { /* v2=v3=v4 */
-			/*byte 1*/
-			u8 scaninfo:2;			/* S1,S0 */
-			u8 barinfo:2;			/* B1,B0 */
-			u8 activeinfo:1;		/* A0 1 */
-			u8 colorindicator:3;		/* Y2-Y0 */
-			/*byte 2*/
-			u8 fmt_ration:4;		/* R3-R0 */
-			u8 pic_ration:2;		/* M1-M0 */
-			u8 colorimetry:2;		/* C1-C0 */
-			/*byte 3*/
-			u8 pic_scaling:2;		/* SC1-SC0 */
-			u8 qt_range:2;			/* Q1-Q0 */
-			u8 ext_color:3;			/* EC2-EC0 */
-			u8 it_content:1;		/* ITC */
-			/*byte 4*/
-			u8 vic:8;				/* VIC7-VIC0 */
-			/*byte 5*/
-			u8 pix_repeat:4;		/* PR3-PR0 */
-			u8 content_type:2;		/* CN1-CN0 */
-			u8 ycc_range:2;			/* YQ1-YQ0 */
-		} __packed v4;
-	} cont;
-	/*byte 6,7*/
-	u16 line_num_end_topbar:16;	/*littel endian can use*/
-	/*byte 8,9*/
-	u16 line_num_start_btmbar:16;
-	/*byte 10,11*/
-	u16 pix_num_left_bar:16;
-	/*byte 12,13*/
-	u16 pix_num_right_bar:16;
-	/* byte 14 */
-	u8 additional_colorimetry;
-} __packed;
-
 /* audio infoFrame packet - 0x84 */
 struct aud_infoframe_st {
 	u8 pkttype;
@@ -1026,10 +952,12 @@ struct rxpkt_st {
 };
 
 enum emp_pkt_type_e {
-	EMP_VTEM,
+	EMP_VTEM_CLASS0,
+	EMP_VTEM_CLASS1,
 	EMP_SBTM,
-	EMP_DV,
-	EMP_CUVA
+	EMP_AMDV,
+	EMP_CUVA,
+	EMP_CVTEM
 };
 
 struct packet_info_s {
@@ -1117,11 +1045,12 @@ extern u32 rx_vsif_type[4];
 extern u32 rx_emp_type[4];
 extern u32 rx_spd_type[4];
 /*extern bool hdr_enable;*/
+bool rx_chk_avi_valid(u8 port);
 void rx_pkt_status(u8 port);
 void rx_pkt_debug(void);
 void rx_debug_pktinfo(char input[][20], u8 port);
 void rx_pkt_dump(enum pkt_type_e typeid, u8 port);
-void rx_pkt_initial(void);
+void rx_pkt_initial(u8 port);
 int rx_pkt_handler(enum pkt_decode_type pkt_int_src, u8 port);
 u32 rx_pkt_type_mapping(enum pkt_type_e pkt_type);
 void rx_pkt_buffclear(enum pkt_type_e pkt_type, u8 port);
@@ -1131,7 +1060,7 @@ void rx_get_vsi_info(u8 port);
 /*please ignore checksum byte*/
 void rx_pkt_get_audif_ex(void *pktinfo);
 /*please ignore checksum byte*/
-void rx_pkt_get_avi_ex(void *pktinfo);
+void rx_pkt_get_avi_ex(void *pktinfo, u8 port);
 void rx_pkt_get_drm_ex(void *pktinfo);
 void rx_pkt_get_acr_ex(void *pktinfo);
 void rx_pkt_get_gmd_ex(void *pktinfo);
@@ -1153,6 +1082,10 @@ void rx_get_em_info(u8 port);
 void rx_get_aif_info(u8 port);
 void rx_check_pkt_flag(u8 port);
 void dump_pktinfo_status(u8 port);
-int rx_is_specific_20_dev(u8 port);
+enum spec_dev_e rx_get_dev_type(u8 port);
+void dump_cvtem_packet(u8 port);
+void parse_dsc_pps_data(u8 *buff, u8 port);
+void dump_dsc_pps_info(u8 port);
 struct emp_info_s *rx_get_emp_info(u8 port);
+bool rx_is_xbox_dev(u8 port);
 #endif

@@ -196,6 +196,7 @@ static ssize_t enable_store(struct device *dev,
 	return count;
 }
 
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 static ssize_t map_tables_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
@@ -215,6 +216,7 @@ static ssize_t map_tables_show(struct device *dev,
 	spin_unlock_irqrestore(&chip->slock, flags);
 	return len;
 }
+#endif
 
 static ssize_t led_blink_show(struct device *dev, struct device_attribute *attr,
 			      char *buf)
@@ -293,7 +295,9 @@ static ssize_t ir_learning_store(struct device *dev,
 	if (r_dev->ir_learning_on == !!val)
 		return count;
 
-	disable_irq(chip->irqno);
+	disable_irq(chip->irqno[0]);
+	if (ENABLE_LEGACY_IR(chip->protocol))
+		disable_irq(chip->irqno[1]);
 	mutex_lock(&chip->file_lock);
 	r_dev->ir_learning_on = !!val;
 	if (!!val) {
@@ -302,7 +306,9 @@ static ssize_t ir_learning_store(struct device *dev,
 		chip->protocol = REMOTE_TYPE_RAW_NEC;
 		if (meson_ir_pulses_malloc(chip) < 0) {
 			mutex_unlock(&chip->file_lock);
-			enable_irq(chip->irqno);
+			enable_irq(chip->irqno[0]);
+			if (ENABLE_LEGACY_IR(chip->protocol))
+				enable_irq(chip->irqno[1]);
 			return -ENOMEM;
 		}
 	} else {
@@ -311,7 +317,9 @@ static ssize_t ir_learning_store(struct device *dev,
 		meson_ir_pulses_free(chip);
 	}
 	mutex_unlock(&chip->file_lock);
-	enable_irq(chip->irqno);
+	enable_irq(chip->irqno[0]);
+	if (ENABLE_LEGACY_IR(chip->protocol))
+		enable_irq(chip->irqno[1]);
 	return count;
 }
 
@@ -326,7 +334,9 @@ static ssize_t learned_pulse_show(struct device *dev,
 	if (!r_dev->pulses)
 		return len;
 
-	disable_irq(chip->irqno);
+	disable_irq(chip->irqno[0]);
+	if (ENABLE_LEGACY_IR(chip->protocol))
+		disable_irq(chip->irqno[1]);
 	mutex_lock(&chip->file_lock);
 
 	for (i = 0; i < r_dev->pulses->len; i++)
@@ -334,7 +344,9 @@ static ssize_t learned_pulse_show(struct device *dev,
 			       r_dev->pulses->pulse[i] & GENMASK(30, 0));
 
 	mutex_unlock(&chip->file_lock);
-	enable_irq(chip->irqno);
+	enable_irq(chip->irqno[0]);
+	if (ENABLE_LEGACY_IR(chip->protocol))
+		enable_irq(chip->irqno[1]);
 	len += sprintf(buf + len, "\n");
 
 	return len;
@@ -367,11 +379,15 @@ DEVICE_ATTR_RW(protocol);
 DEVICE_ATTR_RW(keymap);
 DEVICE_ATTR_RW(debug_enable);
 DEVICE_ATTR_RW(enable);
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 DEVICE_ATTR_RO(map_tables);
+#endif
 
 static struct attribute *meson_ir_sysfs_attrs[] = {
 	&dev_attr_protocol.attr,
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	&dev_attr_map_tables.attr,
+#endif
 	&dev_attr_keymap.attr,
 	&dev_attr_debug_enable.attr,
 	&dev_attr_enable.attr,

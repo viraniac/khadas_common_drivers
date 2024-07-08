@@ -20,9 +20,9 @@
 #define VFRAME_H
 
 #include <linux/types.h>
-#ifdef CONFIG_AMLOGIC_MEDIA_TVIN
+//#ifdef CONFIG_AMLOGIC_MEDIA_TVIN
 #include <linux/amlogic/media/frame_provider/tvin/tvin.h>
-#endif
+//#endif
 #include <linux/amlogic/media/canvas/canvas.h>
 #include <linux/atomic.h>
 #include <linux/amlogic/iomap.h>
@@ -65,6 +65,7 @@
 #define VIDTYPE_EXT_VDIN_SCATTER        0x1
 #define VIDTYPE_EXT_MOSAIC_22           0x2
 #define VIDTYPE_EXT_BYPASS_DETUNNEL	0x4
+#define VIDTYPE_EXT_VDIN_HDCP		0x8
 
 #define DISP_RATIO_FORCECONFIG          0x80000000
 #define DISP_RATIO_FORCE_NORMALWIDE     0x40000000
@@ -122,6 +123,8 @@
 #define VFRAME_FLAG_PC_MODE			0x40000000
 #define VFRAME_FLAG_ALLM_MODE			0x80000000
 
+#define DI_FLAG_DI_LOCAL_BUF		0x02000000
+#define DI_FLAG_DI_PSTVPPLINK		0x04000000
 #define DI_FLAG_DI_BYPASS			0x08000000
 #define DI_FLAG_DI_GET			0x10000000
 #define DI_FLAG_DI_PVPPLINK		0x20000000
@@ -129,6 +132,9 @@
 #define DI_FLAG_DCT_DS_RATIO_MASK    0xff
 #define DI_FLAG_DCT_DS_RATIO_BIT     0
 #define DI_FLAG_DCT_DS_RATIO_MAX     0xff
+
+#define AIPQ_FLAG_VERSION_1	      0x1   /*1 or 0, is old mode, t3/t3x/s5 HARDWARE do AIPQ*/
+#define AIPQ_FLAG_VERSION_2	      0x2   /*new mode, GPU do AIPQ*/
 
 /* need check folllowing bits when toggle frame, to trigger property change */
 /* add more bits which indicates display attr change in vf->flag */
@@ -153,21 +159,6 @@ struct vframe_hist_s {
 	unsigned char luma_max;
 	unsigned char luma_min;
 	unsigned short gamma[64];
-	unsigned int vpp_luma_sum;	/*vpp hist info */
-	unsigned int vpp_chroma_sum;
-	unsigned int vpp_pixel_sum;
-	unsigned int vpp_height;
-	unsigned int vpp_width;
-	unsigned char vpp_luma_max;
-	unsigned char vpp_luma_min;
-	unsigned short vpp_gamma[64];
-	unsigned short vpp_dark_hist[64];
-	unsigned int vpp_hue_gamma[32];
-	unsigned int vpp_sat_gamma[32];
-
-#ifdef AML_LOCAL_DIMMING
-	unsigned int ldim_max[100];
-#endif
 } /*vframe_hist_t */;
 
 struct tvin_hdr10p_data_s {
@@ -371,6 +362,9 @@ struct vframe_src_fmt_s {
 	u32 play_id;
 	int dv_id;
 	bool pr_done;/*mark pyramid status*/
+	bool hdmi_new_frame;
+	u32 py_level;
+	u32 downsamplers;
 };
 
 enum pic_mode_provider_e {
@@ -659,6 +653,8 @@ struct vframe_s {
 	u32 compHeight;
 	u32 ratio_control;
 	u32 bitdepth;
+	/* for mif if dw output */
+	u32 bitdepth_dw;
 
 	/*
 	 * bit 31: is_cuva
@@ -682,7 +678,12 @@ struct vframe_s {
 	 */
 	u32 signal_type;
 	/*
-	 *bit 0: FMM flag
+	 * bit 0: FMM flag
+	 * bit[8-11]: modify to avi_colorimetry 00:NULL  01:SMPTE_ST_170    10:BT_709
+	 * bit[12-15] modify to avi_ext_colorimetry 00:XVYCC_601  01:XVYCC_709  10:SYCC_601
+	 *	11:OPYCC_601  100:OP_RGB  101:BT_2020_YCC  110:BI_2020_RGBORYCC
+	 *	111:SMPTE_ST_2113_P3D65RGB  1000:SMPTE_ST_2113_P3DCIRGB
+	 *	1001:BT_2100
 	 */
 	u32 ext_signal_type;
 	u32 orientation;
@@ -690,11 +691,11 @@ struct vframe_s {
 	enum vframe_source_type_e source_type;
 	enum vframe_secam_phase_e phase;
 	enum vframe_source_mode_e source_mode;
-#ifdef CONFIG_AMLOGIC_MEDIA_TVIN
+//#ifdef CONFIG_AMLOGIC_MEDIA_TVIN
 	enum tvin_sig_fmt_e sig_fmt;
 	enum tvin_trans_fmt trans_fmt;
 	struct tvafe_vga_parm_s vga_parm;
-#endif
+//#endif
 	struct vframe_view_s left_eye;
 	struct vframe_view_s right_eye;
 	u32 mode_3d_enable;
@@ -794,6 +795,7 @@ struct vframe_s {
 	/*for double write VP9/AV1 vf*/
 	void *mem_dw_handle;
 	struct nn_value_t nn_value[AI_PQ_TOP];
+	u32 aipq_flag;
 	struct dma_fence *fence;
 		/*current is dv input*/
 	bool dv_input;

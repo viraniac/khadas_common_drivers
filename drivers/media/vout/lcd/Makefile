@@ -3,6 +3,7 @@
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_vout.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_reg.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_common.o
+$(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_cus_ctrl.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_notify.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_debug.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_unifykey.o
@@ -12,7 +13,10 @@ $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_tcon_fw_param.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_tcon_debug.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_tcon_pdf.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_vbyone.o
+$(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_lvds.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_drm.o
+$(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_dphy_ctrl.o
+$(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_LCD) += vout/lcd/lcd_tcon_swpdf.o
 
 include $(COMMON_DRIVERS_DIR)/drivers/media/vout/lcd/lcd_venc/Makefile
 

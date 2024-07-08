@@ -36,6 +36,11 @@
 		#size-cells = <2>;
 		ranges;
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x0>;
+		};
+
 		dsp_fw_reserved0:linux,dsp_fw0 {
 			compatible = "amlogic, dsp";
 			size = <0x0 0x1000000>;
@@ -43,6 +48,7 @@
 		};
 
 		dsp_fw_reserved1:linux,dsp_fw1 {
+			status = "disabled";
 			compatible = "amlogic, dsp";
 			size = <0x0 0x400000>;
 			reg = <0x0 0x3800000 0x0 0x400000>;
@@ -294,6 +300,9 @@
 		aml-audio-card,dai-link@4 {
 			mclk-fs = <256>;
 			continuous-clock;
+			format = "i2s";
+			bitclock-master = <&loopback>;
+			frame-master = <&loopback>;
 			suffix-name = "alsaPORT-loopback";
 			cpu {
 				sound-dai = <&loopback>;
@@ -330,7 +339,7 @@
 		key_name = "power";
 		key_code = <KEY_POWER>;
 		key-gpios = <&gpio GPIOF_7 GPIO_ACTIVE_HIGH>;
-		detect_mode = <0>;/*0:polling mode, 1:irq mode*/
+		detect_mode = <1>;/*0:polling mode, 1:irq mode*/
 	};
 
 	adc_keypad {

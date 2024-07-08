@@ -56,18 +56,26 @@
 #define MAX_CONNECTOR_NUM (3)
 
 static int skip_logo;
+int recovery_mode;
 
-static int quiescent_ctl(char *str)
+static int check_reboot_mode(char *str)
 {
 	if (strncmp("qui", str, 3) == 0)
 		skip_logo = 1;
 	else
 		skip_logo = 0;
 
+	if (strncmp("factory", str, 7) == 0 ||
+	    strncmp("recovery", str, 8) == 0) {
+		recovery_mode = 1;
+	} else {
+		recovery_mode = 0;
+	}
+
 	return 0;
 }
 
-__setup("reboot_mode=", quiescent_ctl);
+__setup("reboot_mode=", check_reboot_mode);
 
 static void am_meson_fb_output_poll_changed(struct drm_device *dev)
 {
@@ -93,11 +101,61 @@ static const struct drm_mode_config_funcs meson_mode_config_funcs = {
 #else
 	.fb_create           = drm_gem_fb_create,
 #endif
+	.get_format_info     = am_meson_get_format_info,
+
 };
 
 static const struct drm_mode_config_helper_funcs meson_mode_config_helpers = {
 	.atomic_commit_tail = meson_atomic_helper_commit_tail,
 };
+
+int am_meson_get_vrr_range_ioctl(struct drm_device *dev,
+			void *data, struct drm_file *file_priv)
+{
+	int num_group = 0;
+	u32 conn_id;
+	struct drm_connector *connector;
+	struct drm_vrr_mode_groups *groups = data;
+	struct drm_vrr_mode_group *group;
+	int i = 0;
+
+	conn_id = groups->conn_id;
+	connector = drm_connector_lookup(dev, file_priv, conn_id);
+	if (!connector)
+		return -ENOENT;
+
+	switch (connector->connector_type) {
+#ifndef CONFIG_AMLOGIC_DRM_CUT_HDMI
+	case DRM_MODE_CONNECTOR_HDMIA:
+		num_group = am_meson_hdmi_get_vrr_range(dev, data, file_priv);
+		break;
+#endif
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
+	case DRM_MODE_CONNECTOR_LVDS:
+		num_group = am_meson_lcd_get_vrr_range(connector, groups->groups,
+						       MAX_VRR_MODE_GROUP);
+		break;
+#endif
+	default:
+		return -ENOENT;
+	}
+
+	if (!num_group) {
+		DRM_ERROR("get vrr error or not support qms\n");
+		return -EINVAL;
+	}
+
+	groups->num = num_group;
+
+	for (i = 0; i < num_group; i++) {
+		group = &groups->groups[i];
+		DRM_DEBUG("%s,%d, %d, %d, %d\n", __func__,
+		group->vrr_max, group->vrr_min, group->width, group->height);
+	}
+
+	drm_connector_put(connector);
+	return 0;
+}
 
 static const struct drm_ioctl_desc meson_ioctls[] = {
 	#ifdef CONFIG_AMLOGIC_DRM_USE_ION
@@ -106,14 +164,19 @@ static const struct drm_ioctl_desc meson_ioctls[] = {
 	#endif
 	DRM_IOCTL_DEF_DRV(MESON_ASYNC_ATOMIC, meson_async_atomic_ioctl,
 			  0),
+#ifndef CONFIG_AMLOGIC_DRM_CUT_HDMI
 	DRM_IOCTL_DEF_DRV(MESON_TESTATTR, am_meson_mode_testattr_ioctl, 0),
+#endif
+	DRM_IOCTL_DEF_DRV(MESON_GET_VRR_RANGE, am_meson_get_vrr_range_ioctl, 0),
 	DRM_IOCTL_DEF_DRV(MESON_RMFB, am_meson_mode_rmfb_ioctl, 0),
+	DRM_IOCTL_DEF_DRV(MESON_ADDFB2, am_meson_mode_addfb2_ioctl, 0),
 	#if IS_ENABLED(CONFIG_SYNC_FILE)
 	DRM_IOCTL_DEF_DRV(MESON_DMABUF_EXPORT_SYNC_FILE, am_meson_dmabuf_export_sync_file_ioctl,
 			  DRM_MASTER),
 	DRM_IOCTL_DEF_DRV(MESON_CREAT_PRESENT_FENCE,
 			meson_crtc_creat_present_fence_ioctl, 0),
 	#endif
+	DRM_IOCTL_DEF_DRV(MESON_MUTE_PLANE, meson_plane_mute_ioctl, 0)
 };
 
 DEFINE_DRM_GEM_FOPS(meson_drm_fops);
@@ -249,6 +312,8 @@ static int am_meson_drm_bind(struct device *dev)
 	priv->osd_occupied_index = -1;
 
 	dev_set_drvdata(dev, priv);
+	init_waitqueue_head(&priv->wq_shut_ctrl);
+	priv->shutdown_on = false;
 
 #ifdef CONFIG_AMLOGIC_DRM_USE_ION
 	ret = am_meson_gem_create(priv);
@@ -269,6 +334,9 @@ static int am_meson_drm_bind(struct device *dev)
 	drm->mode_config.funcs = &meson_mode_config_funcs;
 	drm->mode_config.helper_private	= &meson_mode_config_helpers;
 	drm->mode_config.allow_fb_modifiers = true;
+
+	if (recovery_mode)
+		priv->recovery_mode = true;
 
 	/* Try to bind all sub drivers. */
 	ret = component_bind_all(dev, &priv->bound_data);
@@ -498,7 +566,6 @@ static int am_meson_drv_probe(struct platform_device *pdev)
 	struct component_match *match = NULL;
 	int i;
 
-	DRM_DEBUG("%s in[%d]\n", __func__, __LINE__);
 	if (am_meson_drv_use_osd())
 		return am_meson_drv_probe_prune(pdev);
 
@@ -551,7 +618,6 @@ static int am_meson_drv_probe(struct platform_device *pdev)
 		am_meson_add_endpoints(dev, &match, port);
 		of_node_put(port);
 	}
-	DRM_DEBUG("%s out[%d]\n", __func__, __LINE__);
 #ifdef CONFIG_AMLOGIC_VOUT_SERVE
 	disable_vout_mode_set_sysfs();
 #endif
@@ -663,11 +729,54 @@ static const struct dev_pm_ops am_meson_drm_pm_ops = {
 
 static void am_meson_drv_shutdown(struct platform_device *pdev)
 {
+	struct drm_modeset_acquire_ctx ctx;
+	struct drm_device *dev;
+	struct drm_crtc *crtc;
+	struct am_meson_crtc *amcrtc;
+	struct meson_drm_thread *drm_thread;
 	struct meson_drm *priv;
+	int ret;
+	int i;
 
+	DRM_INFO("%s: in\n", __func__);
 	priv = dev_get_drvdata(&pdev->dev);
-	if (priv)
-		drm_atomic_helper_shutdown(priv->drm);
+	if (!priv) {
+		DRM_ERROR("%s: priv is NULL!\n", __func__);
+		return;
+	}
+
+	dev = priv->drm;
+
+	/* prevent drm_wait_vblank_ioctl on waiting event*/
+	drm_atomic_helper_shutdown(dev);
+
+	DRM_MODESET_LOCK_ALL_BEGIN(dev, ctx, 0, ret);
+
+	/* suspend atomic ioctl thread */
+	drm_for_each_crtc(crtc, dev) {
+		amcrtc = to_am_meson_crtc(crtc);
+		disable_irq(amcrtc->irq);
+	}
+
+	priv->shutdown_on = true;
+
+	/* prevent drm_wait_vblank_ioctl in its entry to avoid late lock */
+	dev->num_crtcs = 0;
+
+	DRM_MODESET_LOCK_ALL_END(dev, ctx, ret);
+
+	/* flush kworker of commit thread and stop the thread */
+	DRM_INFO("%s: try to flush worker\n", __func__);
+	for (i = 0; i < priv->num_crtcs; i++) {
+		drm_thread = &priv->commit_thread[i];
+		if (drm_thread->thread) {
+			kthread_flush_worker(&drm_thread->worker);
+			kthread_stop(drm_thread->thread);
+			drm_thread->thread = NULL;
+		}
+	}
+
+	DRM_INFO("%s: done\n", __func__);
 }
 
 static struct platform_driver am_meson_drm_platform_driver = {

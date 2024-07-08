@@ -70,6 +70,7 @@
 #define GENCMDIADDRH(aih, addr)		((aih) | (((addr) >> 16) & 0xffff))
 
 #define DMA_DIR(dir)		((dir) ? NFC_CMD_N2M : NFC_CMD_M2N)
+#define DMA_ADDR_ALIGN		(8)
 
 #define ECC_CHECK_RETURN_FF	(-1)
 
@@ -83,6 +84,9 @@
 #define NAND_MAX_DEVICE	4
 
 /* eMMC clock register, misc control */
+#define CLK_SELECT_SRC_MASK	GENMASK(7, 6)
+#define CLK_SELECT_SRC_FIXDIV2PLL	BIT(6)
+#define CLK_ALWAYS_ON	BIT(28)
 #define CLK_SELECT_NAND		BIT(31)
 
 #define NFC_CLK_CYCLE		6

@@ -716,7 +716,7 @@ const struct di_mp_uit_s di_mp_ui_top[] = {
 	[edi_mp_pps_position]  = {"pps_position:uint:def:1",
 			edi_mp_pps_position, 1},
 	[edi_mp_pre_enable_mask]  = {"pre_enable_mask:bit0:ma;bit1:mc:def:3",
-			edi_mp_pre_enable_mask, 1},//3
+			edi_mp_pre_enable_mask, 3},//3
 	[edi_mp_post_refresh]  = {"post_refresh:bool",
 			edi_mp_post_refresh, 0},
 	[edi_mp_nrds_en]  = {"nrds_en:uint",
@@ -5428,9 +5428,11 @@ void dip_init_pq_ops(void)
 
 	/* hw l1 ops*/
 	if (IS_IC_EF(ic_id, SC2)) {
+#ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 		if (IS_IC_EF(ic_id, T7))
 			get_datal()->hop_l1 = &dim_ops_l1_v4;
 		else
+#endif
 			get_datal()->hop_l1 = &dim_ops_l1_v3;
 		di_attach_ops_v3(&get_datal()->hop_l2);
 	} else {

@@ -265,56 +265,77 @@ void SLut_gen(struct sa_adj_param_s *reg_sat,
 	}
 }
 
-void ai_color_cfg(struct sa_adj_param_s *sa_adj_param)
+void ai_color_cfg(struct sa_adj_param_s *sa_adj_param, int vpp_index)
 {
 	int s_gain_en;
 	int l_gain_en;
 	int en;
 	int *s_gain;
 	int *l_gain;
-	int i;
+	int i, j;
+	int s5_slice_mode = get_s5_slice_mode();
+	unsigned int sa_ctl = SA_CTRL;
+	unsigned int sa_adj = SA_ADJ;
+	unsigned int sa_s_gain_0 = SA_S_GAIN_0;
+	unsigned int sa_l_gain_0 = SA_L_GAIN_0;
+
+	if (s5_slice_mode < 1 || s5_slice_mode > 4)
+		return;
 
 	s_gain_en = sa_adj_param->reg_sat_s_gain_en;
 	l_gain_en = sa_adj_param->reg_sat_l_gain_en;
 
-	en = s_gain_en | l_gain_en;
-	VSYNC_WR_MPEG_REG_BITS(SA_CTRL, en, 0, 1);
-	if (!en)
-		return;
-	VSYNC_WR_MPEG_REG_BITS(SA_ADJ, (s_gain_en << 1) | l_gain_en, 27, 2);
+	for (j = 0; j < s5_slice_mode; j++) {
+		sa_ctl += aice_offset[j];
+		sa_adj += aice_offset[j];
+		sa_s_gain_0 += aice_offset[j];
+		sa_l_gain_0 += aice_offset[j];
 
-	s_gain = sa_adj_param->reg_s_gain_lut;
-	l_gain = sa_adj_param->reg_l_gain_lut;
+		en = s_gain_en | l_gain_en;
+		VSYNC_WRITE_VPP_REG_BITS_EX_VPP_SEL(sa_ctl, en, 0, 1, 0, vpp_index);
+		if (!en)
+			return;
+		VSYNC_WRITE_VPP_REG_BITS_EX_VPP_SEL(sa_adj,
+			(s_gain_en << 1) | l_gain_en, 27, 2, 0, vpp_index);
 
-	if (s_gain_en) {
-		for (i = 0; i < 60; i++)
-			VSYNC_WR_MPEG_REG(SA_S_GAIN_0 + i,
-				((s_gain[2 * i] & 0xfff) << 16) | (s_gain[2 * i + 1] & 0xfff));
-	}
+		s_gain = sa_adj_param->reg_s_gain_lut;
+		l_gain = sa_adj_param->reg_l_gain_lut;
 
-	if (l_gain_en) {
-		for (i = 0; i < 32; i++)
-			VSYNC_WR_MPEG_REG(SA_L_GAIN_0 + i,
-				((l_gain[2 * i] & 0x3ff) << 16) | (l_gain[2 * i + 1] & 0x3ff));
+		if (s_gain_en) {
+			for (i = 0; i < 60; i++)
+				VSYNC_WRITE_VPP_REG_EX_VPP_SEL(sa_s_gain_0 + i,
+					((s_gain[2 * i] & 0xfff) << 16) |
+					(s_gain[2 * i + 1] & 0xfff), 0, vpp_index);
+		}
+
+		if (l_gain_en) {
+			for (i = 0; i < 32; i++)
+				VSYNC_WRITE_VPP_REG_EX_VPP_SEL(sa_l_gain_0 + i,
+					((l_gain[2 * i] & 0x3ff) << 16) |
+					(l_gain[2 * i + 1] & 0x3ff), 0, vpp_index);
+		}
 	}
 }
 
-void ai_color_proc(struct vframe_s *vf)
+void ai_color_proc(struct vframe_s *vf, int vpp_index)
 {
 	int i;
 
-	if (!vf || !vf->vc_private)
+	if (!vf || !vf->vc_private) {
+		ai_clr_config(0, vpp_index);
+		if (ai_clr_dbg & 0x20000)
+			pr_info("vf: NULL or vc_private: NULL\n");
 		return;
+	}
 
 	if (sa_adj_parm.reg_sat_s_gain_en == 0 &&
 		sa_adj_parm.reg_sat_l_gain_en == 0)
 		return;
 
-	if (!vf->vc_private->aicolor_info) {
-		if (ai_clr_dbg) {
+	if (!vf->vc_private->aicolor_info ||
+		(vf->vc_private->flag & VC_FLAG_AI_COLOR) == 0) {
+		if (ai_clr_dbg & 0x10000)
 			pr_info("no aicolor_info\n");
-			ai_clr_dbg--;
-		}
 		return;
 	}
 
@@ -322,16 +343,16 @@ void ai_color_proc(struct vframe_s *vf)
 		sa_adj_parm.reg_s_gain_lut[i] =
 			(int)vf->vc_private->aicolor_info->color_value[i];
 
-	if (ai_clr_dbg > 0) {
+	if (ai_clr_dbg & 0xffff) {
 		for (i = 0; i < 120; i++)
 			pr_info("input: reg_s_gain_lut[%d] = %d\n", i,
 				sa_adj_parm.reg_s_gain_lut[i]);
 	}
 
 	SLut_gen(&sa_adj_parm, &sa_fw_parm);
-	ai_color_cfg(&sa_adj_parm);
+	ai_color_cfg(&sa_adj_parm, vpp_index);
 
-	if (ai_clr_dbg > 0) {
+	if (ai_clr_dbg & 0xffff) {
 		for (i = 0; i < 120; i++)
 			pr_info("output-> reg_s_gain_lut[%d] = %d\n", i,
 				sa_adj_parm.reg_s_gain_lut[i]);
@@ -339,16 +360,18 @@ void ai_color_proc(struct vframe_s *vf)
 	}
 }
 
-void ai_clr_config(int enable)
+void ai_clr_config(int enable, int vpp_index)
 {
 	int i;
-	int s5_slice_mode = get_s5_slice_mode();
+	unsigned int val;
+	int s5_slice_mode = 4;
 
-	if (s5_slice_mode < 1 || s5_slice_mode > 4)
-		return;
+	if (chip_type_id == chip_t3x)
+		s5_slice_mode = 2;
 
+	val = (1 << 8) | (enable << 0);
 	for (i = 0; i < s5_slice_mode; i++)
-		WRITE_VPP_REG_BITS_S5(SA_CTRL + aice_offset[i], enable, 0, 1);
+		VSYNC_WRITE_VPP_REG_EX_VPP_SEL(SA_CTRL + aice_offset[i], val, 0, vpp_index);
 }
 
 int ai_color_debug_store(char **parm)

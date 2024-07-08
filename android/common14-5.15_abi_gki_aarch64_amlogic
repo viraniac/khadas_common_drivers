@@ -1,37 +1,36 @@
-  kimage_vaddr
-  sysfs_create_bin_file
-  vabits_actual
-  list_sort
-  kthread_flush_worker
+# aml_drm.ko
+  drm_connector_list_iter_end
+  drm_wait_one_vblank
+  drm_get_format_info
+  drm_format_info_min_pitch
 
-# amlogic-debug.ko
-  __tracepoint_android_rvh_do_undefinstr
-  __traceiter_android_rvh_do_undefinstr
+# amlogic-memory-debug.ko
+  bpf_trace_run9
+
+# amlogic_debug.ko
+  __tracepoint_android_rvh_select_task_rq_fair
+  __traceiter_android_rvh_select_task_rq_fair
 
 # amlogic-debug-iotrace.ko
-  __tracepoint_android_vh_set_module_permit_after_init
-  __traceiter_android_vh_set_module_permit_after_init
+  log_post_read_mmio
+  log_post_write_mmio
+  log_read_mmio
+  log_write_mmio
 
-  sg_pcopy_to_buffer
-  usb_hcd_is_primary_hcd
-  usb_hcd_map_urb_for_dma
-  xhci_get_ep_ctx
-  usb_hcd_link_urb_to_ep
+# amlogic-wireless.ko
+  async_schedule_node
 
-# amlogic-host.ko
-  unregister_die_notifier
+# amlogic-crypto-dma.ko
+  sg_nents_for_len
 
-# aml_drm.ko
-  drm_state_dump
-  __drm_printfn_seq_file
-  __drm_puts_seq_file
-  __drm_printfn_coredump
-  __drm_puts_coredump
-  drm_atomic_helper_shutdown
-
-# amlogic-mmc.ko
-  mmc_gpiod_request_cd
-
-# aml_media.ko
-  __get_task_comm
-  is_dma_buf_file
+# amlogic-gpio.ko
+  desc_to_gpio
+  device_create_with_groups
+  gpiochip_line_is_valid
+  gpiochip_lock_as_irq
+  gpiochip_unlock_as_irq
+  gpiod_get_direction
+  kernfs_find_and_get_ns
+  kernfs_notify
+  kernfs_put
+  request_any_context_irq

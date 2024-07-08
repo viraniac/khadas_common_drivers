@@ -41,6 +41,7 @@
 #endif
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM
 #include <linux/amlogic/media/amvecm/ve.h>
+#include <linux/amlogic/media/amvecm/amvecm.h>
 #endif
 
 #ifdef CONFIG_AMLOGIC_MEDIA_VIDEO
@@ -129,6 +130,7 @@ struct hw_osd_blend_reg_s hw_osd_reg_blend;
 struct hw_osd_slice2ppc_reg_s hw_osd_reg_slice2ppc;
 struct hw_osd_slice2ppc_s osd_slice2ppc;
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 struct hw_osd_reg_s hw_osd_reg_array_g12a[HW_OSD_COUNT] = {
 	{
 		VIU_OSD1_CTRL_STAT,
@@ -1340,6 +1342,7 @@ struct hw_osd_reg_s hw_osd_reg_array_t3x[HW_OSD_COUNT] = {
 		OSD3_PROC_OUT_SIZE,
 	},
 };
+#endif
 
 struct hw_osd_blend_reg_s hw_osd_blend_reg_legacy = {
 	/* osd_blend */
@@ -1371,6 +1374,7 @@ struct hw_osd_blend_reg_s hw_osd_blend_reg_legacy = {
 	OSD2_BLEND_SRC_CTRL
 };
 
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
 struct hw_osd_blend_reg_s hw_osd_blend_reg_s5 = {
 	/* osd_blend */
 	S5_VIU_OSD_BLEND_CTRL,
@@ -1400,6 +1404,7 @@ struct hw_osd_blend_reg_s hw_osd_blend_reg_s5 = {
 	S5_OSD1_BLEND_SRC_CTRL,
 	S5_OSD2_BLEND_SRC_CTRL
 };
+#endif
 
 struct hw_osd_slice2ppc_reg_s hw_osd_slice2ppc_reg =  {
 	OSD_2SLICE2PPC_IN_SIZE,
@@ -3317,7 +3322,28 @@ static s64 get_adjust_vsynctime(u32 output_index)
 	int thresh_line, vsync_time;
 	s64 adjust_nsec;
 
-	vinfo = get_current_vinfo();
+	switch (output_index) {
+	case VIU1:
+	#ifdef CONFIG_AMLOGIC_VOUT_SERVE
+		vinfo = get_current_vinfo();
+	#endif
+		break;
+	case VIU2:
+	#ifdef CONFIG_AMLOGIC_VOUT2_SERVE
+		vinfo = get_current_vinfo2();
+	#endif
+		break;
+	case VIU3:
+	#ifdef CONFIG_AMLOGIC_VOUT3_SERVE
+		vinfo = get_current_vinfo3();
+	#endif
+		break;
+	default:
+		osd_log_err("%s, set output_index %u error\n",
+			    __func__, output_index);
+		break;
+	};
+
 	if (vinfo && vinfo->name && (!strcmp(vinfo->name, "invalid") ||
 		      !strcmp(vinfo->name, "null"))) {
 		active_begin_line = get_active_begin_line(output_index);
@@ -4532,16 +4558,9 @@ static void osd_wait_vsync_hw_viux(u32 output_index)
 {
 	unsigned long timeout;
 	wait_queue_head_t *wait_queue = &osd_rdma_vpp0_done_wq;
+	int ret = -1;
 
 	if (osd_hw.fb_drvier_probe) {
-		/* for the independent viu2 HW module,
-		 * use the latch, waiting for vsync (not rdma interrupt).
-		 */
-		if (osd_hw.osd_meson_dev.has_viu2 && output_index == VIU2) {
-			osd_wait_vsync_event_viu2();
-			return;
-		}
-
 		vsync_hit[output_index] = false;
 
 		if (pxp_mode) {
@@ -4581,8 +4600,25 @@ static void osd_wait_vsync_hw_viux(u32 output_index)
 			else
 				timeout = msecs_to_jiffies(1000);
 		}
-		wait_event_interruptible_timeout(*wait_queue,
-						 vsync_hit[output_index], timeout);
+
+		/* for the independent viu2 HW module,
+		 * use the latch, waiting for vsync (not rdma interrupt).
+		 */
+		if (osd_hw.osd_meson_dev.has_viu2 && output_index == VIU2) {
+			ktime_t stime;
+
+			stime = ktime_get();
+			ret = wait_event_interruptible_timeout
+				(osd_vsync2_wq, timestamp[VIU2] > stime,
+				 timeout);
+		} else {
+			ret = wait_event_interruptible_timeout
+				(*wait_queue, vsync_hit[output_index], timeout);
+		}
+
+		if (ret <= 0 && timeout == msecs_to_jiffies(1000))
+			osd_log_err("wait for viu%d, error %d\n",
+				    output_index + 1, ret);
 	}
 }
 
@@ -7555,6 +7591,7 @@ static void _osd_pan_display_layers_fence
 	/* osd_count need -1 when VIU2 enable */
 	struct layer_fence_map_s *layer_map = NULL;
 	u32 inc_cnt = fence_map->inc_cnt;
+	int need_lock = 0;
 
 	if (output_index == VIU1) {
 		osd_count = osd_hw.osd_meson_dev.viu1_osd_count;
@@ -7628,9 +7665,14 @@ static void _osd_pan_display_layers_fence
 	}
 	/* set hw regs */
 	if (osd_hw.osd_display_debug[output_index] != OSD_DISP_DEBUG) {
-		mutex_lock(&preblend_lock);
+		if (osd_hw.osd_preblend_en && output_index == VIU1)
+			need_lock = 1;
+
+		if (need_lock)
+			mutex_lock(&preblend_lock);
 		osd_setting_blend(output_index);
-		mutex_unlock(&preblend_lock);
+		if (need_lock)
+			mutex_unlock(&preblend_lock);
 	}
 out:
 	/* signal out fence */
@@ -13566,6 +13608,12 @@ static void osd_setting_viux(u32 output_index)
 				osd_hw.reg[OSD_ENABLE]
 				.update_func(index);
 		}
+		/* if osd is disabled, use black dim color */
+		if (osd_hw.enable[index] == DISABLE) {
+			osd_hw.dim_layer[index] = 1;
+			osd_hw.dim_color[index] = 0;
+		}
+
 		if (!osd_hw.dim_layer[index]) {
 			VSYNCOSD_WR_MPEG_REG(osd_reg->osd_dimm_ctrl,
 					     0x00000000);
@@ -14651,147 +14699,12 @@ static void osd_flag_regs_init(void)
 	osd_rdma_flag_init();
 }
 
-void osd_init_hw(u32 logo_loaded, u32 osd_probe,
-		 struct osd_device_data_s *osd_meson)
+static void osd_hw_init(u32 logo_loaded)
 {
 	u32 idx, data32;
-	int err_num = 0;
-#ifdef CONFIG_AMLOGIC_MEDIA_SECURITY
-	void *osd_secure_op[VPP_TOP_MAX] = {VSYNCOSD_WR_MPEG_REG_BITS,
-					    VSYNCOSD_WR_MPEG_REG_BITS_VPP1,
-					    VSYNCOSD_WR_MPEG_REG_BITS_VPP2};
-#endif
-#ifdef CONFIG_AMLOGIC_MEDIA_FB_OSD_SYNC_FENCE
-	int i = 0;
 
-	for (i = 0 ; i < HW_OSD_COUNT; i++)
-		displayed_bufs[i] = NULL;
-#endif
-
-	osd_hw.fb_drvier_probe = osd_probe;
-	osd_hw.vpp_num = 1;
-
-	memcpy(&osd_hw.osd_meson_dev, osd_meson,
-	       sizeof(struct osd_device_data_s));
-	if (osd_hw.osd_meson_dev.has_vpp1)
-		osd_hw.vpp_num++;
-	if (osd_hw.osd_meson_dev.has_vpp2)
-		osd_hw.vpp_num++;
 	osd_vpu_power_on();
-
-	if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_S5 ||
-	    osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T3X)
-		memcpy(&hw_osd_reg_blend, &hw_osd_blend_reg_s5,
-		       sizeof(struct hw_osd_blend_reg_s));
-	else
-		memcpy(&hw_osd_reg_blend, &hw_osd_blend_reg_legacy,
-		       sizeof(struct hw_osd_blend_reg_s));
-
-	if (osd_hw.osd_meson_dev.has_slice2ppc)
-		memcpy(&hw_osd_reg_slice2ppc, &hw_osd_slice2ppc_reg,
-		       sizeof(struct hw_osd_slice2ppc_reg_s));
-
-	if (osd_meson->osd_count == 3 &&
-	    osd_meson->has_viu2) {
-		/* VIU1 2 OSD + 1 VIU2 1 OSD*/
-		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_tl1[0],
-		       sizeof(struct hw_osd_reg_s) *
-		       osd_hw.osd_meson_dev.osd_count);
-	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T7) {
-		/* 4 or 3 OSD, multi_afbc_core */
-		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_t7[0],
-		       sizeof(struct hw_osd_reg_s) *
-		       osd_hw.osd_meson_dev.osd_count);
-	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T3 ||
-		   osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T5W ||
-		   osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T5M) {
-		/* 4 or 3 OSD, multi_afbc_core */
-		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_t3[0],
-		       sizeof(struct hw_osd_reg_s) *
-		       osd_hw.osd_meson_dev.osd_count);
-	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_C3) {
-		/* one osd, no afbc, no osd blend */
-		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_c3[0],
-			   sizeof(struct hw_osd_reg_s) *
-			   osd_hw.osd_meson_dev.osd_count);
-	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_S5) {
-		/* 2 OSD (OSD1 + OSD3), multi_afbc_core */
-		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_s5[0],
-		       sizeof(struct hw_osd_reg_s) *
-			   osd_hw.osd_meson_dev.osd_count);
-	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T3X) {
-		/* 3 OSD, multi_afbc_core */
-		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_t3x[0],
-		       sizeof(struct hw_osd_reg_s) *
-		       osd_hw.osd_meson_dev.osd_count);
-	} else {
-		/* VIU1 3 OSD + 1 VIU2 1 OSD or VIU1 2 OSD*/
-		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_g12a[0],
-		       sizeof(struct hw_osd_reg_s) *
-		       osd_hw.osd_meson_dev.osd_count);
-	}
-	if (osd_dev_hw.display_type == T7_DISPLAY ||
-		osd_dev_hw.s5_display) {
-		if (osd_meson->cpu_id >= __MESON_CPU_MAJOR_ID_T3X) {
-			memcpy(&venc_regs[0], &venc_regs_t3x[0],
-				sizeof(struct vpu_venc_regs) * 3);
-		} else {
-			memcpy(&venc_regs[0], &venc_regs_t7[0],
-				sizeof(struct vpu_venc_regs) * 3);
-		}
-	}
-	if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_GXTVBB) {
-#ifndef CONFIG_AMLOGIC_REMOVE_OLD
-		backup_regs_init(HW_RESET_AFBCD_REGS);
-#endif
-	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_GXM) {
-#ifndef CONFIG_AMLOGIC_REMOVE_OLD
-		backup_regs_init(HW_RESET_OSD1_REGS);
-#endif
-	} else if ((osd_meson->cpu_id >= __MESON_CPU_MAJOR_ID_GXL) &&
-		 osd_meson->cpu_id <= __MESON_CPU_MAJOR_ID_TXL) {
-#ifndef CONFIG_AMLOGIC_REMOVE_OLD
-		backup_regs_init(HW_RESET_OSD1_REGS);
-#endif
-	} else if (osd_meson->cpu_id >= __MESON_CPU_MAJOR_ID_G12A) {
-		if (osd_dev_hw.display_type != C3_DISPLAY) {
-			if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_G12A)
-				backup_regs_init(HW_RESET_MALI_AFBCD_REGS);
-			else
-				backup_regs_init(HW_RESET_NONE);
-		}
-	} else {
-		backup_regs_init(HW_RESET_NONE);
-	}
-
-	/*for c3 irq clr*/
-	if (osd_dev_hw.display_type == C3_DISPLAY)
-		irq_clr_c3();
-
 	osd_flag_regs_init();
-	recovery_regs_init();
-
-	/* set osd vpp rdma func */
-	set_rdma_func_handler();
-	for (idx = 0; idx < HW_REG_INDEX_MAX; idx++)
-		osd_hw.reg[idx].update_func =
-		hw_func_array[idx];
-
-#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM
-	osd_hdr_on = false;
-#endif
-	osd_hw.hw_reset_flag = HW_RESET_NONE;
-	osd_hw.hwc_enable[VIU1] = 0;
-	osd_hw.hwc_enable[VIU2] = 0;
-	if (osd_hw.osd_meson_dev.osd_ver == OSD_NORMAL) {
-		osd_hw.hw_cursor_en = 1;
-	} else if (osd_hw.osd_meson_dev.osd_ver == OSD_HIGH_ONE) {
-		osd_hw.hw_cursor_en = 0;
-		/* g12a and g12b need delay */
-		supsend_delay = 50;
-	}
-	if (osd_hw.osd_meson_dev.has_rdma)
-		osd_hw.hw_rdma_en = 1;
 	/*close gamma only for axg*/
 	if (osd_hw.osd_meson_dev.osd_ver == OSD_SIMPLE)
 		osd_reg_write(L_GAMMA_CNTL_PORT, 0);
@@ -14880,7 +14793,9 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 				      data32);
 		if (osd_hw.osd_meson_dev.osd_ver == OSD_HIGH_ONE)
 			osd_setting_default_hwc();
-	} else if (osd_hw.osd_meson_dev.cpu_id ==
+	}
+
+	if (osd_hw.osd_meson_dev.cpu_id ==
 			__MESON_CPU_MAJOR_ID_T7) {
 		osd_mali_afbcd_top_ctrl =
 			osd_reg_read(MALI_AFBCD_TOP_CTRL) & osd_mali_afbcd_top_ctrl_mask;
@@ -14892,6 +14807,7 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 		osd_mali_afbcd1_top_ctrl &= ~(1 << 20);
 		notify_to_amdv();
 	}
+
 	if (osd_hw.osd_meson_dev.osd_ver <= OSD_NORMAL &&
 		osd_dev_hw.display_type != C3_DISPLAY) {
 		osd_vpp_misc =
@@ -14911,42 +14827,7 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 			osd_hw.order[OSD1] = OSD_ORDER_01;
 		}
 	} else if (osd_hw.osd_meson_dev.osd_ver == OSD_HIGH_ONE) {
-		osd_hw.order[OSD1] = LAYER_1;
-		osd_hw.order[OSD2] = LAYER_2;
-		osd_hw.order[OSD3] = LAYER_3;
-		for (idx = 0; idx < VIU_COUNT; idx++) {
-			osd_hw.disp_info[idx].background_w = 1920;
-			osd_hw.disp_info[idx].background_h = 1080;
-			osd_hw.disp_info[idx].fullscreen_w = 1920;
-			osd_hw.disp_info[idx].fullscreen_h = 1080;
-			osd_hw.disp_info[idx].position_x = 0;
-			osd_hw.disp_info[idx].position_y = 0;
-			osd_hw.disp_info[idx].position_w = 1920;
-			osd_hw.disp_info[idx].background_h = 1080;
-			osd_hw.vinfo_width[idx] = 1920;
-			osd_hw.vinfo_height[idx] = 1080;
-		}
-		if ((osd_hw.osd_meson_dev.cpu_id ==
-			__MESON_CPU_MAJOR_ID_G12A) ||
-			((osd_hw.osd_meson_dev.cpu_id ==
-			__MESON_CPU_MAJOR_ID_G12B) &&
-			is_meson_rev_a()))
-			osd_hw.workaround_line = 1;
 		for (idx = 0; idx < osd_hw.osd_meson_dev.osd_count; idx++) {
-			osd_hw.premult_en[idx] = 0;
-			osd_hw.osd_afbcd[idx].format = COLOR_INDEX_32_ABGR;
-			osd_hw.osd_afbcd[idx].inter_format =
-				MALI_AFBC_32X8_PIXEL << 1 |
-				MALI_AFBC_SPLIT_ON;
-			osd_hw.osd_afbcd[idx].afbc_start = 0;
-
-			osd_hw.osd_afbcd[idx].out_addr_id = idx + 1;
-			if (osd_hw.osd_meson_dev.cpu_id ==
-				__MESON_CPU_MAJOR_ID_G12A) {
-				osd_hw.afbc_force_reset = 1;
-				osd_hw.afbc_regs_backup = 1;
-			}
-
 			if (idx < osd_hw.osd_meson_dev.viu1_osd_count) {
 				/* TODO: temp set at here,
 				 * need move it to uboot
@@ -14972,12 +14853,19 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 			} else {
 				osd_hw.powered[idx] = 0;
 			}
+			osd_set_deband(idx, osd_hw.osd_deband_enable[idx]);
 		}
 		osd_set_basic_urgent(true);
 		if (osd_hw.osd_meson_dev.cpu_id !=
 			__MESON_CPU_MAJOR_ID_TXHD2 &&
 			osd_hw.osd_meson_dev.cpu_id !=
-			__MESON_CPU_MAJOR_ID_S1A )
+			__MESON_CPU_MAJOR_ID_S1A &&
+			osd_hw.osd_meson_dev.cpu_id !=
+			__MESON_CPU_MAJOR_ID_S7 &&
+			osd_hw.osd_meson_dev.cpu_id !=
+			__MESON_CPU_MAJOR_ID_T7 &&
+			osd_hw.osd_meson_dev.cpu_id !=
+			__MESON_CPU_MAJOR_ID_S7D)
 			osd_set_two_ports(true);
 		if (osd_dev_hw.prevsync_support) {
 			u32 vpp0_pre_go_field = 0;
@@ -15038,6 +14926,7 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 							 get_output_device_id(OSD4));
 		}
 	}
+
 	/* disable deband as default */
 	if (osd_hw.osd_meson_dev.has_deband) {
 		if (osd_dev_hw.display_type != C3_DISPLAY)
@@ -15045,6 +14934,232 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 		else
 			osd_reg_write(VOUT_OSD1_DB_FLT_CTRL, 0);
 	}
+
+	if (osd_hw.osd_meson_dev.cpu_id == __MESON_CPU_MAJOR_ID_AXG) {
+		data32 = osd_reg_read
+			(hw_osd_reg_array[OSD1].osd_fifo_ctrl_stat);
+		/* bit[9:5]: HOLD_FIFO_LINES */
+		data32 &= ~(0x1f << 5);
+		data32 |= 0x18 << 5;
+		osd_reg_write(hw_osd_reg_array[OSD1].osd_fifo_ctrl_stat,
+			      data32);
+	}
+	if (osd_hw.osd_meson_dev.cpu_id == __MESON_CPU_MAJOR_ID_TXHD2 &&
+		osd_hw.osd_meson_dev.has_vpp1) {
+		set_vpp_osd1_rgb2yuv(1);
+		set_vpp_osd2_rgb2yuv(0);
+	} else if (osd_hw.osd_meson_dev.osd_rgb2yuv == 1) {
+		set_vpp_osd1_rgb2yuv(1);
+		set_vpp_osd2_rgb2yuv(1);
+	}
+
+	if (osd_dev_hw.display_type == C3_DISPLAY &&
+		osd_hw.osd_meson_dev.osd_rgb2yuv)
+		osd1_matrix_yuv2rgb(RGB2YUV);
+
+	if (osd_hw.hw_rdma_en) {
+		osd_rdma_enable(VPU_VPP0, 2);
+		if (osd_hw.osd_meson_dev.has_vpp1 &&
+		   osd_hw.display_dev_cnt == 2)
+			osd_rdma_enable(VPU_VPP1, 2);
+		if (osd_hw.osd_meson_dev.has_vpp2 &&
+		   osd_hw.display_dev_cnt == 3)
+			osd_rdma_enable(VPU_VPP2, 2);
+	} else {
+		osd_hw.afbc_force_reset = 0;
+	}
+	/* temp set */
+	for (idx = 0; idx < osd_hw.osd_meson_dev.viu1_osd_count; idx++) {
+		osd_hw.use_h_filter_mode[idx] = 0xff;
+		osd_hw.use_v_filter_mode[idx] = 0xff;
+		osd_update_coef(idx);
+	}
+}
+
+void osd_init_hw(u32 logo_loaded, u32 osd_probe,
+		 struct osd_device_data_s *osd_meson)
+{
+	u32 idx;
+	int err_num = 0;
+#ifdef CONFIG_AMLOGIC_MEDIA_SECURITY
+	void *osd_secure_op[VPP_TOP_MAX] = {VSYNCOSD_WR_MPEG_REG_BITS,
+					    VSYNCOSD_WR_MPEG_REG_BITS_VPP1,
+					    VSYNCOSD_WR_MPEG_REG_BITS_VPP2};
+#endif
+#ifdef CONFIG_AMLOGIC_MEDIA_FB_OSD_SYNC_FENCE
+	int i = 0;
+
+	for (i = 0 ; i < HW_OSD_COUNT; i++)
+		displayed_bufs[i] = NULL;
+#endif
+
+	osd_hw.fb_drvier_probe = osd_probe;
+	osd_hw.vpp_num = 1;
+
+	memcpy(&osd_hw.osd_meson_dev, osd_meson,
+	       sizeof(struct osd_device_data_s));
+	if (osd_hw.osd_meson_dev.has_vpp1)
+		osd_hw.vpp_num++;
+	if (osd_hw.osd_meson_dev.has_vpp2)
+		osd_hw.vpp_num++;
+
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
+	if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_S5 ||
+	    osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T3X)
+		memcpy(&hw_osd_reg_blend, &hw_osd_blend_reg_s5,
+		       sizeof(struct hw_osd_blend_reg_s));
+	else
+#endif
+		memcpy(&hw_osd_reg_blend, &hw_osd_blend_reg_legacy,
+		       sizeof(struct hw_osd_blend_reg_s));
+
+	if (osd_hw.osd_meson_dev.has_slice2ppc)
+		memcpy(&hw_osd_reg_slice2ppc, &hw_osd_slice2ppc_reg,
+		       sizeof(struct hw_osd_slice2ppc_reg_s));
+
+	if (osd_meson->osd_count == 3 &&
+	    osd_meson->has_viu2) {
+		/* VIU1 2 OSD + 1 VIU2 1 OSD*/
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
+		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_tl1[0],
+		       sizeof(struct hw_osd_reg_s) *
+		       osd_hw.osd_meson_dev.osd_count);
+	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T7) {
+		/* 4 or 3 OSD, multi_afbc_core */
+		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_t7[0],
+		       sizeof(struct hw_osd_reg_s) *
+		       osd_hw.osd_meson_dev.osd_count);
+	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T3 ||
+		   osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T5W ||
+		   osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T5M) {
+		/* 4 or 3 OSD, multi_afbc_core */
+		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_t3[0],
+		       sizeof(struct hw_osd_reg_s) *
+		       osd_hw.osd_meson_dev.osd_count);
+#endif
+	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_C3) {
+		/* one osd, no afbc, no osd blend */
+		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_c3[0],
+			   sizeof(struct hw_osd_reg_s) *
+			   osd_hw.osd_meson_dev.osd_count);
+#ifndef CONFIG_AMLOGIC_C3_REMOVE
+	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_S5) {
+		/* 2 OSD (OSD1 + OSD3), multi_afbc_core */
+		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_s5[0],
+		       sizeof(struct hw_osd_reg_s) *
+			   osd_hw.osd_meson_dev.osd_count);
+	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_T3X) {
+		/* 3 OSD, multi_afbc_core */
+		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_t3x[0],
+		       sizeof(struct hw_osd_reg_s) *
+		       osd_hw.osd_meson_dev.osd_count);
+	} else {
+		/* VIU1 3 OSD + 1 VIU2 1 OSD or VIU1 2 OSD*/
+		memcpy(&hw_osd_reg_array[0], &hw_osd_reg_array_g12a[0],
+		       sizeof(struct hw_osd_reg_s) *
+		       osd_hw.osd_meson_dev.osd_count);
+#endif
+	}
+	if (osd_dev_hw.display_type == T7_DISPLAY ||
+		osd_dev_hw.s5_display) {
+		if (osd_meson->cpu_id >= __MESON_CPU_MAJOR_ID_T3X) {
+			memcpy(&venc_regs[0], &venc_regs_t3x[0],
+				sizeof(struct vpu_venc_regs) * 3);
+		} else {
+			memcpy(&venc_regs[0], &venc_regs_t7[0],
+				sizeof(struct vpu_venc_regs) * 3);
+		}
+	}
+	if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_GXTVBB) {
+#ifndef CONFIG_AMLOGIC_REMOVE_OLD
+		backup_regs_init(HW_RESET_AFBCD_REGS);
+#endif
+	} else if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_GXM) {
+#ifndef CONFIG_AMLOGIC_REMOVE_OLD
+		backup_regs_init(HW_RESET_OSD1_REGS);
+#endif
+	} else if ((osd_meson->cpu_id >= __MESON_CPU_MAJOR_ID_GXL) &&
+		 osd_meson->cpu_id <= __MESON_CPU_MAJOR_ID_TXL) {
+#ifndef CONFIG_AMLOGIC_REMOVE_OLD
+		backup_regs_init(HW_RESET_OSD1_REGS);
+#endif
+	} else if (osd_meson->cpu_id >= __MESON_CPU_MAJOR_ID_G12A) {
+		if (osd_dev_hw.display_type != C3_DISPLAY) {
+			if (osd_meson->cpu_id == __MESON_CPU_MAJOR_ID_G12A)
+				backup_regs_init(HW_RESET_MALI_AFBCD_REGS);
+			else
+				backup_regs_init(HW_RESET_NONE);
+		}
+	} else {
+		backup_regs_init(HW_RESET_NONE);
+	}
+
+	/*for c3 irq clr*/
+	if (osd_dev_hw.display_type == C3_DISPLAY)
+		irq_clr_c3();
+
+	recovery_regs_init();
+
+	/* set osd vpp rdma func */
+	set_rdma_func_handler();
+	for (idx = 0; idx < HW_REG_INDEX_MAX; idx++)
+		osd_hw.reg[idx].update_func =
+		hw_func_array[idx];
+
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM
+	osd_hdr_on = false;
+#endif
+	osd_hw.hw_reset_flag = HW_RESET_NONE;
+	osd_hw.hwc_enable[VIU1] = 0;
+	osd_hw.hwc_enable[VIU2] = 0;
+	if (osd_hw.osd_meson_dev.osd_ver == OSD_NORMAL) {
+		osd_hw.hw_cursor_en = 1;
+	} else if (osd_hw.osd_meson_dev.osd_ver == OSD_HIGH_ONE) {
+		osd_hw.hw_cursor_en = 0;
+		/* g12a and g12b need delay */
+		supsend_delay = 50;
+	}
+	if (osd_hw.osd_meson_dev.has_rdma)
+		osd_hw.hw_rdma_en = 1;
+
+	if (osd_hw.osd_meson_dev.osd_ver == OSD_HIGH_ONE) {
+		osd_hw.order[OSD1] = LAYER_1;
+		osd_hw.order[OSD2] = LAYER_2;
+		osd_hw.order[OSD3] = LAYER_3;
+		for (idx = 0; idx < VIU_COUNT; idx++) {
+			osd_hw.disp_info[idx].background_w = 1920;
+			osd_hw.disp_info[idx].background_h = 1080;
+			osd_hw.disp_info[idx].fullscreen_w = 1920;
+			osd_hw.disp_info[idx].fullscreen_h = 1080;
+			osd_hw.disp_info[idx].position_x = 0;
+			osd_hw.disp_info[idx].position_y = 0;
+			osd_hw.disp_info[idx].position_w = 1920;
+			osd_hw.disp_info[idx].background_h = 1080;
+			osd_hw.vinfo_width[idx] = 1920;
+			osd_hw.vinfo_height[idx] = 1080;
+		}
+		if ((osd_hw.osd_meson_dev.cpu_id ==
+			__MESON_CPU_MAJOR_ID_G12A) ||
+			((osd_hw.osd_meson_dev.cpu_id ==
+			__MESON_CPU_MAJOR_ID_G12B) &&
+			is_meson_rev_a()))
+			osd_hw.workaround_line = 1;
+		for (idx = 0; idx < osd_hw.osd_meson_dev.osd_count; idx++) {
+			osd_hw.premult_en[idx] = 0;
+			osd_hw.osd_afbcd[idx].format = COLOR_INDEX_32_ABGR;
+			osd_hw.osd_afbcd[idx].inter_format =
+				MALI_AFBC_32X8_PIXEL << 1 |
+				MALI_AFBC_SPLIT_ON;
+			osd_hw.osd_afbcd[idx].afbc_start = 0;
+			osd_hw.osd_afbcd[idx].out_addr_id = idx + 1;
+			if (osd_hw.osd_meson_dev.cpu_id ==
+				__MESON_CPU_MAJOR_ID_G12A) {
+				osd_hw.afbc_force_reset = 1;
+				osd_hw.afbc_regs_backup = 1;
+			}
+		}
+	}
+
 	for (idx = 0; idx < osd_hw.osd_meson_dev.osd_count; idx++) {
 		osd_hw.updated[idx] = 0;
 		osd_hw.urgent[idx] = 1;
@@ -15098,12 +15213,12 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 		 * osd_hw.rotation_pandata[idx].y_start = 0;
 		 */
 		osd_set_dummy_data(idx, 0xff);
-		osd_set_deband(idx, osd_hw.osd_deband_enable[idx]);
 		#ifdef DEBUG_FIRSTFRAME
 		set_force_dimm(idx);
 		set_force_save_frames(idx);
 		#endif
 	}
+	osd_hw_init(logo_loaded);
 	/* hwc_enable == 0 handler */
 #ifdef CONFIG_AMLOGIC_MEDIA_FB_OSD_SYNC_FENCE
 	osd_hw.osd_fence[VIU1][DISABLE].sync_fence_handler =
@@ -15143,23 +15258,7 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 	osd_hw.osd_preblend_en = 0;
 	osd_hw.fix_target_width = 1920;
 	osd_hw.fix_target_height = 1080;
-	if (osd_hw.osd_meson_dev.cpu_id == __MESON_CPU_MAJOR_ID_AXG) {
-		data32 = osd_reg_read
-			(hw_osd_reg_array[OSD1].osd_fifo_ctrl_stat);
-		/* bit[9:5]: HOLD_FIFO_LINES */
-		data32 &= ~(0x1f << 5);
-		data32 |= 0x18 << 5;
-		osd_reg_write(hw_osd_reg_array[OSD1].osd_fifo_ctrl_stat,
-			      data32);
-	}
-	if (osd_hw.osd_meson_dev.cpu_id == __MESON_CPU_MAJOR_ID_TXHD2 &&
-		osd_hw.osd_meson_dev.has_vpp1) {
-		set_vpp_osd1_rgb2yuv(1);
-		set_vpp_osd2_rgb2yuv(0);
-	} else if (osd_hw.osd_meson_dev.osd_rgb2yuv == 1) {
-		set_vpp_osd1_rgb2yuv(1);
-		set_vpp_osd2_rgb2yuv(1);
-	}
+
 	if (osd_hw.fb_drvier_probe) {
 #ifdef CONFIG_AMLOGIC_MEDIA_FB_OSD_SYNC_FENCE
 		INIT_LIST_HEAD(&post_fence_list[VIU1]);
@@ -15203,17 +15302,6 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 			request_fiq(INT_VIU_VSYNC, &osd_viu2_fiq_isr);
 #endif
 	}
-	if (osd_hw.hw_rdma_en) {
-		osd_rdma_enable(VPU_VPP0, 2);
-		if (osd_hw.osd_meson_dev.has_vpp1 &&
-		   osd_hw.display_dev_cnt == 2)
-			osd_rdma_enable(VPU_VPP1, 2);
-		if (osd_hw.osd_meson_dev.has_vpp2 &&
-		   osd_hw.display_dev_cnt == 3)
-			osd_rdma_enable(VPU_VPP2, 2);
-	} else {
-		osd_hw.afbc_force_reset = 0;
-	}
 #ifdef CONFIG_AMLOGIC_MEDIA_FB_OSD_SYNC_FENCE
 	affinity_set_init();
 #endif
@@ -15224,6 +15312,9 @@ void osd_init_hw(u32 logo_loaded, u32 osd_probe,
 #endif
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 	register_osd_func(get_osd_status);
+#endif
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM
+		register_osd_status_cb(get_osd_status);
 #endif
 	if (osd_hw.osd_meson_dev.cpu_id == __MESON_CPU_MAJOR_ID_TXHD2)
 		enable_vd_zorder = 0;
@@ -15707,6 +15798,9 @@ void  osd_suspend_hw(void)
 
 void osd_resume_hw(void)
 {
+	/* for hw reg recovery */
+	osd_hw_init(0);
+
 	if (osd_hw.osd_meson_dev.osd_ver <= OSD_NORMAL &&
 		osd_dev_hw.display_type != C3_DISPLAY) {
 		if (osd_hw.reg_status_save &

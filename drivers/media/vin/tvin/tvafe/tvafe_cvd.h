@@ -168,7 +168,6 @@ struct tvafe_cvd2_info_s {
 #endif
 	unsigned int ntsc_switch_cnt;
 
-	unsigned int smr_cnt;
 	unsigned int isr_cnt;
 	unsigned int unlock_cnt;
 };
@@ -181,7 +180,9 @@ struct tvafe_cvd2_s {
 	const unsigned int *acd_table;
 	struct tvafe_reg_table_s *pq_conf;
 	unsigned int fmt_loop_cnt;
+	unsigned int smr_cnt;
 	unsigned int cvd_chroma_saturation;
+	unsigned int det_secam_cnt; //for secam detected error
 	unsigned char hw_data_cur;
 	enum tvin_port_e vd_port;
 	enum tvin_sig_fmt_e config_fmt;
@@ -220,6 +221,7 @@ void tvafe_cvd2_reset_pga(void);
 enum tvafe_cvbs_video_e tvafe_cvd2_get_lock_status(struct tvafe_cvd2_s *cvd2);
 int tvafe_cvd2_get_atv_format(void);
 int tvafe_cvd2_get_hv_lock(void);
+int tvafe_cvd2_get_force_format(void);
 void tvafe_cvd2_hold_rst(void);
 void tvafe_snow_config(unsigned int onoff);
 void tvafe_snow_config_clamp(unsigned int onoff);
@@ -231,6 +233,9 @@ void cvd_vbi_config(void);
 void tvafe_cvd2_rf_ntsc50_en(bool v);
 void tvafe_cvd2_non_std_config(struct tvafe_cvd2_s *cvd2);
 int cvd_set_debug_parm(const char *buff, char **parm);
+bool get_tvafe_signal_state(void);
+bool get_tvafe_signal_state(void);
+enum tvin_sig_fmt_e get_tvafe_signal_fmt(void);
 
 extern bool tvafe_snow_function_flag;
 extern bool reinit_scan;

@@ -105,9 +105,10 @@ enum VIDEO_DEC_TYPE {
 #define DECODER_ERROR_VLC_DECODE_TBL    (0x20 << 16)
 #define PARSER_ERROR_WRONG_HEAD_VER     (0x40 << 16)
 #define PARSER_ERROR_WRONG_PACKAGE_SIZE (0x80 << 16)
-#define DECODER_FATAL_ERROR_SIZE_OVERFLOW     (0x100 << 16)
+#define DECODER_FATAL_ERROR_SIZE_OVERFLOW       (0x100 << 16)
 #define DECODER_FATAL_ERROR_UNKNOWN             (0x200 << 16)
-#define DECODER_FATAL_ERROR_NO_MEM		(0x400 << 16)
+#define DECODER_FATAL_ERROR_NO_MEM              (0x400 << 16)
+#define DECODER_FATAL_ERROR_UNSUPPORT_FORMAT    (0x800 << 16)
 
 #define DECODER_ERROR_MASK	(0xffff << 16)
 /* The total slot number for fifo_buf */
@@ -163,6 +164,7 @@ struct codec_profile_t {
 #define AMSTREAM_SET_AUDIO_DELAY_LIMIT_MS     0x11B
 #define AMSTREAM_SET_DRMMODE                  0x11C
 #define AMSTREAM_SET_VIDEO_ID                 0x11E
+#define AMSTREAM_SET_FCC_MODE                 0x11F
 
 /*  video set   cmd */
 #define AMSTREAM_SET_OMX_VPTS                 0x160

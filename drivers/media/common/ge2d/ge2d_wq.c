@@ -17,6 +17,7 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
+#include <uapi/linux/sched/types.h>
 
 /* Amlogic Headers */
 #if IS_ENABLED(CONFIG_AMLOGIC_DMC_DEV_ACCESS)
@@ -51,11 +52,13 @@
 
 #define GE2D_NO_POWER_OFF_OP 0x8
 #define GE2D_NO_POWER_ON_OP  0x4
+#define GE2D_ONOFF_MODE_MAX_COUNT 32767
 
 static struct ge2d_manager_s ge2d_manager;
 static int ge2d_irq = -ENXIO;
 static struct clk *ge2d_clk;
 static int backup_init_regs = 1;
+static DEFINE_MUTEX(dp_ctrl_mutex);
 
 static const int bpp_type_lut[] = {
 #ifdef CONFIG_AMLOGIC_MEDIA_FB
@@ -125,14 +128,58 @@ static const int default_ge2d_color_lut[] = {
 static int ge2d_buffer_get_phys(struct aml_dma_cfg *cfg,
 				unsigned long *addr);
 
+static u32 ge2d_onoff_mode, ge2d_on_cnt, ge2d_off_cnt;
+
+/* onoff_mode:
+ * 0. on_counter means how many pixels will output before ge2d turns off.
+ * 1. on_counter means how many clocks will ge2d turn on before ge2d turns off.
+ *
+ * on_cnt:   on counter, range (0, 32767].
+ * off_cnt: off counter, range (0, 32767].
+ */
+int ge2d_set_onoff_mode(u32 onoff_mode, u32 on_cnt, u32 off_cnt)
+{
+	if ((onoff_mode != 0 && onoff_mode != 1) ||
+	    on_cnt > GE2D_ONOFF_MODE_MAX_COUNT ||
+	    off_cnt > GE2D_ONOFF_MODE_MAX_COUNT) {
+		ge2d_log_err("%s out of range, %u %u %u\n",
+			     __func__, onoff_mode, on_cnt, off_cnt);
+		return -EINVAL;
+	}
+	mutex_lock(&dp_ctrl_mutex);
+	ge2d_onoff_mode = onoff_mode;
+	ge2d_on_cnt = on_cnt;
+	ge2d_off_cnt = off_cnt;
+	ge2d_log_dbg("%s, onoff_mode:%d on_cnt:%d off_cnt:%d\n",
+		     __func__, onoff_mode, on_cnt, off_cnt);
+	mutex_unlock(&dp_ctrl_mutex);
+
+	return 0;
+}
+EXPORT_SYMBOL(ge2d_set_onoff_mode);
+
+void ge2d_get_onoff_mode(u32 *onoff_mode, u32 *on_cnt, u32 *off_cnt)
+{
+	if (!onoff_mode || !on_cnt || !off_cnt) {
+		ge2d_log_err("%s err, onoff_mode:%p on_cnt:%p off_cnt:%p\n",
+			     __func__, onoff_mode, on_cnt, off_cnt);
+		return;
+	}
+
+	*onoff_mode = ge2d_onoff_mode;
+	*on_cnt = ge2d_on_cnt;
+	*off_cnt = ge2d_off_cnt;
+}
+EXPORT_SYMBOL(ge2d_get_onoff_mode);
+
 static void ge2d_pre_init(void)
 {
 	struct ge2d_gen_s ge2d_gen_cfg;
 
 	ge2d_gen_cfg.interrupt_ctrl = 0x02;
-	ge2d_gen_cfg.dp_on_cnt       = 0;
-	ge2d_gen_cfg.dp_off_cnt      = 0;
-	ge2d_gen_cfg.dp_onoff_mode   = 0;
+	ge2d_gen_cfg.dp_on_cnt       = ge2d_on_cnt;
+	ge2d_gen_cfg.dp_off_cnt      = ge2d_off_cnt;
+	ge2d_gen_cfg.dp_onoff_mode   = ge2d_onoff_mode;
 	ge2d_gen_cfg.vfmt_onoff_en   = 0;
 	/*  fifo size control, 00: 512, 01: 256, 10: 128 11: 96 */
 	ge2d_gen_cfg.fifo_size = 0;
@@ -253,11 +300,6 @@ ssize_t free_queue_status_show(struct class *cla, struct class_attribute *attr,
 		return 0;
 	return snprintf(buf, 40, "free space :%d\n",
 			get_queue_member_count(&wq->free_queue));
-}
-
-static inline int work_queue_no_space(struct ge2d_context_s *queue)
-{
-	return list_empty(&queue->free_queue);
 }
 
 static void ge2d_dump_cmd(struct ge2d_cmd_s *cfg)
@@ -663,10 +705,12 @@ static struct list_head *ge2d_process_cmd_queue(struct ge2d_context_s *wq,
 		}
 
 		/* recycle the item to free_queue */
-		kfree(pitem_entry->config.clut8_table.data);
 		spin_lock(&wq->lock);
-		list_move_tail(&pitem_entry->list, &wq->free_queue);
+		list_del(&pitem_entry->list);
 		spin_unlock(&wq->lock);
+
+		kfree(pitem_entry->config.clut8_table.data);
+		kfree(pitem_entry);
 	}
 
 start_process:
@@ -798,15 +842,17 @@ static int ge2d_process_work_queue(struct ge2d_context_s *wq)
 
 		/* release clut8_data */
 		kfree(pitem->config.clut8_table.data);
+
 		spin_lock(&wq->lock);
 		pos = pos->next;
-		list_move_tail(&pitem->list, &wq->free_queue);
+		list_del(&pitem->list);
 		spin_unlock(&wq->lock);
-
 		/* if block mode (cmd) */
 		if (block_mode) {
 			pitem->cmd.wait_done_flag = 0;
 			wake_up_interruptible(&wq->cmd_complete);
+		} else {
+			kfree(pitem);
 		}
 		pitem = (struct ge2d_queue_item_s *)pos;
 	} while (pos != head);
@@ -930,19 +976,13 @@ void ge2d_wq_set_scale_coef(struct ge2d_context_s *wq,
 int ge2d_wq_add_work(struct ge2d_context_s *wq, int enqueue)
 {
 	struct ge2d_queue_item_s  *pitem;
+	unsigned int block = 0;
 
 	ge2d_log_dbg("add new work @@%s:%d\n", __func__, __LINE__);
-	if (work_queue_no_space(wq)) {
-		ge2d_log_dbg("work queue no space\n");
-		/* we should wait for queue empty at this point. */
-		return -1;
-	}
-
-	pitem = list_entry(wq->free_queue.next, struct ge2d_queue_item_s, list);
-	if (IS_ERR_OR_NULL(pitem)) {
-		ge2d_log_err("@@%s:%d, failed\n", __func__, __LINE__);
+	pitem = kmalloc(sizeof(*pitem), GFP_KERNEL);
+	if (!pitem)
 		goto error;
-	}
+
 	memset(&pitem->flag, 0, sizeof(struct ge2d_item_flag_s));
 	memcpy(&pitem->cmd, &wq->cmd, sizeof(struct ge2d_cmd_s));
 	memset(&wq->cmd, 0, sizeof(struct ge2d_cmd_s));
@@ -951,8 +991,9 @@ int ge2d_wq_add_work(struct ge2d_context_s *wq, int enqueue)
 	if (enqueue)
 		pitem->flag.cmd_queue_mode = 1;
 
+	block = pitem->cmd.wait_done_flag;
 	spin_lock(&wq->lock);
-	list_move_tail(&pitem->list, &wq->work_queue);
+	list_add_tail(&pitem->list, &wq->work_queue);
 	spin_unlock(&wq->lock);
 	ge2d_log_dbg("add new work ok\n");
 
@@ -961,10 +1002,11 @@ int ge2d_wq_add_work(struct ge2d_context_s *wq, int enqueue)
 		if (ge2d_manager.event.cmd_in_com.done == 0)
 			complete(&ge2d_manager.event.cmd_in_com);/* new cmd come in */
 		/* add block mode   if() */
-		if (pitem->cmd.wait_done_flag) {
+		if (block) {
 			wait_event_interruptible(wq->cmd_complete,
 						 pitem->cmd.wait_done_flag == 0);
 			/* interruptible_sleep_on(&wq->cmd_complete); */
+			kfree(pitem);
 		}
 	}
 
@@ -992,10 +1034,11 @@ int post_queue_to_process(struct ge2d_context_s *wq, int block)
 	if (ge2d_manager.event.cmd_in_com.done == 0)
 		complete(&ge2d_manager.event.cmd_in_com);/* new cmd come in */
 
-	if (pitem->cmd.wait_done_flag)
+	if (block) {
 		wait_event_interruptible(wq->cmd_complete,
 					 pitem->cmd.wait_done_flag == 0);
-
+		kfree(pitem);
+	}
 	ge2d_log_dbg("post a queue, done\n");
 
 	return 0;
@@ -1026,7 +1069,13 @@ static int ge2d_monitor_thread(void *data)
 {
 	int ret;
 	struct ge2d_manager_s *manager = (struct ge2d_manager_s *)data;
+	struct sched_param param = {.sched_priority = 2};
 
+	ret = sched_setscheduler(current, SCHED_FIFO, &param);
+	if (ret) {
+		ge2d_log_err("could not set realtime priority (%d)\n", ret);
+		return -1;
+	}
 	ge2d_log_info("ge2d workqueue monitor start\n");
 	/* setup current_wq here. */
 	while (ge2d_manager.process_queue_state != GE2D_PROCESS_QUEUE_STOP) {
@@ -3018,8 +3067,6 @@ void ge2d_ioctl_detach_dma_fd(struct ge2d_context_s *wq,
 
 struct ge2d_context_s *create_ge2d_work_queue(void)
 {
-	int i;
-	struct ge2d_queue_item_s *p_item;
 	struct ge2d_context_s *ge2d_work_queue;
 	int  empty;
 
@@ -3039,17 +3086,6 @@ struct ge2d_context_s *create_ge2d_work_queue(void)
 	INIT_LIST_HEAD(&ge2d_work_queue->free_queue);
 	init_waitqueue_head(&ge2d_work_queue->cmd_complete);
 	spin_lock_init(&ge2d_work_queue->lock);  /* for process lock. */
-	for (i = 0; i < max_cmd_cnt; i++) {
-		p_item = kcalloc(1,
-				 sizeof(struct ge2d_queue_item_s),
-				 GFP_KERNEL);
-		if (!p_item) {
-			ge2d_log_err("can't request queue item memory\n");
-			return NULL;
-		}
-		list_add_tail(&p_item->list, &ge2d_work_queue->free_queue);
-	}
-
 	/* put this process queue  into manager queue list. */
 	/* maybe process queue is changing . */
 	spin_lock(&ge2d_manager.event.sem_lock);
@@ -3118,16 +3154,9 @@ int  destroy_ge2d_work_queue(struct ge2d_context_s *ge2d_work_queue)
 }
 EXPORT_SYMBOL(destroy_ge2d_work_queue);
 
-int ge2d_wq_init(struct platform_device *pdev, int irq, struct clk *clk)
+int ge2d_irq_init(int irq)
 {
-	ge2d_manager.pdev = pdev;
-	ge2d_irq = irq;
-	ge2d_clk = clk;
-
-	ge2d_log_dbg("ge2d: pdev=%p, irq=%d, clk=%p\n",
-		     pdev, irq, clk);
-
-	ge2d_manager.irq_num = request_irq(ge2d_irq,
+	ge2d_manager.irq_num = request_irq(irq,
 					   ge2d_wq_handle,
 					   IRQF_SHARED,
 					   "ge2d",
@@ -3137,12 +3166,31 @@ int ge2d_wq_init(struct platform_device *pdev, int irq, struct clk *clk)
 		return -1;
 	}
 
+	return 0;
+}
+
+int ge2d_wq_init(struct platform_device *pdev, int irq, struct clk *clk)
+{
+	ge2d_manager.pdev = pdev;
+	ge2d_irq = irq;
+	ge2d_clk = clk;
+
+	ge2d_log_dbg("ge2d: pdev=%p, irq=%d, clk=%p\n",
+		     pdev, irq, clk);
+
+#ifndef CONFIG_AMLOGIC_FREERTOS
+	if (ge2d_irq_init(irq) < 0)
+		return -1;
+#endif
+
 	/* prepare bottom half */
 	spin_lock_init(&ge2d_manager.event.sem_lock);
 	init_completion(&ge2d_manager.event.cmd_in_com);
 	init_waitqueue_head(&ge2d_manager.event.cmd_complete);
 	init_completion(&ge2d_manager.event.process_complete);
+	spin_lock(&ge2d_manager.event.sem_lock);
 	INIT_LIST_HEAD(&ge2d_manager.process_queue);
+	spin_unlock(&ge2d_manager.event.sem_lock);
 	mutex_init(&ge2d_manager.event.destroy_lock);
 	ge2d_manager.last_wq = NULL;
 	ge2d_manager.ge2d_thread = NULL;

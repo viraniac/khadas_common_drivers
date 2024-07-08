@@ -886,7 +886,7 @@ static int aml_dvb_probe(struct platform_device *pdev)
 		if (tsn_in == INPUT_DEMOD)
 			advb->dmx[i]->sid = advb->ts[advb->dmx[i]->ts_index].ts_sid;
 		else
-			advb->dmx[i]->sid = -1;
+			advb->dmx[i]->sid = 0;
 		advb->dmx[i]->hw_source = hw_source;
 		ret = dmx_init(advb->dmx[i], padater);
 		if (ret)
@@ -905,7 +905,7 @@ static int aml_dvb_probe(struct platform_device *pdev)
 
 	class_register(&aml_stb_class);
 	dmx_regist_dmx_class();
-
+	ts_clone_probe(pdev);
 #ifdef CONFIG_AMLOGIC_MEDIA_FRAME_SYNC
 	register_tsync_callbackfunc(TSYNC_AMLDMX_PCR_GET, demux_get_pcr);
 #endif

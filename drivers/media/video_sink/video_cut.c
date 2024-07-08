@@ -28,9 +28,9 @@
 #include <linux/amlogic/media/vout/vout_notify.h>
 #endif
 #include <linux/amlogic/media/video_sink/video_signal_notify.h>
-#ifdef CONFIG_AMLOGIC_MEDIA_VIN
+//#ifdef CONFIG_AMLOGIC_MEDIA_VIN
 #include <linux/amlogic/media/frame_provider/tvin/tvin.h>
-#endif
+//#endif
 #include <linux/amlogic/media/vfm/vfm_ext.h>
 #include <linux/sched.h>
 #include <linux/sched/clock.h>
@@ -325,8 +325,7 @@ static u8 enable_hdmi_delay_normal_check = 1;
 #define HDMI_DELAY_NORMAL_CHECK_COUNT 300
 #define HDMI_VIDEO_MIN_DELAY 3
 
-/*bit0~1 for vd1, bit2~3 for vd2*/
-static u32 force_skip_cnt;
+static u32 force_skip_cnt[MAX_VD_LAYERS] = {0xff, 0xff, 0xff};
 /* wait queue for poll */
 static wait_queue_head_t amvideo_trick_wait;
 static u32 smooth_sync_enable;
@@ -565,6 +564,7 @@ static unsigned int framepacking_width = 1920;
 static unsigned int framepacking_height = 2205;
 static int pause_one_3d_fl_frame;
 u32 framepacking_support;
+u32 g_framepacking_support;
 unsigned int framepacking_blank = 45;
 unsigned int process_3d_type;
 #ifdef TV_3D_FUNCTION_OPEN
@@ -612,6 +612,7 @@ static void update_process_hdmi_avsync_flag(bool flag);
 static void hdmi_in_delay_maxmin_reset(void);
 
 static u32 lowlatency_enable = 1;
+module_param(lowlatency_enable, uint, 0664);
 MODULE_PARM_DESC(lowlatency_enable, "\n lowlatency_enable\n");
 
 static u32 thread_vsync_in;
@@ -686,8 +687,6 @@ static int process_frame(void)
 		return -1;
 	}
 
-	if (debug_flag & DEBUG_FLAG_LATENCY)
-		pr_info("process frame start\n");
 	if (cur_vinfo->field_height != cur_vinfo->height)
 		vinfo_height = cur_vinfo->field_height;
 	else
@@ -697,6 +696,9 @@ static int process_frame(void)
 	min_line = (vinfo_height * line_threshold) / 100 + start_line;
 	max_line = (vinfo_height * (100 - line_threshold)) / 100 + start_line;
 	enc_line1 = get_cur_enc_line();
+	if (debug_flag & DEBUG_FLAG_LATENCY)
+		pr_info("process frame start, line:%d\n", enc_line1);
+
 	if (enc_line1 >= max_line || overrun_flag) {
 		lowlatency_proc_drop++;
 		return -2;
@@ -757,7 +759,7 @@ static int process_frame(void)
 	atomic_set(&video_inirq_flag, 0);
 	atomic_dec(&video_proc_lock);
 	if (debug_flag & DEBUG_FLAG_LATENCY)
-		pr_info("process frame end\n");
+		pr_info("process frame end, line:%d\n", enc_line2 + enc_line1);
 
 	return 0;
 }
@@ -1105,7 +1107,8 @@ static void video_vf_unreg_provider(void)
 			vf_local[0].uvm_vf = NULL;
 			vf_local_ext[0].ratio_control = vf_local[0].ratio_control;
 		} else if (cur_dispbuf[0]->vf_ext &&
-			is_pre_link_source(cur_dispbuf[0])) {
+			is_plink_source(cur_dispbuf[0]) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1113,8 +1116,8 @@ static void video_vf_unreg_provider(void)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("video_unreg: prelink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("video_unreg: #1 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);
 			tmp_rc = cur_dispbuf[0]->ratio_control;
@@ -1125,7 +1128,8 @@ static void video_vf_unreg_provider(void)
 			vf_local[0].vf_ext = NULL;
 			vf_local[0].uvm_vf = NULL;
 		} else if (IS_DI_POST(cur_dispbuf[0]->type) &&
-			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf)) {
+			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1133,8 +1137,8 @@ static void video_vf_unreg_provider(void)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("video_unreg: pre/post link: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("video_unreg: #2 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);
 			tmp_rc = cur_dispbuf[0]->ratio_control;
@@ -1362,7 +1366,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 			vf_local[0].uvm_vf = NULL;
 			vf_local_ext[0].ratio_control = vf_local[0].ratio_control;
 		} else if (cur_dispbuf[0]->vf_ext &&
-			is_pre_link_source(cur_dispbuf[0])) {
+			is_plink_source(cur_dispbuf[0]) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1370,8 +1375,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("%s: prelink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("%s: #1 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					__func__,
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);
@@ -1383,7 +1388,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 			vf_local[0].vf_ext = NULL;
 			vf_local[0].uvm_vf = NULL;
 		} else if (IS_DI_POST(cur_dispbuf[0]->type) &&
-			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf)) {
+			(cur_dispbuf[0]->vf_ext || cur_dispbuf[0]->uvm_vf) &&
+			!HAS_DI_LOCAL_BUF(cur_dispbuf[0]->di_flag)) {
 			u32 tmp_rc;
 			struct vframe_s *tmp;
 
@@ -1391,8 +1397,8 @@ static void video_vf_light_unreg_provider(int need_keep_frame)
 				tmp = cur_dispbuf[0]->uvm_vf;
 			else
 				tmp = (struct vframe_s *)cur_dispbuf[0]->vf_ext;
-			if (debug_flag & DEBUG_FLAG_PRELINK)
-				pr_info("%s: pre/post link: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
+			if (debug_flag & DEBUG_FLAG_PLINK)
+				pr_info("%s: #2 plink: cur_dispbuf:%px vf_ext:%px uvm_vf:%px flag:%x\n",
 					__func__,
 					cur_dispbuf[0], cur_dispbuf[0]->vf_ext,
 					cur_dispbuf[0]->uvm_vf, cur_dispbuf[0]->flag);
@@ -3118,14 +3124,16 @@ void set_vsync_pts_inc_mode(int inc)
 }
 EXPORT_SYMBOL(set_vsync_pts_inc_mode);
 
-u32 get_force_skip_cnt(enum vd_path_e path)
+bool get_force_skip_cnt(u8 layer_id,
+	u32 *vskip_cnt, u32 *hskip_cnt)
 {
-	if (path == VD1_PATH)
-		return (force_skip_cnt & 3);
-	else if (path == VD2_PATH)
-		return ((force_skip_cnt >> 2) & 3);
-	else
-		return 0;
+	if (force_skip_cnt[layer_id] != 0xff) {
+		*vskip_cnt = force_skip_cnt[layer_id] & 0xff;
+		*hskip_cnt = (force_skip_cnt[layer_id] & 0x100) >> 8;
+		return true;
+	} else {
+		return false;
+	}
 }
 
 static void vd_dispbuf_to_put(void)
@@ -7530,6 +7538,8 @@ static ssize_t vdx_state_show(u32 index, char *buf)
 	struct vpp_frame_par_s *_cur_frame_par = NULL;
 	struct video_layer_s *_vd_layer = NULL;
 	struct disp_info_s *layer_info = NULL;
+	int afbc = 0, dw = 0;
+	struct vframe_s *dispbuf = NULL;
 
 	if (index >= MAX_VD_LAYER)
 		return 0;
@@ -7539,6 +7549,14 @@ static ssize_t vdx_state_show(u32 index, char *buf)
 
 	if (!_cur_frame_par)
 		return len;
+
+	dispbuf = get_dispbuf(index);
+	if (dispbuf) {
+		afbc = dispbuf->type & VIDTYPE_COMPRESS ? 1 : 0;
+		dw = afbc && _cur_frame_par->nocomp;
+		len += sprintf(buf + len, "afbc:%d double_write:%d, mif:%d.\n",
+			       afbc, dw, !afbc);
+	}
 	vpp_filter = &_cur_frame_par->vpp_filter;
 	len += sprintf(buf + len,
 		       "zoom_start_x_lines:%u.zoom_end_x_lines:%u.\n",
@@ -7718,23 +7736,25 @@ static ssize_t over_field_state_store(struct class *cla,
 static ssize_t video_force_skip_cnt_show(struct class *cla, struct class_attribute *attr,
 			       char *buf)
 {
-	return sprintf(buf, "force_skip_cnt:%d, bit0~1 for vd1, bit2~3 for vd2\n",
-		       force_skip_cnt);
+	return sprintf(buf, "force_skip_cnt:0x%x, 0x%x, 0x%x(bit8: hskip, bit0-7: vskip)\n",
+		       force_skip_cnt[0],
+		       force_skip_cnt[1],
+		       force_skip_cnt[2]);
 }
 
 static ssize_t video_force_skip_cnt_store(struct class *cla,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
 {
-	unsigned long cnt;
-	int ret = 0;
+	int parsed[2];
+	u32 index;
 
-	ret = kstrtoul(buf, 0, (unsigned long *)&cnt);
-	if (ret < 0)
-		return -EINVAL;
-
-	force_skip_cnt = cnt;
-
+	if (likely(parse_para(buf, 2, parsed) == 2)) {
+		if (parsed[0] < MAX_VD_LAYER) {
+			index = parsed[0];
+			force_skip_cnt[index] = parsed[1];
+		}
+	}
 	return count;
 }
 
@@ -10214,8 +10234,8 @@ module_param(bypass_pps, bool, 0664);
 MODULE_PARM_DESC(process_3d_type, "\n process_3d_type\n");
 module_param(process_3d_type, uint, 0664);
 
-MODULE_PARM_DESC(framepacking_support, "\n framepacking_support\n");
-module_param(framepacking_support, uint, 0664);
+MODULE_PARM_DESC(g_framepacking_support, "\n g_framepacking_support\n");
+module_param(g_framepacking_support, uint, 0664);
 
 MODULE_PARM_DESC(framepacking_width, "\n framepacking_width\n");
 module_param(framepacking_width, uint, 0664);
@@ -10236,6 +10256,9 @@ module_param(osd_vpp1_bld_ctrl, uint, 0444);
 MODULE_PARM_DESC(osd_vpp1_bld_ctrl, "osd_vpp1_bld_ctrl");
 module_param(osd_vpp2_bld_ctrl, uint, 0444);
 MODULE_PARM_DESC(osd_vpp2_bld_ctrl, "osd_vpp2_bld_ctrl");
+
+MODULE_PARM_DESC(line_threshold, "\n line_threshold\n");
+module_param(line_threshold, int, 0664);
 
 //MODULE_DESCRIPTION("AMLOGIC video output driver");
 //MODULE_LICENSE("GPL");

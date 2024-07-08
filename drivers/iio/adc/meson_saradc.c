@@ -157,15 +157,15 @@
 
 #define SAR_ADC_DEF_VREF					1800000	/* uV */
 
-static const char * const chan7_vol[] = {
+static const char * const test_vol[] = {
 	"gnd",
 	"vdd/4",
 	"vdd/2",
 	"vdd*3/4",
 	"vdd",
-	"ch7_input",
-	"ch7_input",
-	"ch7_input",
+	"chan_input",
+	"chan_input",
+	"chan_input",
 };
 
 enum meson_sar_adc_filter_mode {
@@ -260,7 +260,7 @@ static int meson_sar_adc_read_raw_sample(struct iio_dev *indio_dev,
 
 	fifo_val = priv->param->dops->read_fifo(indio_dev, chan, true);
 
-	if (priv->param->calib_enable)
+	if (priv->param->calib && priv->calib_ready)
 		/* to fix the sample value by software */
 		*val = meson_sar_adc_calib_val(indio_dev, fifo_val);
 	else
@@ -410,7 +410,7 @@ meson_sar_adc_read_raw_sample_from_chnl(struct iio_dev *indio_dev,
 
 	fifo_val = priv->param->dops->read_chnl(indio_dev, chan);
 
-	if (priv->param->calib_enable)
+	if (priv->param->calib && priv->calib_ready)
 		/* to fix the sample value by software */
 		*val = meson_sar_adc_calib_val(indio_dev, fifo_val);
 	else
@@ -551,14 +551,14 @@ static int meson_sar_adc_iio_info_read_raw(struct iio_dev *indio_dev,
 		}
 
 	case IIO_CHAN_INFO_CALIBBIAS:
-		if (!priv->param->calib_enable)
+		if (!priv->param->calib)
 			return -EINVAL;
 
 		*val = priv->calibbias;
 		return IIO_VAL_INT;
 
 	case IIO_CHAN_INFO_CALIBSCALE:
-		if (!priv->param->calib_enable)
+		if (!priv->param->calib)
 			return -EINVAL;
 
 		*val = priv->calibscale / MILLION;
@@ -969,24 +969,30 @@ static int meson_sar_adc_calib(struct iio_dev *indio_dev)
 {
 	struct meson_sar_adc_priv *priv = iio_priv(indio_dev);
 	int ret, nominal0, nominal1, value0, value1;
+	int chan;
+	enum meson_sar_adc_test_input_sel lower;
+	enum meson_sar_adc_test_input_sel upper;
 
-	/* use points 25% and 75% for calibration */
-	nominal0 = (1 << priv->param->resolution) / 4;
-	nominal1 = (1 << priv->param->resolution) * 3 / 4;
+	chan = priv->param->calib->test_channel;
+	upper = priv->param->calib->test_upper;
+	lower = priv->param->calib->test_lower;
 
-	priv->param->dops->set_ch7_mux(indio_dev, CHAN7_MUX_VDD_DIV4);
+	nominal0 = (1 << priv->param->resolution) * lower / 4;
+	nominal1 = (1 << priv->param->resolution) * upper / 4;
+
+	priv->param->dops->set_test_input(indio_dev, lower);
 	usleep_range(10, 20);
 	ret = meson_sar_adc_get_sample(indio_dev,
-				       &indio_dev->channels[7],
+				       &indio_dev->channels[chan],
 				       MEDIAN_AVERAGING_FILTER,
 				       EIGHT_SAMPLES, &value0);
 	if (ret < 0)
 		goto out;
 
-	priv->param->dops->set_ch7_mux(indio_dev, CHAN7_MUX_VDD_MUL3_DIV4);
+	priv->param->dops->set_test_input(indio_dev, upper);
 	usleep_range(10, 20);
 	ret = meson_sar_adc_get_sample(indio_dev,
-				       &indio_dev->channels[7],
+				       &indio_dev->channels[chan],
 				       MEDIAN_AVERAGING_FILTER,
 				       EIGHT_SAMPLES, &value1);
 	if (ret < 0)
@@ -1003,7 +1009,7 @@ static int meson_sar_adc_calib(struct iio_dev *indio_dev)
 					     MILLION);
 	ret = 0;
 out:
-	priv->param->dops->set_ch7_mux(indio_dev, CHAN7_MUX_CH7_INPUT);
+	priv->param->dops->set_test_input(indio_dev, TEST_MUX_CHANN_INPUT);
 
 	return ret;
 }
@@ -1213,8 +1219,8 @@ static const struct iio_buffer_setup_ops meson_buffer_setup_ops = {
 };
 #endif
 
-static ssize_t chan7_mux_show(struct device *dev, struct device_attribute *attr,
-			      char *buf)
+static ssize_t test_input_show(struct device *dev, struct device_attribute *attr,
+			       char *buf)
 {
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
 	struct meson_sar_adc_priv *priv = iio_priv(indio_dev);
@@ -1222,16 +1228,16 @@ static ssize_t chan7_mux_show(struct device *dev, struct device_attribute *attr,
 	int i;
 
 	len = sprintf(buf, "current: [%d]%s\n\n",
-		      priv->chan7_mux_sel, chan7_vol[priv->chan7_mux_sel]);
-	for (i = 0; i < ARRAY_SIZE(chan7_vol); i++)
-		len += sprintf(buf + len, "%d: %s\n", i, chan7_vol[i]);
+		      priv->test_input_sel, test_vol[priv->test_input_sel]);
+	for (i = 0; i < ARRAY_SIZE(test_vol); i++)
+		len += sprintf(buf + len, "%d: %s\n", i, test_vol[i]);
 
 	return len;
 }
 
-static ssize_t chan7_mux_store(struct device *dev,
-			       struct device_attribute *attr,
-			       const char *buf, size_t count)
+static ssize_t test_input_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
 {
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
 	struct meson_sar_adc_priv *priv = iio_priv(indio_dev);
@@ -1239,7 +1245,7 @@ static ssize_t chan7_mux_store(struct device *dev,
 
 	if (kstrtoint(buf, 0, &val) != 0)
 		return -EINVAL;
-	if (val >= ARRAY_SIZE(chan7_vol))
+	if (val >= ARRAY_SIZE(test_vol))
 		return -EINVAL;
 
 	if (meson_sar_adc_pm_runtime_supported(indio_dev)) {
@@ -1247,7 +1253,7 @@ static ssize_t chan7_mux_store(struct device *dev,
 			return -EINVAL;
 	}
 
-	priv->param->dops->set_ch7_mux(indio_dev, val);
+	priv->param->dops->set_test_input(indio_dev, val);
 
 	if (meson_sar_adc_pm_runtime_supported(indio_dev)) {
 		pm_runtime_mark_last_busy(indio_dev->dev.parent);
@@ -1257,11 +1263,11 @@ static ssize_t chan7_mux_store(struct device *dev,
 	return count;
 }
 
-static IIO_DEVICE_ATTR(chan7_mux, 0644,
-		       chan7_mux_show, chan7_mux_store, -1);
+static IIO_DEVICE_ATTR(test_input, 0644,
+		       test_input_show, test_input_store, -1);
 
 static struct attribute *meson_sar_adc_attrs[] = {
-	&iio_dev_attr_chan7_mux.dev_attr.attr,
+	&iio_dev_attr_test_input.dev_attr.attr,
 	NULL, /*need to terminate the list of attributes by NULL*/
 };
 
@@ -1328,17 +1334,22 @@ static const struct meson_sar_adc_data meson_sar_adc_g12a_data = {
 };
 #endif
 
+static const struct meson_sar_adc_data meson_sar_adc_txhd2_data = {
+	.param = &meson_sar_adc_txhd2_param,
+	.name = "meson-txhd2-saradc",
+};
+
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 static const struct meson_sar_adc_data meson_sar_adc_c2_data = {
 	.param = &meson_sar_adc_c2_param,
 	.name = "meson-c2-saradc",
 };
-#endif
 
-static const struct meson_sar_adc_data meson_sar_adc_txhd2_data = {
-	.param = &meson_sar_adc_txhd2_param,
-	.name = "meson-txhd2-saradc",
+static const struct meson_sar_adc_data meson_sar_adc_s7_data = {
+	.param = &meson_sar_adc_s7_param,
+	.name = "meson-s7-saradc",
 };
+#endif
 
 static const struct of_device_id meson_sar_adc_of_match[] = {
 #ifndef CONFIG_AMLOGIC_REMOVE_OLD
@@ -1378,16 +1389,20 @@ static const struct of_device_id meson_sar_adc_of_match[] = {
 		.data = &meson_sar_adc_g12a_data,
 	},
 #endif
+	{
+		.compatible = "amlogic,meson-txhd2-saradc",
+		.data = &meson_sar_adc_txhd2_data,
+	},
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	{
 		.compatible = "amlogic,meson-c2-saradc",
 		.data = &meson_sar_adc_c2_data,
 	},
-#endif
 	{
-		.compatible = "amlogic,meson-txhd2-saradc",
-		.data = &meson_sar_adc_txhd2_data,
+		.compatible = "amlogic,meson-s7-saradc",
+		.data = &meson_sar_adc_s7_data,
 	},
+#endif
 	{},
 };
 MODULE_DEVICE_TABLE(of, meson_sar_adc_of_match);
@@ -1426,7 +1441,7 @@ static int meson_sar_adc_probe(struct platform_device *pdev)
 
 	priv->param = match_param;
 
-	if (!match_param->dops->extra_init || !match_param->dops->set_ch7_mux ||
+	if (!match_param->dops->extra_init || !match_param->dops->set_test_input ||
 	    !match_param->dops->read_fifo || !match_param->dops->enable_chnl ||
 	    !match_param->dops->read_chnl) {
 		dev_err(&pdev->dev, "necessary operations not supported\n");
@@ -1569,7 +1584,7 @@ static int meson_sar_adc_probe(struct platform_device *pdev)
 			goto err;
 	}
 
-	if (priv->param->calib_enable) {
+	if (priv->param->calib) {
 		for (i = 0; i < indio_dev->num_channels; i++) {
 			chan = (struct iio_chan_spec *)indio_dev->channels + i;
 			if (chan->channel < 0)
@@ -1580,9 +1595,12 @@ static int meson_sar_adc_probe(struct platform_device *pdev)
 				BIT(IIO_CHAN_INFO_CALIBSCALE);
 		}
 
+		priv->calib_ready = 0;
 		ret = meson_sar_adc_calib(indio_dev);
 		if (ret)
 			dev_warn(&pdev->dev, "calibration failed\n");
+		else
+			priv->calib_ready = 1;
 	}
 
 	ret = iio_device_register(indio_dev);
@@ -1703,7 +1721,7 @@ static int __maybe_unused meson_sar_adc_runtime_resume(struct device *dev)
 	if (ret)
 		return ret;
 
-	priv->param->dops->set_ch7_mux(indio_dev, priv->chan7_mux_sel);
+	priv->param->dops->set_test_input(indio_dev, priv->test_input_sel);
 
 	return 0;
 }
@@ -1730,7 +1748,15 @@ static struct platform_driver meson_sar_adc_driver = {
 	},
 };
 
-module_platform_driver(meson_sar_adc_driver);
+int __init meson_sar_adc_driver_init(void)
+{
+	return platform_driver_register(&meson_sar_adc_driver);
+}
+
+void __exit meson_sar_adc_driver_exit(void)
+{
+	platform_driver_unregister(&meson_sar_adc_driver);
+}
 
 MODULE_AUTHOR("Martin Blumenstingl <martin.blumenstingl@googlemail.com>");
 MODULE_DESCRIPTION("Amlogic Meson SAR ADC driver");

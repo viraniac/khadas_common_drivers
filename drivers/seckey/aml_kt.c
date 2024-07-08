@@ -235,13 +235,25 @@ static bool aml_kt_slot_reserved(u32 index)
 int aml_kt_get_status(struct aml_kt_dev *dev, u32 handle, u32 *key_sts)
 {
 	int ret = KT_SUCCESS;
+	int cnt = 0;
 	u32 kte = 0;
 	u32 reg_val = 0;
 	u32 reg_offset = 0;
 	u32 reg_ret = 0;
+	u8 is_iv = 0;
 
 	if (unlikely(!dev)) {
 		KT_LOGE("Empty aml_kt_dev\n");
+		return KT_ERROR;
+	}
+
+	is_iv = handle >> KT_IV_FLAG_OFFSET;
+	if (is_iv) {
+		/* KT functions deal with both the KT and IV table.
+		 * However, there is no function such as get_status IV entry.
+		 * Therefore, we return KT_ERROR when the handle is a IV handle.
+		 */
+		KT_LOGE("No get status function for IV entry\n");
 		return KT_ERROR;
 	}
 
@@ -264,11 +276,14 @@ int aml_kt_get_status(struct aml_kt_dev *dev, u32 handle, u32 *key_sts)
 			kte << KTE_KTE_OFFSET);
 	iowrite32(reg_val, (char *)dev->base_addr + reg_offset);
 
-	if (aml_kt_read_pending(dev) != KT_SUCCESS) {
-		KT_LOGE("pending error kte[%d]\n", kte);
-		ret = KT_ERROR;
-		goto unlock_kt;
-	}
+	do {
+		reg_ret = ioread32((char *)dev->base_addr + dev->reg.cfg_offset);
+		if (cnt++ > KT_PENDING_WAIT_TIMEOUT) {
+			KT_LOGE("Error: wait KT pending done timeout\n");
+			ret = KT_ERROR;
+			goto unlock_kt;
+		}
+	} while (reg_ret & (KT_PENDING << KTE_PENDING_OFFSET));
 
 	reg_ret = ioread32((char *)dev->base_addr + dev->reg.sts_offset);
 	if (reg_ret != KT_ERROR) {
@@ -841,10 +856,20 @@ static int aml_kt_invalidate(struct aml_kt_dev *dev, u32 handle)
 	u32 kte = 0;
 	u32 reg_val = 0;
 	u32 reg_offset = 0;
+	u8 is_iv = 0;
 
 	if (unlikely(!dev)) {
 		KT_LOGE("Empty aml_kt_dev\n");
 		return KT_ERROR;
+	}
+
+	is_iv = handle >> KT_IV_FLAG_OFFSET;
+	if (is_iv) {
+		/* KT functions deal with both the KT and IV table.
+		 * However, there is no function such as invalidating IV entry.
+		 * Therefore, we just return KT_SUCCESS when the handle is a IV handle.
+		 */
+		return KT_SUCCESS;
 	}
 
 	ret = aml_kt_handle_to_kte(dev, handle, &kte);
@@ -886,7 +911,7 @@ int aml_kt_free(struct aml_kt_dev *dev, u32 handle)
 {
 	int ret = KT_SUCCESS;
 	u32 kte = 0;
-	u8 is_iv = 0;
+	u8 is_iv = handle >> KT_IV_FLAG_OFFSET;
 
 	if (unlikely(!dev)) {
 		KT_LOGE("Empty aml_kt_dev\n");
@@ -899,7 +924,6 @@ int aml_kt_free(struct aml_kt_dev *dev, u32 handle)
 		return ret;
 	}
 
-	is_iv = handle >> KT_IV_FLAG_OFFSET;
 	ret = aml_kt_invalidate(dev, handle);
 
 	mutex_lock(&dev->lock);

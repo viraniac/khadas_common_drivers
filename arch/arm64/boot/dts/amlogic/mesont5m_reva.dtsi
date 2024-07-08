@@ -296,6 +296,7 @@
 	dmc_monitor {
 		compatible = "amlogic,dmc_monitor-t5m";
 		status = "okay";
+		memory-region = <&dmc_reserved>;
 		reg = <0 0xfe036000 0 0x400
 		       0 0xfe034000 0 0x400>;
 		reg_base = <0xfe036000>;
@@ -1022,8 +1023,6 @@
 				reg = <0x0 0x8410c 0x0 0x10>;
 				#irblaster-cells = <2>;
 				interrupts = <GIC_SPI 23 IRQ_TYPE_EDGE_RISING>;
-				//pinctrl-names = "default";
-				//pinctrl-0 = <&irblaster_pins2>;
 			};
 
 			eth_phy: mdio-multiplexer@28000 {
@@ -1060,12 +1059,6 @@
 						max-speed = <100>;
 					};
 				};
-			};
-
-			cpu_version {
-				status = "okay";
-				compatible = "amlogic,meson-gx-ao-secure", "syscon";
-				reg=<0x0 0x10220 0x0 0x140>;
 			};
 
 			hwspinlock_regs: syscon@e2c0 {
@@ -1267,6 +1260,14 @@
 			pinctrl_audio: pinctrl {
 				compatible = "amlogic, audio-pinctrl";
 			};
+
+			extn:extn {
+				compatible = "amlogic, t5m-snd-extn";
+				#sound-dai-cells = <0>;
+				interrupts = <GIC_SPI 42 IRQ_TYPE_EDGE_RISING>;
+				interrupt-names = "irq_frhdmirx";
+				status = "okay";
+			};
 		};/* end of audiobus*/
 
 		vpu: vpu {
@@ -1283,9 +1284,9 @@
 					"vpu_clk0",
 					"vpu_clk1",
 					"vpu_clk";
-			clk_level = <7>;
-			/* 0: 100.0M    1: 166.7M    2: 200.0M    3: 250.0M */
-			/* 4: 333.3M    5: 400.0M    6: 500.0M    7: 666.7M */
+			clk_level = <8>;
+			/* 0: 24M       1: 100.0M    2: 166.7M    3: 200.0M    4: 250.0M */
+			/* 5: 333.3M    6: 400.0M    7: 500.0M    8: 666.7M */
 		};
 
 		/*if you want to use vdin just modify status to "ok"*/
@@ -1423,7 +1424,7 @@
 			#size-cells = <2>;
 			ranges = <0x0 0x0 0x0 0xfe333000 0x0 0x1000>;
 			earc: earc@0 {
-				compatible = "amlogic, t3-snd-earc";
+				compatible = "amlogic, t5m-snd-earc";
 				#sound-dai-cells = <0>;
 
 				status = "disabled";
@@ -2534,21 +2535,35 @@
 
 	irblaster_pins1:irblaster_pin1 {
 		mux {
-			groups = "remote_out_d1";
+			groups = "remote_out_b";
 			function = "remote_out";
 		};
 	};
 
 	irblaster_pins2:irblaster_pin2 {
 		mux {
-			groups = "remote_out_d9";
+			groups = "remote_out_d1";
 			function = "remote_out";
 		};
 	};
 
 	irblaster_pins3:irblaster_pin3 {
 		mux {
-			groups = "remote_out_b";
+			groups = "remote_out_d9";
+			function = "remote_out";
+		};
+	};
+
+	irblaster_pins4:irblaster_pin4 {
+		mux {
+			groups = "remote_out_p6";
+			function = "remote_out";
+		};
+	};
+
+	irblaster_pins5:irblaster_pin5 {
+		mux {
+			groups = "remote_out_p9";
 			function = "remote_out";
 		};
 	};
@@ -3389,7 +3404,7 @@
 				 //"spi_ss0_h8",used as GPIOH_8
 				 "spi0_clk_h11";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3397,7 +3412,7 @@
 		mux {
 			groups = "spi0_ss0_h8";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3408,7 +3423,7 @@
 				 //"spi0_ss0_m",used as GPIOM_22
 				 "spi0_clk_m";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3419,7 +3434,7 @@
 				 //"spi_ss0_z3",used as GPIOZ_3
 				 "spi0_clk_z";
 			function = "spi0";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3430,7 +3445,7 @@
 				 //"spi1_ss0_h",used as GPIOH_22
 				 "spi1_clk_h";
 			function = "spi1";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3438,7 +3453,7 @@
 		mux {
 			groups = "spi1_ss0_h";
 			function = "spi1";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3449,7 +3464,7 @@
 				 //"spi2_ss0_c",used as GPIOC_3
 				 "spi2_clk_c";
 			function = "spi2";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3460,7 +3475,7 @@
 					//"spi2_ss0_m",used as GPIOM_3
 					"spi2_clk_m";
 			function = "spi2";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 
@@ -3471,7 +3486,7 @@
 						//"spi2_ss0_p",used as GPIOP_3
 						"spi2_clk_p";
 			function = "spi2";
-			drive-strength-microamp = <2000>;
+			drive-strength-microamp = <3000>;
 		};
 	};
 

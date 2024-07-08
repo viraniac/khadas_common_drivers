@@ -26,7 +26,7 @@ config AMLOGIC_DEBUG_ATRACE
 	  Support Tags
 
 config AMLOGIC_BOOT_TIME
-	bool "AMLOGIC boot time optimi zation"
+	bool "AMLOGIC boot time optimization"
 	depends on AMLOGIC_BREAK_GKI
 	default n
 	help
@@ -35,23 +35,11 @@ config AMLOGIC_BOOT_TIME
 
 config AMLOGIC_DEBUG_PRINTK
 	tristate "Amlogic printk support"
-	depends on AMLOGIC_BREAK_GKI_20
 	depends on PRINTK_CALLER
 	default n
 	help
 	  if you want to print information such as cpu irq,
 	  please use this option switch it.
-
-config AMLOGIC_BGKI_DEBUG_IOTRACE
-	bool "Amlogic ftrace pstore debug"
-	depends on AMLOGIC_BREAK_GKI
-	depends on AMLOGIC_BREAK_GKI_20
-	select PSTORE_FTRACE
-	default n
-	help
-	  Dump function call and register access to ramoops after watchdog
-	  reboot.
-	  Enable if doubt
 
 config AMLOGIC_DEBUG_FILE
 	bool "Amlogic dump log to debug file"
@@ -140,6 +128,12 @@ config AMLOGIC_REMOVE_OLD
 	help
 	  remove more for zapper
 
+config AMLOGIC_C3_REMOVE
+	bool "c3 project cut"
+	default n
+	help
+	  remove more for c3 project
+
 config AMLOGIC_DEBUG_IOTRACE
 	tristate "amlogic debug iotrace config"
 	default n
@@ -185,4 +179,12 @@ config AMLOGIC_DEBUG_ISOLCPUS
 	depends on AMLOGIC_DEBUG
 	help
 	  this option is provided for AMLOGIC isolate CPU5 modifications.
+
+config AMLOGIC_F2FS_OPTIMIZATION
+	bool "AMLOGIC f2fs optimization"
+	depends on AMLOGIC_BREAK_GKI_20
+	default y
+	help
+	  This option is set up for Amlogic f2fs optimization,
+	  if you want to optimize f2fs, please set this config to y.
 

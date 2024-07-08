@@ -6,8 +6,8 @@
 /dts-v1/;
 
 #include "mesonsm1.dtsi"
-#include "mesonsm1_drm.dtsi"
 #include "mesonsm1_ac200-panel.dtsi"
+#include "mesonsm1_drm.dtsi"
 #include "partition_mbox_normal_dynamic.dtsi"
 
 / {
@@ -49,6 +49,11 @@
 			console-size = <0x40000>;
 			ftrace-size = <0x80000>;
 			pmsg-size = <0x20000>;
+		};
+
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
 		};
 
 		debug_reserved:linux,iotrace {
@@ -165,6 +170,7 @@
 		};
 		vm0_cma_reserved:linux,vm0_cma {
 			compatible = "shared-dma-pool";
+			status = "okay";
 			reusable;
 			size = <0x0 0x2000000>;
 			alignment = <0x0 0x400000>;
@@ -187,54 +193,13 @@
 
 	gpioleds {
 		compatible = "gpio-leds";
-		status = "disabled";
+		status = "okay";
 
 		bt_led {
 			label="bt_led";
 			gpios=<&gpio_ao GPIOAO_11 GPIO_ACTIVE_HIGH>;
 			default-state ="off";
 		};
-	};
-
-	cvbsout {
-		compatible = "amlogic, cvbsout-sm1";
-		dev_name = "cvbsout";
-		status = "okay";
-		clocks = <&clkc CLKID_VCLK2_ENCI
-			&clkc CLKID_VCLK2_VENCI0
-			&clkc CLKID_VCLK2_VENCI1
-			&clkc CLKID_DAC_CLK>;
-		clock-names = "venci_top_gate",
-			"venci_0_gate",
-			"venci_1_gate",
-			"vdac_clk_gate";
-		/* clk path */
-		/* 0:vid_pll vid2_clk */
-		/* 1:gp0_pll vid2_clk */
-		/* 2:vid_pll vid1_clk */
-		/* 3:gp0_pll vid1_clk */
-		clk_path = <0>;
-
-		/* performance: reg_address, reg_value */
-		/* sm1 */
-		performance = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x8080
-			0x1b05  0xfd
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
-		performance_sarft = <0x1bf0  0x9
-			0x1b56  0x333
-			0x1b12  0x0
-			0x1b05  0x9
-			0x1c59  0xfc48
-			0xffff  0x0>; /* ending flag */
-		performance_revB_telecom = <0x1bf0  0x9
-			0x1b56  0x546
-			0x1b12  0x8080
-			0x1b05  0x9
-			0x1c59  0xf850
-			0xffff  0x0>; /* ending flag */
 	};
 
 	codec_mm {
@@ -268,7 +233,7 @@
 
 	multi-di {
 		compatible = "amlogic, dim-sm1";
-		status = "disabled";
+		status = "okay";
 		/* 0:use reserved; 1:use cma; 2:use cma as reserved */
 		flag_cma = <4>;	//<1>;
 		//memory-region = <&di_reserved>;
@@ -321,7 +286,7 @@
 		dev_name = "dvb-extern";
 		status = "disabled";
 
-		fe_num = <2>;
+		fe_num = <1>;
 		fe0_demod = "cxd2856";
 		fe0_i2c_adap_id = <&i2c2>;
 		fe0_demod_i2c_addr = <0xD8>;
@@ -482,15 +447,6 @@
 		key_val = <630 910 20>; //val=voltage/1800mV*1023
 		key_tolerance = <40 40 40>;
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey{
 		compatible = "amlogic,unifykey";
@@ -1957,9 +1913,9 @@
 	max-frequency = <200000000>;
 	non-removable;
 	disable-wp;
-	//mmc-ddr-1_8v;
-	//mmc-hs200-1_8v;
-	//mmc-hs400-1_8v;
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
 	//mmc-pwrseq = <&emmc_pwrseq>;
 	//vmmc-supply = <&vcc_3v3>;
 	//vqmmc-supply = <&vddio_boot>;
@@ -1968,7 +1924,7 @@
 &sd_emmc_b {
 	//vmmc-supply = <&vddao3v3_reg>;
 	//vqmmc-supply = <&vddio_c>;
-	status = "okay";
+	status = "disabled";
 	pinctrl-0 = <&sdcard_pins>;
 	pinctrl-1 = <&sdcard_clk_gate_pins>;
 	pinctrl-2 = <&sd_1bit_pins>;

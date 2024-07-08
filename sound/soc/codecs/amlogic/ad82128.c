@@ -65,6 +65,7 @@ struct ad82128_data {
 	int reset_pin;
 	int init_done;
 	int vol;
+	int subwoofer_enable;
 };
 
 static int ad82128_hw_params(struct snd_pcm_substream *substream,
@@ -185,6 +186,21 @@ static int ad82128_mute_info(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int ad82128_Subwoofer_info(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	uinfo->access =
+	    (SNDRV_CTL_ELEM_ACCESS_TLV_READ | SNDRV_CTL_ELEM_ACCESS_READWRITE);
+	uinfo->count = 1;
+
+	uinfo->value.integer.min = 0;
+	uinfo->value.integer.max = 1;
+	uinfo->value.integer.step = 1;
+
+	return 0;
+}
+
 static int ad82128_vol_locked_get(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
 {
@@ -281,6 +297,42 @@ static int ad82128_mute_locked_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static void subwoofer_enable(struct snd_soc_component *component, int enable)
+{
+	if (enable) {
+		snd_soc_component_update_bits(component, AD82128_STATE_CTRL5_REG,
+			AD82128_Subwoofer, AD82128_Subwoofer);
+		snd_soc_component_write(component, AD82128_MONO_KEY_HIGH, 0x30);
+		snd_soc_component_write(component, AD82128_MONO_KEY_LOW, 0x06);
+	} else {
+		snd_soc_component_update_bits(component, AD82128_STATE_CTRL5_REG,
+			AD82128_Subwoofer, 0);
+		snd_soc_component_write(component, AD82128_MONO_KEY_HIGH, 0);
+		snd_soc_component_write(component, AD82128_MONO_KEY_LOW, 0);
+	}
+}
+
+static int ad82128_Subwoofer_locked_put(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct ad82128_data *ad82128 = snd_soc_component_get_drvdata(component);
+
+	ad82128->subwoofer_enable = ucontrol->value.integer.value[0];
+	subwoofer_enable(component, ad82128->subwoofer_enable);
+	return 0;
+}
+
+static int ad82128_Subwoofer_locked_get(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
+	struct ad82128_data *ad82128 = snd_soc_component_get_drvdata(component);
+
+	ucontrol->value.integer.value[0] = ad82128->subwoofer_enable;
+
+	return 0;
+}
 #ifdef DEBUG_AD82128_SDZ
 static void ad82128_fault_check_work(struct work_struct *work)
 {
@@ -416,7 +468,7 @@ static void ad82128_init_func(struct work_struct *p_work)
 
 	/* Set device to unmute */
 	ad82128_mute(component, 0);
-
+	subwoofer_enable(component, ad82128->subwoofer_enable);
 #ifdef DEBUG_AD82128_SDZ
 	INIT_DELAYED_WORK(&ad82128->fault_check_work, ad82128_fault_check_work);
 #endif
@@ -568,7 +620,7 @@ static int ad82128_resume(struct snd_soc_component *component)
 	}
 	ad82128_mute(component, ad82128->mute);
 	pr_info("ad82128_resume mute %d\n", ad82128->mute);
-
+	subwoofer_enable(component, ad82128->subwoofer_enable);
 	return 0;
 }
 #else
@@ -643,6 +695,13 @@ static const struct snd_kcontrol_new ad82128_snd_controls[] = {
 	 .info = ad82128_mute_info,
 	 .get = ad82128_mute_locked_get,
 	 .put = ad82128_mute_locked_put,
+	},
+	{
+	 .iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+	 .name = "Subwoofer Enable",
+	 .info = ad82128_Subwoofer_info,
+	 .get = ad82128_Subwoofer_locked_get,
+	 .put = ad82128_Subwoofer_locked_put,
 	},
 };
 
@@ -828,6 +887,10 @@ static int ad82128_probe(struct i2c_client *client,
 		dev_err(dev, "failed to request supplies: %d\n", ret);
 		return ret;
 	}
+	ret = of_property_read_u32(dev->of_node, "subwoofer-enable",
+				   &data->subwoofer_enable);
+	if (ret < 0)
+		data->subwoofer_enable = 0;
 
 	dev_set_drvdata(dev, data);
 

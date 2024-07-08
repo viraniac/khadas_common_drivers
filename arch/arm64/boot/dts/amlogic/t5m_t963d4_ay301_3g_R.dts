@@ -6,8 +6,8 @@
 /dts-v1/;
 
 #include "mesont5m.dtsi"
-#include "mesont5m_drm.dtsi"
 #include "mesont5m_ay301-panel.dtsi"
+#include "mesont5m_drm.dtsi"
 
 / {
 	amlogic-dt-id = "t5m_t963d4_ay301-3g";
@@ -58,6 +58,11 @@
 			pmsg-size = <0x20000>;
 		};
 
+		dmc_reserved:linux,dmc_monitor {
+			compatible = "amlogic,dmc_monitor-reserved";
+			reg = <0x0 0x0 0x0 0x80000>;
+		};
+
 		debug_reserved:linux,iotrace {
 			compatible = "amlogic, iotrace";
 			reg = <0x0 0x04f00000 0x0 0x00100000>;
@@ -84,7 +89,7 @@
 		lcd_tcon_reserved:linux,lcd_tcon {
 			compatible = "amlogic, lcd_tcon";
 			reg = <0x0 0x3e000000 0x0 0x00a02840>;
-			no-map;
+			//no-map;
 		};
 
 		lcd_cma_reserved:linux,lcd-cma {
@@ -206,7 +211,7 @@
 			 * 384Mhz (0x18000000)
 			 * 368Mhz (0x17000000)
 			 */
-			size = <0x0 0xac00000>;
+			size = <0x0 0x9C00000>;
 			alignment = <0x0 0x400000>;
 			linux,contiguous-region;
 			/*alloc-ranges = <0x0 0x0 0x0 0x3f800000>;*/
@@ -432,6 +437,10 @@
 		clock-names = "vdac_clk_gate";
 		cutwindow_val_h = <0 0 0 0 8>; /* level 0~4 */
 		cutwindow_val_v = <4 8 14 16 24>;  /* level 0~4 */
+		horizontal_dir0 = <148 148 148 148 148>;
+		horizontal_dir1 = <148 168 166 160 148>;
+		horizontal_stp0 = <0 0 0 0 0>;
+		horizontal_stp1 = <0 0 0 0 0>;
 	};
 
 	vbi {
@@ -503,15 +512,6 @@
 		key_tolerance = <40 40 40 40 40 40 40>;
 		mboxes = <&mbox_fifo T5M_REE2AO_KEYPAD>;
 	};
-
-	provisionkey {
-		compatible = "amlogic, provisionkey";
-		status = "disabled";
-		key-permit-default = "write";
-		//new key not need add dts if started with KEY_PROVISION_
-		KEY_PROVISION_XXX { };
-		//test_my_added_keyname { };
-	};//End provisionkey
 
 	unifykey {
 		compatible = "amlogic,unifykey";
@@ -1006,7 +1006,7 @@
 		dmxdev_num = <0x11>;
 
 		tsn_from = "demod";
-
+		ts_clone = <0x0>;
 		/*single demod setting */
 		ts1_sid = <0x21>;
 		ts1 = "parallel";
@@ -1142,8 +1142,6 @@
 		ctrl_gain = <1>;
 		src-clk-freq = <491520000>;
 
-		/* pcpd_monitor*/
-		pcpd_monitor_src = <&pcpd_monitor_a>;
 		suspend-clk-off = <1>;
 		status = "okay";
 
@@ -1167,6 +1165,10 @@
 				&clkc CLKID_HIFI1_PLL>;
 		clock-names = "mclk", "clk_srcpll", "clk_src_cd";
 		tdmin-src-name = "hdmirx";
+
+		/* pcpd_monitor*/
+		pcpd_monitor_src = <&pcpd_monitor_a>;
+
 		src-clk-freq = <491520000>;
 		suspend-clk-off = <1>;
 		status = "okay";
@@ -1257,17 +1259,6 @@
 				"gate_spdifout", "clk_spdifout";
 		src-clk-freq = <491520000>;
 		suspend-clk-off = <1>;
-		status = "okay";
-	};
-
-	extn:extn {
-		compatible = "amlogic, t7-snd-extn";
-		#sound-dai-cells = <0>;
-
-		interrupts =
-				<GIC_SPI 42 IRQ_TYPE_EDGE_RISING>;
-		interrupt-names = "irq_frhdmirx";
-
 		status = "okay";
 	};
 
@@ -1863,6 +1854,7 @@
 	wb_sel = <0>;/*1:mtx ;0:gainoff*/
 	vlock_en = <1>;/*1:enable;0:disable*/
 	vlock_mode = <0x8>;
+	vrr_priority = <1>;/*1:game mode vrr always on;0:vrr on depend on vrr signal*/
 	/*vlock work mode:
 	 *bit0:auto ENC
 	 *bit1:auto PLL

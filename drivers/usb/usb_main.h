@@ -28,14 +28,17 @@ static inline  int __init amlogic_new_usb2_v2_driver_init(void)
 
 #if IS_ENABLED(CONFIG_AMLOGIC_USB3PHY)
 int __init amlogic_new_otg_driver_init(void);
-/*int __init amlogic_new_usb3_v3_driver_init(void); */
+int __init amlogic_new_usb3_v3_driver_init(void);
 #else
 static inline  int __init amlogic_new_otg_driver_init(void)
 {
 	return -1;
 }
 
-/*static inline  int __init amlogic_new_usb3_v3_driver_init(void) {return 0;}*/
+static inline  int __init amlogic_new_usb3_v3_driver_init(void)
+{
+	return -1;
+}
 #endif
 
 #if IS_ENABLED(CONFIG_AMLOGIC_USBPHYC2)
@@ -134,5 +137,24 @@ static inline  int __init amlogic_bc_driver_init(void)
 #endif
 
 int get_otg_mode(void);
+int __init aml_xhci_plat_init(void);
+void __exit aml_xhci_plat_exit(void);
+int __init aml_xhci_hcd_init(void);
+void __exit aml_xhci_hcd_fini(void);
+#if IS_ENABLED(CONFIG_USB_DWC3)
+
+int __init aml_dwc3_init(void);
+void __exit aml_dwc3_exit(void);
+#else
+static inline  int __init aml_dwc3_init(void)
+{
+	return -1;
+}
+
+static inline  int __init aml_dwc3_exit(void)
+{
+	return -1;
+}
+#endif
 
 #endif

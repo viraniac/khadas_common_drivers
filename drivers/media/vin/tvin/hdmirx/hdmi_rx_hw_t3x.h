@@ -85,6 +85,7 @@
 	#define HYPER_GAIN	MSK(4, 16)
 	#define BUF_BST		MSK(3, 28)
 	#define LEQ_POLE	MSK(3, 20)
+	#define BUF_GAIN	MSK(3, 24)
 #define T3X_HDMIRX21PHY_DCHA_DFE        (0x49 << 2)
 	#define VGA_GAIN	MSK(16, 0)
 	#define DFE_TAP_EN	MSK(9, 16)
@@ -133,6 +134,59 @@
 #define T3X_CLKCTRL_AUD21_PLL_CTRL3		(0x02ed  << 2)
 #define T3X_CLKCTRL_AUD21_PLL_STS		(0x02ee  << 2)
 
+/* i2c monitor reg */
+#define T3X_I2C_MONITOR_BASE			0xfe014000
+#define T3X_I2C_MONITOR_SMP_START		(0x14000 + (0x000 << 2))
+#define T3X_I2C_MONITOR_SMP_SEL			(0x14000 + (0x001 << 2))
+#define T3X_I2C_MONITOR_SMP_CNTL		(0x14000 + (0x002 << 2))
+#define T3X_I2C_MONITOR_SMP_FLT			(0x14000 + (0x003 << 2))
+#define T3X_I2C_MONITOR_SMP_FLT_HPD		(0x14000 + (0x004 << 2))
+#define T3X_I2C_MONITOR_SMP_I2C_TIMEOUT_TH	(0x14000 + (0x005 << 2))
+#define T3X_I2C_MONITOR_SMP_CLK			(0x14000 + (0x006 << 2))
+#define T3X_I2C_MONITOR_DDR_START_ADDR		(0x14000 + (0x007 << 2))
+#define T3X_I2C_MONITOR_DDR_END_ADDR		(0x14000 + (0x008 << 2))
+#define T3X_I2C_MONITOR_DDR_CNTL		(0x14000 + (0x009 << 2))
+#define T3X_I2C_MONITOR_INTR_MASK		(0x14000 + (0x00a << 2))
+#define T3X_I2C_MONITOR_DDR_WPTR		(0x14000 + (0x00b << 2))
+#define T3X_I2C_MONITOR_DDR_BOUND_CNT		(0x14000 + (0x00c << 2))
+#define T3X_I2C_MONITOR_AXI_CMD_PENDING		(0x14000 + (0x00d << 2))
+#define T3X_I2C_MONITOR_SMP_STATUS		(0x14000 + (0x00e << 2))
+#define T3X_I2C_MONITOR_SMP_I2C_BUSY_CNT	(0x14000 + (0x00f << 2))
+#define T3X_I2C_MONITOR_AXI_STATUS		(0x14000 + (0x010 << 2))
+#define T3X_I2C_MONITOR_INTR_STATUS		(0x14000 + (0x011 << 2))
+#define T3X_I2C_MONITOR_AXI_CMD_CNT		(0x14000 + (0x012 << 2))
+
+enum i2c_sample_mode_e {
+	E_FUNC_SAMPLE,
+	E_I2C_WAVE_SAMPLE,
+	E_CEC_WAVE_SAMPLE,
+	E_BIST_MODE
+};
+
+enum i2c_trigger_mode_e {
+	E_HW_TRIGGER,
+	E_SW_TRIGGER
+};
+
+enum i2c_dump_mode_e {
+	E_ABNORMAL_START0 = 0x1,
+	E_ABNORMAL_START1 = 0x2,
+	E_ABNORMAL_STOP = 0x4,
+	E_I2C_TIMEOUT = 0x8,
+	E_HPD_CHANGE = 0x10,
+	E_DUMP_ALL = 0x1f
+};
+
+enum i2c_data_type_e {
+	E_DATA,
+	E_START_DATA,
+	E_STOP_DATA,
+	E_START_DATA_STOP,
+	E_STOP_ABNORMAL,
+	E_START_ABNORMAL,
+	E_TIME_OUT
+};
+
 enum frl_train_sts_e {
 	E_FRL_TRAIN_START,
 	E_FRL_TRAIN_FINISH,
@@ -160,6 +214,9 @@ extern int rterm_trim_val_t3x_21;
 extern int rterm_trim_flag_t3x_21;
 extern int phy_term_lel_t3x_21;
 extern int tuning_cnt;
+extern int vga_tuning_min;
+extern int vga_tuning_max;
+extern int cal_phy_time;
 
 /*--------------------------function declare------------------*/
 /* T3X */
@@ -174,7 +231,6 @@ void aml_phy_switch_port_t3x(u8 port);
 void aml_phy_iq_skew_monitor_t3x(void);
 void get_val_t3x(char *temp, unsigned int val, int len);
 unsigned int rx_sec_hdcp_cfg_t3x(void);
-void rx_set_irq_t3x(bool en, u8 port);
 void rx_set_aud_output_t3x(u32 param, u8 port);
 void rx_sw_reset_t3x(int level, u8 port);
 void hdcp_init_t3x(u8 port);
@@ -187,20 +243,18 @@ void aml_phy_offset_cal_t3x(void);
 void quick_sort2_t3x_20(int arr[], int l, int r);
 void rx_pwrcntl_mem_pd_cfg(void);
 void rx_frl_train(u8 port);
-void rx_frl_train_handler(struct work_struct *work);
-void rx_frl_train_handler_1(struct work_struct *work);
-enum frl_train_sts_e rx_get_frl_train_sts(void);
-void rx_set_frl_train_sts(enum frl_train_sts_e sts);
+void rx_frl_train_handler(struct kthread_work *work);
+void rx_frl_train_handler_1(struct kthread_work *work);
+enum frl_train_sts_e rx_get_frl_train_sts(u8 port);
+void rx_set_frl_train_sts(enum frl_train_sts_e sts, u8 port);
 enum frl_rate_e hdmirx_get_frl_rate(u8 port);
-bool is_frl_train_finished(void);
+bool is_frl_train_finished(u8 port);
 void rx_long_bist_t3x(void);
 void rx_t3x_prbs(void);
 void dump_aud21_param(u8 port);
 void rx_21_fpll_cfg(int f_rate, u8 port);
 bool is_fpll_err(u8 port);
 void audio_setting_for_aud21(int frl_rate, u8 port);
-void frate_monitor(void);
-void frate_monitor1(void);
 void clk_init_cor_t3x(void);
 void rx_dig_clk_en_t3x(bool en);
 void rx_lts_2_flt_ready(u8 port);
@@ -215,10 +269,25 @@ bool s_tmds_transmission_detected(u8 port);
 bool hdmirx_flt_update_cleared_wait(u32 addr, u8 port);
 void hdmirx_vga_gain_tuning(u8 port);
 void rx_set_term_value_t3x(unsigned char port, bool value);
-void aml_phy_power_off_t3x_port0(void);
-void aml_phy_power_off_t3x_port1(void);
-void aml_phy_power_off_t3x_port2(void);
-void aml_phy_power_off_t3x_port3(void);
+void aml_phy_power_off_t3x_20(u8 port);
+void aml_phy_power_off_t3x_21(u8 port);
+void rx_cor_reset_t3x(u8 port);
+void cor_debug_t3x(u8 port);
+void clr_frl_fifo_status(u8 port);
+void rx_rcc_err_frl_config(u8 port);
+void rx_read_ecc_err(u8 port);
+bool is_fsm_ready_t3x(void);
+void rx_switch_to_self_hsync(u8 port, bool en);
+bool rx_is_switch_to_analog_clk(u8 port);
+void rx_switch_to_analog_clk(u8 port);
+void rx_clr_f_det(bool en, u8 port);
+bool rx_get_clkready_sts(u8 port);
+bool rx_get_valid_m_sts(u8 port);
+
+void rx_i2c_dbg_monitor(void);
+void rx_i2c_monitor(u8 sel, u8 smp_mod, u8 trig_mod, u8 dump_mod);
+void rx_i2c_dump(void);
+bool rx_is_power_off_t3x(u8 port);
 
 //void reset_pcs(void);
 

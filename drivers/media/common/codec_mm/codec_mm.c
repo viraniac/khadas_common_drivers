@@ -28,6 +28,7 @@
 
 #include <linux/amlogic/media/codec_mm/codec_mm.h>
 #include <linux/amlogic/media/codec_mm/codec_mm_scatter.h>
+#include <linux/amlogic/media/codec_mm/codec_mm_state.h>
 #include <linux/amlogic/media/codec_mm/configs.h>
 #include <linux/page-isolation.h>
 #include <asm/pgtable.h>
@@ -249,6 +250,7 @@ int cma_mmu_op(struct page *page, int count, bool set)
 #define DEFAULT_TVP_SIZE_FOR_4K (236 * SZ_1M)
 #define DEFAULT_TVP_SIZE_FOR_NO4K (160 * SZ_1M)
 #define DEFAULT_TVP_SEGMENT_MIN_SIZE (16 * SZ_1M)
+#define AV1_4K_FG_MEM_SIZE 342 // 3 segments 240M/70M/32M
 
 #define ALLOC_MAX_RETRY 1
 
@@ -280,7 +282,7 @@ int cma_mmu_op(struct page *page, int count, bool set)
 /* the maximum size allowed to be reserved for a record */
 #define LOG_LINE_MAX		(CONSOLE_LOG_MAX - PREFIX_MAX)
 
-static void dump_mem_infos(void);
+static void dump_mem_infos(struct seq_file *m);
 
 static int dump_free_mem_infos(void *buf, int size);
 static int __init secure_vdec_res_setup(struct reserved_mem *rmem);
@@ -481,7 +483,9 @@ struct codec_mm_mgt_s {
 	atomic_t tvp_user_count;
 	/* for tvp operator used */
 	struct mutex tvp_protect_lock;
+	struct codec_state_node cs;
 	void *trk_h;
+	struct work_struct	tvp_alloc_wrk;
 };
 
 #define PHY_OFF() offsetof(struct codec_mm_s, phy_addr)
@@ -938,6 +942,7 @@ static int codec_mm_alloc_in(struct codec_mm_mgt_s *mgt, struct codec_mm_s *mem)
 							  PAGE_SHIFT, false);
 			mem->from_flags = AMPORTS_MEM_FLAGS_FROM_GET_FROM_CMA;
 			if (mem->mem_handle) {
+				mem->vbuffer = mem->mem_handle;
 				mem->phy_addr =
 					page_to_phys((struct page *)mem->mem_handle);
 				if (!mgt->tvp_enable) {
@@ -978,7 +983,7 @@ static int codec_mm_alloc_in(struct codec_mm_mgt_s *mgt, struct codec_mm_s *mem)
 		if (can_from_res) {
 			if (mgt->cma_res_pool.total_size > 0 &&
 			    (mgt->cma_res_pool.alloced_size +
-			    mem->buffer_size) < mgt->cma_res_pool.total_size) {
+			    mem->buffer_size) <= mgt->cma_res_pool.total_size) {
 				/*
 				 *from cma res first.
 				 */
@@ -1022,6 +1027,9 @@ static int codec_mm_alloc_in(struct codec_mm_mgt_s *mgt, struct codec_mm_s *mem)
 				mem->phy_addr =
 					page_to_phys((struct page *)
 						mem->mem_handle);
+				if (mem->flags & CODEC_MM_FLAGS_CPU)
+					mem->vbuffer =
+						codec_mm_map_phyaddr(mem);
 
 				if (!mgt->tvp_enable) {
 					dma_sync_single_for_device(mgt->dev,
@@ -1294,7 +1302,7 @@ struct codec_mm_s *codec_mm_alloc(const char *owner, int size,
 		pr_err("mem flags %d %d, %d\n",
 		       memflags, mem->flags, align2n);
 		kfree(mem);
-		dump_mem_infos();
+		dump_mem_infos(NULL);
 		if (mgt->tvp_enable)
 			dump_tvp_pool_info();
 		return NULL;
@@ -1471,16 +1479,8 @@ void *codec_mm_dma_alloc_coherent(ulong *handle,
 	spin_lock_irqsave(&mgt->lock, flags);
 
 	mem->mem_id = mgt->global_memid++;
-	if (s_cma) {
+	if (s_cma)
 		mgt->alloced_cma_size	+= buf_size;
-	} else if (s_res) {
-		if (mgt->cma_res_pool.total_size > 0)
-			mgt->cma_res_pool.total_size += buf_size;
-		else
-			mgt->alloced_res_size += buf_size;
-	} else {
-		mgt->alloced_sys_size	+= buf_size;
-	}
 	mgt->alloced_from_coherent	+= buf_size;
 	mgt->total_alloced_size		+= buf_size;
 	if (mgt->total_alloced_size > mgt->max_used_mem_size)
@@ -1521,13 +1521,6 @@ void codec_mm_dma_free_coherent(ulong handle)
 
 	if (mem->flags & 2)
 		mgt->alloced_cma_size	-= mem->buffer_size;
-	else if (mem->flags & 1)
-		if (mgt->cma_res_pool.total_size > 0)
-			mgt->cma_res_pool.total_size += mem->buffer_size;
-		else
-			mgt->alloced_res_size += mem->buffer_size;
-	else
-		mgt->alloced_sys_size	-= mem->buffer_size;
 	mgt->alloced_from_coherent	-= mem->buffer_size;
 	mgt->total_alloced_size		-= mem->buffer_size;
 	list_del(&mem->list);
@@ -2047,6 +2040,32 @@ alloced_finished:
 	return try_alloced_size;
 }
 
+static void codec_mm_tvp_alloc_monitor(struct work_struct *work)
+{
+	int ret = 0;
+	struct codec_mm_mgt_s *mgt = container_of(work,
+		struct codec_mm_mgt_s, tvp_alloc_wrk);
+
+	while (mgt->tvp_pool.total_size < (AV1_4K_FG_MEM_SIZE * 1024 * 1024)) {
+		ret = codec_mm_tvp_pool_alloc_by_slot(&mgt->tvp_pool, 0, mgt->tvp_enable);
+		if (ret == 0) {
+			pr_err("prealloc tvp_pool fail\n");
+			return;
+		}
+	}
+}
+
+void codec_mm_prealloc_tvp_pool(void)
+{
+	struct codec_mm_mgt_s *mgt = get_mem_mgt();
+
+	if (mgt->tvp_enable < 2 || tvp_dynamic_increase_disable) // not 4k secure video,do nothing
+		return;
+
+	schedule_work(&mgt->tvp_alloc_wrk);
+}
+EXPORT_SYMBOL(codec_mm_prealloc_tvp_pool);
+
 int codec_mm_extpool_pool_alloc(struct extpool_mgt_s *tvp_pool,
 	int size, int memflags, int for_tvp)
 {
@@ -2490,7 +2509,7 @@ int get_string_segment(int size)
 		(size / LOG_LINE_MAX + 1);
 }
 
-static void dump_mem_infos(void)
+static void dump_mem_infos(struct seq_file *m)
 {
 	struct codec_mm_mgt_s *mgt = get_mem_mgt();
 	struct codec_mm_s *mem = NULL;
@@ -2610,7 +2629,7 @@ static void dump_mem_infos(void)
 
 	segment_count = get_string_segment(tsize);
 	for (i = 0; i < segment_count; i++)
-		pr_info("%s", alloc_buf + i * LOG_LINE_MAX);
+		cs_printf(m, "%s", alloc_buf + i * LOG_LINE_MAX);
 
 	vfree(alloc_buf);
 }
@@ -2981,7 +3000,7 @@ int codec_mm_get_free_size(void)
 {
 	struct codec_mm_mgt_s *mgt = get_mem_mgt();
 	if (debug_mode & 0x40)
-		dump_mem_infos();
+		dump_mem_infos(NULL);
 	return codec_mm_get_total_size() -
 		mgt->tvp_pool.total_size  + mgt->tvp_pool.alloced_size -
 		mgt->total_alloced_size;
@@ -2992,7 +3011,7 @@ int codec_mm_get_tvp_free_size(void)
 {
 	struct codec_mm_mgt_s *mgt = get_mem_mgt();
 	if (debug_mode & 0x20)
-		dump_mem_infos();
+		dump_mem_infos(NULL);
 	return mgt->tvp_pool.total_size -
 		mgt->tvp_pool.alloced_size;
 }
@@ -3101,7 +3120,7 @@ int codec_mm_enough_for_size(int size, int with_wait, int mem_flags)
 		if (have_mem)
 			return 1;
 		if (debug_mode & 0x20)
-			dump_mem_infos();
+			dump_mem_infos(NULL);
 		msleep(50);
 		return 0;
 	}
@@ -3157,6 +3176,7 @@ int codec_mm_mgt_init(struct device *dev)
 	mutex_init(&mgt->tvp_pool.pool_lock);
 	mutex_init(&mgt->cma_res_pool.pool_lock);
 	spin_lock_init(&mgt->lock);
+	INIT_WORK(&mgt->tvp_alloc_wrk, codec_mm_tvp_alloc_monitor);
 	return 0;
 }
 EXPORT_SYMBOL(codec_mm_mgt_init);
@@ -3193,7 +3213,7 @@ static ssize_t codec_mm_dump_show(struct class *class,
 {
 	size_t ret = 0;
 
-	dump_mem_infos();
+	dump_mem_infos(NULL);
 	return ret;
 }
 
@@ -3494,7 +3514,7 @@ static ssize_t debug_store(struct class *class,
 		codec_mm_keeper_free_all_keep(1);
 		break;
 	case 11:
-		dump_mem_infos();
+		dump_mem_infos(NULL);
 		break;
 	case 12:
 		dump_free_mem_infos(NULL, 0);
@@ -3517,7 +3537,7 @@ static ssize_t debug_store(struct class *class,
 		}
 		break;
 	case 200:
-		codec_mm_walk_dbuf();
+		codec_mm_dbuf_walk(NULL);
 		break;
 	default:
 		pr_err("unknown cmd! %d\n", val);
@@ -3718,7 +3738,7 @@ static ssize_t dbuf_trace_store(struct class *class,
 static ssize_t dbuf_dump_show(struct class *class,
 			     struct class_attribute *attr, char *buf)
 {
-	codec_mm_walk_dbuf();
+	codec_mm_dbuf_walk(NULL);
 
 	return 0;
 }
@@ -3876,6 +3896,38 @@ static struct mconfig codec_mm_trigger[] = {
 	MC_FUN("debug", codec_mm_trigger_help_fun, codec_mm_trigger_fun),
 };
 
+int codec_mm_cs_show(struct seq_file *m, struct codec_state_node *cs)
+{
+	char *buf = (void *)__get_free_page(GFP_KERNEL);
+	int r = 0;
+
+	seq_printf(m, "\n #### Show %s status ####\n", cs->ops->name);
+
+	seq_puts(m, "\n **** Dump linear buffer alloc status ****\n");
+	dump_mem_infos(m);
+
+	if (buf) {
+		seq_puts(m, "\n **** Dump scatter buffer alloc status ****\n");
+		memset(buf, 0, PAGE_SIZE);
+		codec_mm_scatter_info_dump(buf, PAGE_SIZE);
+		seq_printf(m, "%s", buf);
+
+		seq_puts(m, "\n **** Dump codec mm config list ****\n");
+		memset(buf, 0, PAGE_SIZE);
+		r = configs_list_path_nodes(CONFIG_PATH,
+			buf,
+			PAGE_SIZE,
+			LIST_MODE_NODE_CMDVAL_ALL);
+		seq_printf(m, "%s", buf);
+
+		free_page((ulong)buf);
+	}
+
+	return 0;
+}
+
+CODEC_STATE_RO(codec_mm);
+
 #if IS_MODULE(CONFIG_AMLOGIC_MEDIA_MODULE) && \
 	IS_ENABLED(CONFIG_KALLSYMS_ALL) && \
 	!IS_ENABLED(CONFIG_DEBUG_SPINLOCK)
@@ -4004,12 +4056,27 @@ int __nocfi get_mte_sync_tags_hook_kprobe(void *data)
 }
 #endif
 
+bool is_2k_platform(void)
+{
+	int cpu_type = get_cpu_type();
+	int pack_type = get_meson_cpu_version(MESON_CPU_VERSION_LVL_PACK);
+
+	if (cpu_type == MESON_CPU_MAJOR_ID_T5D ||
+		cpu_type == MESON_CPU_MAJOR_ID_TXHD2 ||
+		cpu_type == MESON_CPU_MAJOR_ID_S1A ||
+		(cpu_type == MESON_CPU_MAJOR_ID_S4 && pack_type == 2) ||
+		(cpu_type == MESON_CPU_MAJOR_ID_S7 && pack_type == 3))
+		return true;
+
+	return false;
+}
 static int codec_mm_probe(struct platform_device *pdev)
 {
 	int r;
 	struct reserved_mem *mem = NULL;
 	int secure_region_index = 0;
 	struct device_node *search_target = NULL;
+	struct codec_mm_mgt_s *mgt = NULL;
 
 	while (1) {
 		search_target = of_parse_phandle(pdev->dev.of_node,
@@ -4034,7 +4101,9 @@ static int codec_mm_probe(struct platform_device *pdev)
 		secure_region_index++;
 	}
 
-	pdev->dev.platform_data = get_mem_mgt();
+	mgt = get_mem_mgt();
+
+	pdev->dev.platform_data = mgt;
 	r = of_reserved_mem_device_init(&pdev->dev);
 	if (r == 0)
 		pr_debug("%s mem init done\n", __func__);
@@ -4064,6 +4133,7 @@ static int codec_mm_probe(struct platform_device *pdev)
 	INIT_REG_NODE_CONFIGS(CONFIG_PATH, &codec_mm_trigger_node,
 				  "trigger", codec_mm_trigger,
 				  CONFIG_FOR_RW | CONFIG_FOR_T);
+	codec_state_register(&mgt->cs, &codec_mm_cs_ops);
 #if IS_MODULE(CONFIG_AMLOGIC_MEDIA_MODULE) && \
 	IS_ENABLED(CONFIG_KALLSYMS_ALL) && \
 	!IS_ENABLED(CONFIG_DEBUG_SPINLOCK)
@@ -4098,7 +4168,29 @@ int __init codec_mm_module_init(void)
 		return -ENODEV;
 	}
 
+	if (codec_state_debugfs_init()) {
+		platform_driver_unregister(&codec_mm_driver);
+		pr_err("Create codec mm debugfs failed.\n");
+		return -EINVAL;
+	}
+
+	if (codec_mm_track_init()) {
+		codec_state_debugfs_release();
+		platform_driver_unregister(&codec_mm_driver);
+		pr_err("Create codec mm debugfs failed.\n");
+		return -EINVAL;
+	}
+
 	return 0;
+}
+
+void __exit codec_mm_module_exit(void)
+{
+	codec_state_debugfs_release();
+
+	codec_mm_track_exit();
+
+	platform_driver_unregister(&codec_mm_driver);
 }
 
 //MODULE_DESCRIPTION("AMLOGIC amports mem  driver");
