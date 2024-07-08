@@ -10,6 +10,7 @@
 #include <dt-bindings/input/input.h>
 #include "mesont7_drm.dtsi"
 #include "khadas-panel.dtsi"
+#include "meson-ir-map-linux.dtsi"
 
 / {
 	model = "Khadas VIM4";
@@ -1988,6 +1989,8 @@
 	status = "okay";
 	pinctrl-0 = <&remote_pins>;
 	pinctrl-names = "default";
+	/*For linux platforms, use custom_maps_linux to override the default custom_maps in the IR*/
+	map = <&custom_maps_linux>;
 };
 
 &amlvecm {
