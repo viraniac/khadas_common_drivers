@@ -25,8 +25,6 @@
 #include <linux/sched.h>
 #include <linux/fs.h>
 #include <linux/dma-mapping.h>
-#include <linux/amlogic/media/frame_sync/ptsserv.h>
-#include <linux/amlogic/media/frame_sync/tsync.h>
 #include <linux/amlogic/media/utils/amstream.h>
 #include <linux/amlogic/media/vfm/vframe_provider.h>
 #include <linux/device.h>
@@ -37,11 +35,11 @@
 #include <linux/clk.h>
 #include <linux/irqflags.h>
 
+#include "../../common/chips/decoder_cpu_ver_info.h"
 #include "../../frame_provider/decoder/utils/vdec.h"
 #include "../amports/streambuf_reg.h"
 #include "../amports/streambuf.h"
 #include <linux/amlogic/media/utils/amports_config.h>
-#include <linux/amlogic/media/frame_sync/tsync_pcr.h>
 #include "../../media_sync/av_sync/media_sync_core.h"
 #include "../../common/media_utils/media_utils.h"
 #include "../../media_sync/pts_server/pts_server_core.h"
@@ -50,7 +48,15 @@
 #include <linux/reset.h>
 #include "../amports/amports_priv.h"
 
+#include <linux/amlogic/media/frame_sync/tsync_pcr.h>
+#include <linux/amlogic/media/frame_sync/ptsserv.h>
+#include <linux/amlogic/media/frame_sync/tsync.h>
+
+
 #define MAX_DRM_PACKAGE_SIZE 0x500000
+
+static bool new_arch;
+
 static u32 video_pts_bit32 = 0;
 typedef long (*pfun_mediasync_vpts_set)(s32 sSyncInsId, mediasync_video_packets_info info);
 static pfun_mediasync_vpts_set mediasync_vpts_set = NULL;
@@ -62,9 +68,6 @@ static s32 pAServerInsId = 12;
 static s32 pVServerInsId = -1;
 static bool singleDmxNewPtsserv = false;
 static ptsserver_ins* PServerIns = NULL;
-
-static struct workqueue_struct *ptsserv_workqueue;
-static struct ptsserver_checkin_pts_s vpts_checkin_info;
 
 static int pts_checkin_debug = 0;
 module_param(pts_checkin_debug, int, 0644);
@@ -107,8 +110,8 @@ static DEFINE_SPINLOCK(demux_ops_lock);
 
 #define PTS_COUNT 8
 #define PTS_PACKET_SIZE 20
-DECLARE_KFIFO(video_frame,  mediasync_video_packets_info, PTS_COUNT);
-DECLARE_KFIFO(audio_frame,mediasync_audio_packets_info, PTS_COUNT);
+DECLARE_KFIFO(video_frame,packets_info, PTS_COUNT);
+DECLARE_KFIFO(audio_frame,packets_info, PTS_COUNT);
 
 static int enable_demux_driver(void)
 {
@@ -259,11 +262,12 @@ static int tsdemux_config(void)
 	return 0;
 }
 
-static void queue_video_info( u64 pts, int size) {
-	mediasync_video_packets_info dmx_frameinfo;
+static void queue_video_info(u64 pts, int size, u32 ptr) {
+	packets_info dmx_frameinfo;
 	memset(&dmx_frameinfo, 0, sizeof(dmx_frameinfo));
 	dmx_frameinfo.packetsPts = pts;
 	dmx_frameinfo.packetsSize = size;
+	dmx_frameinfo.ptr = ptr;
 	kfifo_put(&video_frame, dmx_frameinfo);
 	if (pts_checkin_debug) {
 		pr_info("%s pts:%lld size:%d kfifo_len:%d \n",
@@ -272,11 +276,12 @@ static void queue_video_info( u64 pts, int size) {
 	return ;
 }
 
-static void queue_audio_info( u64 pts, int size) {
-	mediasync_audio_packets_info dmx_frameinfo;
+static void queue_audio_info(u64 pts, int size, u32 ptr) {
+	packets_info dmx_frameinfo;
 	memset(&dmx_frameinfo, 0, sizeof(dmx_frameinfo));
 	dmx_frameinfo.packetsPts = pts;
 	dmx_frameinfo.packetsSize = size;
+	dmx_frameinfo.ptr = ptr;
 	kfifo_put(&audio_frame, dmx_frameinfo);
 	if (pts_checkin_debug) {
 		pr_info("%s pts:%lld size:%d kfifo_len:%d \n",
@@ -305,6 +310,7 @@ EXPORT_SYMBOL(register_mediasync_apts_set_cb);
 
 static int ptsserver_start(u8 type) {
 	struct ptsserver_table_s *ptable;
+
 	ptable = &pts_table[type];
 
 	pr_info("%s, type=%d\n", __func__, type);
@@ -316,7 +322,7 @@ static int ptsserver_start(u8 type) {
 
 	if (type == PTS_SERVER_TYPE_VIDEO) {
 #ifdef CONFIG_AMLOGIC_MEDIA_MULTI_DEC
-		if (!tsync_get_new_arch()) {
+		if (!new_arch) {
 			ptable->buf_start =
 				READ_PARSER_REG(PARSER_VIDEO_START_PTR);
 			ptable->buf_size =
@@ -324,7 +330,7 @@ static int ptsserver_start(u8 type) {
 				- ptable->buf_start + 8;
 		}
 #else
-		if (!tsync_get_new_arch()) {
+		if (!new_arch) {
 			ptable->buf_start =
 				READ_VREG(VLD_MEM_VIFIFO_START_PTR);
 			ptable->buf_size =
@@ -333,7 +339,7 @@ static int ptsserver_start(u8 type) {
 		}
 #endif
 	} else if (type == PTS_SERVER_TYPE_AUDIO) {
-		if (!tsync_get_new_arch()) {
+		if (!new_arch) {
 			ptable->buf_start =
 			READ_AIU_REG(AIU_MEM_AIFIFO_START_PTR);
 			ptable->buf_size =
@@ -362,7 +368,7 @@ static inline void get_swrpage_offset(u8 type, u32 *page, u32 *page_offset)
 	ulong flags;
 	u32 page1, page2, offset;
 
-	if (!tsync_get_new_arch()) {
+	if (!new_arch) {
 		if (type == PTS_SERVER_TYPE_VIDEO) {
 			do {
 				local_irq_save(flags);
@@ -394,7 +400,7 @@ static inline void get_swrpage_offset(u8 type, u32 *page, u32 *page_offset)
 
 			*page = page1;
 			*page_offset = offset -
-				       pts_table[PTS_SERVER_TYPE_AUDIO].buf_start;
+						pts_table[PTS_SERVER_TYPE_AUDIO].buf_start;
 		}
 	}
 }
@@ -404,7 +410,7 @@ static int pts_checkin_apts_size(u32 ptr, u64 pts_val, int size) {
 	checkin_apts_size checkinPtsSize;
 	memset(&checkinPtsSize, 0, sizeof(checkinPtsSize));
 
-	if (tsync_get_new_arch())
+	if (new_arch)
 		return -EINVAL;
 
 	if (pAServerInsId < 0) {
@@ -431,10 +437,10 @@ static int pts_checkin_apts_size(u32 ptr, u64 pts_val, int size) {
 
 static int pts_checkin_vpts_size(u32 ptr, u64 pts_val) {
 	u32 offset, cur_offset = 0, page = 0, page_no;
-	checkin_pts_offset checkinPtsOffset;
-	memset(&checkinPtsOffset, 0, sizeof(checkinPtsOffset));
+	checkin_pts_size mCheckinPtsSize;
+	memset(&mCheckinPtsSize, 0, sizeof(mCheckinPtsSize));
 
-	if (tsync_get_new_arch())
+	if (new_arch)
 		return -EINVAL;
 
 	if (pVServerInsId < 0) {
@@ -445,22 +451,15 @@ static int pts_checkin_vpts_size(u32 ptr, u64 pts_val) {
 	get_swrpage_offset(PTS_SERVER_TYPE_VIDEO, &page, &cur_offset);
 
 	page_no = (offset > cur_offset) ? (page - 1) : page;
-	checkinPtsOffset.offset = pts_table[PTS_SERVER_TYPE_VIDEO].buf_size * page_no + offset;
-
-	checkinPtsOffset.pts = (u32)pts_val;
-	checkinPtsOffset.pts_64 = div64_u64(pts_val * 100, 9);
-	ptsserver_checkin_pts_offset((pVServerInsId & 0xff), &checkinPtsOffset);
+	mCheckinPtsSize.size = pts_table[PTS_SERVER_TYPE_VIDEO].buf_size * page_no + offset;
+	mCheckinPtsSize.pts = (u32)pts_val;
+	mCheckinPtsSize.pts_64 = div64_u64(pts_val * 100, 9);
+	ptsserver_checkin_pts_size((pVServerInsId & 0xff),&mCheckinPtsSize,true);
 	if (pts_checkin_debug) {
 		pr_info("%s pts:%lld page_no:%d rel_offset:%d\n",
-				__func__, pts_val, page_no, checkinPtsOffset.offset);
+				__func__, pts_val, page_no, mCheckinPtsSize.size);
 	}
 	return 0;
-}
-
-static void ptsserv_checkin_work(struct work_struct *work) {
-	struct ptsserver_checkin_pts_s *ptsserv_wk =
-		container_of(work,struct ptsserver_checkin_pts_s,pts_wkr_in);
-	pts_checkin_vpts_size(ptsserv_wk->ptr,ptsserv_wk->pts_val);
 }
 
 extern int pts_lookup(u8 type, u32 *val, u32 *frame_size, u32 pts_margin);
@@ -509,12 +508,8 @@ static irqreturn_t tsdemux_isr(int irq, void *dev_id)
 					pts_checkin_wrptr_pts33(PTS_TYPE_VIDEO,
 						READ_DEMUX_REG(VIDEO_PDTS_WR_PTR),
 						vpts);
-				} else {
-					queue_video_info(vpts,PTS_PACKET_SIZE);
-					vpts_checkin_info.ptr = READ_DEMUX_REG(VIDEO_PDTS_WR_PTR);
-					vpts_checkin_info.pts_val = vpts;
-					queue_work(ptsserv_workqueue, &(vpts_checkin_info.pts_wkr_in));
 				}
+				queue_video_info(vpts,PTS_PACKET_SIZE,READ_DEMUX_REG(VIDEO_PDTS_WR_PTR));
 			}
 
 			if (pdts_status & (1 << AUDIO_PTS_READY)) {
@@ -526,15 +521,19 @@ static irqreturn_t tsdemux_isr(int irq, void *dev_id)
 				if (pts_checkin_debug) {
 					pr_info("%s check_in_apts:%lld \n",__func__,apts);
 				}
+
+#ifdef CONFIG_AMLOGIC_MEDIA_FRAME_SYNC
 				if (!singleDmxNewPtsserv) {
 					pts_checkin_wrptr_pts33(PTS_TYPE_AUDIO,
 						READ_DEMUX_REG(AUDIO_PDTS_WR_PTR),
 						apts);
-				} else {
-					pts_checkin_apts_size(READ_DEMUX_REG(AUDIO_PDTS_WR_PTR),
-						apts, pts_getaudiocheckinsize());
-					queue_audio_info(apts,pts_getaudiocheckinsize());
 				}
+				queue_audio_info(apts,pts_getaudiocheckinsize(),READ_DEMUX_REG(AUDIO_PDTS_WR_PTR));
+#else
+				queue_audio_info(apts,10,READ_DEMUX_REG(AUDIO_PDTS_WR_PTR));
+#endif
+
+
 			}
 
 			WRITE_DEMUX_REG(STB_PTS_DTS_STATUS, pdts_status);
@@ -561,12 +560,8 @@ static irqreturn_t tsdemux_isr(int irq, void *dev_id)
 					pts_checkin_wrptr_pts33(PTS_TYPE_VIDEO,
 						DMX_READ_REG(id, VIDEO_PDTS_WR_PTR),
 						vpts);
-				} else {
-					queue_video_info(vpts,PTS_PACKET_SIZE);
-					vpts_checkin_info.ptr = DMX_READ_REG(id, VIDEO_PDTS_WR_PTR);
-					vpts_checkin_info.pts_val = vpts;
-					queue_work(ptsserv_workqueue, &(vpts_checkin_info.pts_wkr_in));
 				}
+				queue_video_info(vpts,PTS_PACKET_SIZE,DMX_READ_REG(id, VIDEO_PDTS_WR_PTR));
 			}
 
 			if (pdts_status & (1 << AUDIO_PTS_READY)) {
@@ -578,21 +573,18 @@ static irqreturn_t tsdemux_isr(int irq, void *dev_id)
 				if (pts_checkin_debug) {
 					pr_info("%s check_in_apts:%lld \n",__func__,apts);
 				}
+
+#ifdef CONFIG_AMLOGIC_MEDIA_FRAME_SYNC
 				if (!singleDmxNewPtsserv) {
-				#if 0	//32bit
-					pts_checkin_wrptr(PTS_TYPE_AUDIO,
-						DMX_READ_REG(id, AUDIO_PDTS_WR_PTR),
-						(u32)apts);
-				#else	//33bit
 					pts_checkin_wrptr_pts33(PTS_TYPE_AUDIO,
 						DMX_READ_REG(id, AUDIO_PDTS_WR_PTR),
 						apts);
-				#endif
-				} else {
-					pts_checkin_apts_size(DMX_READ_REG(id, AUDIO_PDTS_WR_PTR),
-						apts, pts_getaudiocheckinsize());
-					queue_audio_info(apts,pts_getaudiocheckinsize());
 				}
+				queue_audio_info(apts,pts_getaudiocheckinsize(),DMX_READ_REG(id, AUDIO_PDTS_WR_PTR));
+#else
+				queue_audio_info(apts,10,DMX_READ_REG(id, AUDIO_PDTS_WR_PTR));
+#endif
+
 			}
 
 			if (id == 1)
@@ -628,16 +620,24 @@ static irqreturn_t tsdemux_thread_isr(int irq, void *dev_id)
 {
 	mediasync_video_packets_info dmx_video_frameinfo;
 	mediasync_audio_packets_info dmx_audio_frameinfo;
+	packets_info dmx_video_packetsinfo;
+	packets_info dmx_audio_packetsinfo;
 	if (!kfifo_is_empty(&video_frame)) {
-		memset(&dmx_video_frameinfo, 0, sizeof(dmx_video_frameinfo));
-		if (kfifo_get(&video_frame,&dmx_video_frameinfo)) {
+		memset(&dmx_video_packetsinfo, 0, sizeof(dmx_video_packetsinfo));
+		if (kfifo_get(&video_frame,&dmx_video_packetsinfo)) {
 			//queue videoframe to mediasync
 			s32 sSyncInsId;
 			//if (!mediasync_vpts_set) {
 			//	mediasync_vpts_set = symbol_request(mediasync_ins_set_video_packets_info);
 			//}
 			if (mediasync_vpts_set) {
-				sSyncInsId = 12;
+				if (!singleDmxNewPtsserv) {
+					sSyncInsId = 0;
+				} else {
+					sSyncInsId = 12;
+				}
+				dmx_video_frameinfo.packetsPts = dmx_video_packetsinfo.packetsPts;
+				dmx_video_frameinfo.packetsSize = dmx_video_packetsinfo.packetsSize;
 				mediasync_vpts_set(sSyncInsId, dmx_video_frameinfo);
 				if (pts_checkin_debug) {
 					pr_info("%s video sSyncInsId:%d packetsPts:%lld packetsSize:%d\n",
@@ -647,18 +647,27 @@ static irqreturn_t tsdemux_thread_isr(int irq, void *dev_id)
 							dmx_video_frameinfo.packetsSize);
 				}
 			}
+			if (singleDmxNewPtsserv) {
+				pts_checkin_vpts_size(dmx_video_packetsinfo.ptr,dmx_video_packetsinfo.packetsPts);
+			}
 		}
 	}
 	if (!kfifo_is_empty(&audio_frame)) {
-		memset(&dmx_audio_frameinfo, 0, sizeof(dmx_audio_frameinfo));
-		if (kfifo_get(&audio_frame,&dmx_audio_frameinfo)) {
+		memset(&dmx_audio_packetsinfo, 0, sizeof(dmx_audio_packetsinfo));
+		if (kfifo_get(&audio_frame,&dmx_audio_packetsinfo)) {
 			//queue audioframe to mediasync
 			s32 sSyncInsId;
 			//if (!mediasync_apts_set) {
 			//	mediasync_apts_set = symbol_request(mediasync_ins_set_audio_packets_info);
 			//}
 			if (mediasync_apts_set) {
-				sSyncInsId = 12;
+				if (!singleDmxNewPtsserv) {
+					sSyncInsId = 0;
+				} else {
+					sSyncInsId = 12;
+				}
+				dmx_audio_frameinfo.packetsPts = dmx_audio_packetsinfo.packetsPts;
+				dmx_audio_frameinfo.packetsSize = dmx_audio_packetsinfo.packetsSize;
 				mediasync_apts_set(sSyncInsId, dmx_audio_frameinfo);
 				if (pts_checkin_debug) {
 					pr_info("%s audio sSyncInsId:%d packetsPts:%lld packetsSize:%d\n",
@@ -668,7 +677,9 @@ static irqreturn_t tsdemux_thread_isr(int irq, void *dev_id)
 							dmx_audio_frameinfo.packetsSize);
 				}
 			}
-
+			if (singleDmxNewPtsserv) {
+				pts_checkin_apts_size(dmx_audio_packetsinfo.ptr,dmx_audio_packetsinfo.packetsPts,dmx_audio_packetsinfo.packetsSize);
+			}
 			//add by audioteam zhangjing
 			if (fpaudio == 0) {
 				fpaudio = media_open("/tmp/paudiofifo",O_WRONLY | O_NONBLOCK ,0);
@@ -715,25 +726,18 @@ static ssize_t _tsdemux_write(const char __user *buf, size_t count,
 	const char __user *p = buf;
 	u32 len;
 	int ret;
-	dma_addr_t dma_addr = 0;
 
 	if (r > 0) {
 		if (isphybuf)
 			len = count;
 		else {
 			len = min_t(size_t, r, FETCHBUF_SIZE);
-			if (copy_from_user(fetchbuf, p, len))
+			if (copy_from_user(fetchbuf.vaddr, p, len))
 				return -EFAULT;
 
-			dma_addr =
-				dma_map_single(amports_get_dma_device(),
-						fetchbuf,
-						FETCHBUF_SIZE, DMA_TO_DEVICE);
-			if (dma_mapping_error(amports_get_dma_device(),
-						dma_addr))
-				return -EFAULT;
-
-
+			codec_mm_dma_flush(fetchbuf.vaddr,
+								fetchbuf.size,
+								DMA_TO_DEVICE);
 		}
 
 		fetch_done = 0;
@@ -744,9 +748,7 @@ static ssize_t _tsdemux_write(const char __user *buf, size_t count,
 			u32 buf_32 = (unsigned long)buf & 0xffffffff;
 			WRITE_PARSER_REG(PARSER_FETCH_ADDR, buf_32);
 		} else {
-			WRITE_PARSER_REG(PARSER_FETCH_ADDR, dma_addr);
-			dma_unmap_single(amports_get_dma_device(), dma_addr,
-					FETCHBUF_SIZE, DMA_TO_DEVICE);
+			WRITE_PARSER_REG(PARSER_FETCH_ADDR, fetchbuf.paddr);
 		}
 
 		WRITE_PARSER_REG(PARSER_FETCH_CMD, (7 << FETCH_ENDIAN) | len);
@@ -922,7 +924,7 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid, u32 pcrid, bool is_hevc,
 				(1 << KEEP_DUPLICATE_PACKAGE));
 	}
 
-	if (fetchbuf == 0) {
+	if (stbuf_fetch_init()) {
 		pr_info("%s: no fetchbuf\n", __func__);
 		return -ENOMEM;
 	}
@@ -999,11 +1001,10 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid, u32 pcrid, bool is_hevc,
 
 	if (vid != 0xffff) {
 		if (singleDmxNewPtsserv) {
+
 			r = ptsserver_start(PTS_SERVER_TYPE_VIDEO);
 			pVServerInsId = vdec->pts_server_id;
 			pr_info("pVServerInsId:%d\n", pVServerInsId);
-			ptsserv_workqueue = create_workqueue("ptsserv_queue");
-			INIT_WORK(&(vpts_checkin_info.pts_wkr_in), ptsserv_checkin_work);
 		} else {
 			if (has_hevc_vdec())
 				r = pts_start((is_hevc) ? PTS_TYPE_HEVC : PTS_TYPE_VIDEO);
@@ -1027,7 +1028,7 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid, u32 pcrid, bool is_hevc,
 				goto err2;
 				pr_info("audio ptsserver start failed.(%d)\n", r);
 			}
-			r = ptsserver_static_ins_binder(pAServerInsId, &PServerIns, allocPara);
+			r = ptsserver_static_ins_binder(pAServerInsId, &PServerIns, &allocPara);
 			pr_info("pAServerInsId:%d index:%d\n", pAServerInsId, PServerIns->mPtsServerInsId);
 		} else {
 			r = pts_start(PTS_TYPE_AUDIO);
@@ -1036,6 +1037,7 @@ s32 tsdemux_init(u32 vid, u32 aid, u32 sid, u32 pcrid, bool is_hevc,
 				goto err2;
 			}
 		}
+
 	}
 	/*TODO irq */
 
@@ -1104,14 +1106,19 @@ err4:
 err3:
 	pts_stop(PTS_TYPE_AUDIO);
 	ptsserver_stop(PTS_SERVER_TYPE_AUDIO);
+
 err2:
 	if (has_hevc_vdec())
 		pts_stop((is_hevc) ? PTS_TYPE_HEVC : PTS_TYPE_VIDEO);
 	else
 		pts_stop(PTS_TYPE_VIDEO);
+
 	ptsserver_stop(PTS_SERVER_TYPE_VIDEO);
+
 err1:
 	pr_info("TS Demux init failed.\n");
+
+
 	return -ENOENT;
 }
 
@@ -1133,11 +1140,6 @@ void tsdemux_release(void)
 	if (!enable_demux_driver()) {
 		WRITE_DEMUX_REG(STB_INT_MASK, 0);
 		/*TODO irq */
-		if (singleDmxNewPtsserv) {
-			cancel_work_sync(&vpts_checkin_info.pts_wkr_in);
-			flush_workqueue(ptsserv_workqueue);
-			destroy_workqueue(ptsserv_workqueue);
-		}
 		vdec_free_irq(DEMUX_IRQ, (void *)tsdemux_irq_id);
 	} else {
 
@@ -1176,6 +1178,7 @@ void tsdemux_release(void)
 		tsdemux_reset();
 
 	amports_switch_gate("demux", 0);
+	stbuf_fetch_release();
 
 }
 EXPORT_SYMBOL(tsdemux_release);
@@ -1199,8 +1202,7 @@ static int limited_delay_check(struct file *file,
 
 	if (vbuf->max_buffer_delay_ms > 0 && abuf->max_buffer_delay_ms > 0 &&
 		stbuf_level(vbuf) > 1024 && stbuf_level(abuf) > 256) {
-		int vdelay =
-			calculation_stream_delayed_ms(PTS_TYPE_VIDEO,
+		int vdelay = calculation_stream_delayed_ms(PTS_TYPE_VIDEO,
 					NULL, NULL);
 		int adelay =
 			calculation_stream_delayed_ms(PTS_TYPE_AUDIO,
@@ -1226,6 +1228,7 @@ static int limited_delay_check(struct file *file,
 			&& adelay > abuf->max_buffer_delay_ms)
 			return 0;
 	}
+
 	write_size = min(stbuf_space(vbuf), stbuf_space(abuf));
 	write_size = min_t(int, count, write_size);
 	return write_size;
@@ -1414,8 +1417,8 @@ int get_discontinue_counter(void)
 }
 EXPORT_SYMBOL(get_discontinue_counter);
 
-static ssize_t discontinue_counter_show(struct class *class,
-		struct class_attribute *attr, char *buf)
+static ssize_t discontinue_counter_show(KV_CLASS_CONST struct class *class,
+		KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%d\n", discontinued_counter);
 }
@@ -1436,7 +1439,24 @@ static struct class tsdemux_class = {
 
 int tsdemux_class_register(void)
 {
+	enum AM_MESON_CPU_MAJOR_ID chip;
+
 	int r = class_register(&tsdemux_class);
+
+	chip = get_cpu_major_id();
+	/*
+	 *"new_arch" is true means X4 demux was used.
+	 we use the conditions "chip type >= sc2 and exclude some
+	 X2 demux chip types, such as: such as T5/T5D".
+	 */
+	if (chip >= AM_MESON_CPU_MAJOR_ID_SC2 &&
+		chip != AM_MESON_CPU_MAJOR_ID_T5 &&
+		chip != AM_MESON_CPU_MAJOR_ID_T5D &&
+		chip != AM_MESON_CPU_MAJOR_ID_TXHD2) {
+		new_arch = true;
+	} else {
+		new_arch = false;
+	}
 
 	if (r < 0)
 		pr_info("register tsdemux class error!\n");
@@ -1517,20 +1537,21 @@ void tsdemux_audio_reset(void)
 	if (demux_ops && demux_ops->hw_dmx_unlock)
 		demux_ops->hw_dmx_unlock(xflags);
 
+	spin_unlock_irqrestore(&demux_ops_lock, flags);
+
 	if (singleDmxNewPtsserv) {
 		ptsserver_stop(PTS_SERVER_TYPE_AUDIO);
 		if (PServerIns == NULL) {
 			allocPara.mMaxCount = 500;
 			allocPara.mLookupThreshold = 1024;
 			allocPara.kDoubleCheckThreshold = 5;
-			ptsserver_static_ins_binder(pAServerInsId, &PServerIns, allocPara);
+			ptsserver_static_ins_binder(pAServerInsId, &PServerIns, &allocPara);
 		} else {
 			ptsserver_ins_reset(pAServerInsId);
 		}
 		ptsserver_start(PTS_SERVER_TYPE_AUDIO);
 	}
 
-	spin_unlock_irqrestore(&demux_ops_lock, flags);
 	if (reset_demux_enable == 1)
 		tsdemux_reset();
 }
@@ -1713,8 +1734,9 @@ static int tsparser_stbuf_init(struct stream_buf_s *stbuf,
 			   vdec);
 	if (ret)
 		goto out;
-
-	tsync_pcr_start();
+	if (!singleDmxNewPtsserv) {
+		tsync_pcr_start();
+	}
 
 	stbuf->flag |= BUF_FLAG_IN_USE;
 out:
@@ -1723,6 +1745,7 @@ out:
 
 static void tsparser_stbuf_release(struct stream_buf_s *stbuf)
 {
+
 	tsync_pcr_stop();
 
 	tsdemux_release();

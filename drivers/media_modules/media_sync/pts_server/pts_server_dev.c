@@ -94,14 +94,9 @@ static long ptsserver_ioctl(struct file *file, unsigned int cmd, ulong arg)
 				return -EFAULT;
 			}
 			mutex_lock(&m_alloc_lock);
-			if (ptsserver_ins_alloc(
-						&PServerInsId,
-						&PServerIns,
-						&allocparm) < 0) {
-				return -EFAULT;
-			}
+			ret = ptsserver_ins_alloc(&PServerInsId, &PServerIns, &allocparm);
 			mutex_unlock(&m_alloc_lock);
-			if (PServerIns == NULL) {
+			if (PServerIns == NULL || ret < 0) {
 				return -EFAULT;
 			}
 
@@ -134,7 +129,7 @@ static long ptsserver_ioctl(struct file *file, unsigned int cmd, ulong arg)
 							sizeof(checkin_pts_size))) {
 				return -EFAULT;
 			}
-			ret = ptsserver_checkin_pts_size(priv->mPtsServerInsId,&mCheckinPtsSize);
+			ret = ptsserver_checkin_pts_size(priv->mPtsServerInsId,&mCheckinPtsSize,false);
 		break;
 
 		case PTSSERVER_IOC_CHECKOUT_PTS:
@@ -237,10 +232,12 @@ static long ptsserver_ioctl(struct file *file, unsigned int cmd, ulong arg)
 			return -EFAULT;
 		break;
 		case PTSSERVER_IOC_CHECKOUT_APTS:
+			if (priv->pServerIns == NULL) {
+				return -EFAULT;
+			}
 			if (copy_from_user ((void *)&mCheckoutAptsOffset,
 							(void *)arg,
 							sizeof(checkout_pts_offset))) {
-				pr_info("[%s]%d cmd:%d", __func__, __LINE__, cmd);
 				return -EFAULT;
 			}
 			ret = ptsserver_checkout_apts_offset(priv->mPtsServerInsId, &mCheckoutAptsOffset);
@@ -252,21 +249,19 @@ static long ptsserver_ioctl(struct file *file, unsigned int cmd, ulong arg)
 			}
 		break;
 		case PTSSERVER_IOC_INSTANCE_STATIC_BINDER:
-			if (copy_from_user((void *)&PServerInsId,
-						(void *)arg,
-						sizeof(PServerInsId))) {
-				pr_info("[%s]:%d\n", __func__, __LINE__);
+			if (copy_from_user ((void *)&allocparm,
+							(void *)arg,
+							sizeof(allocparm))) {
 				return -EFAULT;
 			}
 			mutex_lock(&m_alloc_lock);
-			ret = ptsserver_static_ins_binder(PServerInsId, &PServerIns, allocparm);
+			ret = ptsserver_static_ins_binder(priv->mPtsServerInsId, &PServerIns, &allocparm);
 			mutex_unlock(&m_alloc_lock);
 			if (PServerIns == NULL) {
 				pr_info("[%s]:%d\n", __func__, __LINE__);
 				return -EFAULT;
 			}
 			if (priv != NULL) {
-				priv->mPtsServerInsId = PServerInsId;
 				priv->pServerIns = PServerIns;
 			}
 		break;

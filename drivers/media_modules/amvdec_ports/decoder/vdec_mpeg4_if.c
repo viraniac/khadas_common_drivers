@@ -189,7 +189,7 @@ static int vdec_mpeg4_init(struct aml_vcodec_ctx *ctx, unsigned long *h_vdec)
 	struct vdec_mpeg4_inst *inst = NULL;
 	int ret = -1;
 
-	inst = kzalloc(sizeof(*inst), GFP_KERNEL);
+	inst = aml_media_mem_alloc(sizeof(*inst), GFP_KERNEL);
 	if (!inst)
 		return -ENOMEM;
 
@@ -212,7 +212,7 @@ static int vdec_mpeg4_init(struct aml_vcodec_ctx *ctx, unsigned long *h_vdec)
 	inst->vdec.port.type	= PORT_TYPE_VIDEO;
 
 	/* probe info from the stream */
-	inst->vsi = kzalloc(sizeof(struct vdec_mpeg4_vsi), GFP_KERNEL);
+	inst->vsi = aml_media_mem_alloc(sizeof(struct vdec_mpeg4_vsi), GFP_KERNEL);
 	if (!inst->vsi) {
 		ret = -ENOMEM;
 		goto err;
@@ -236,7 +236,7 @@ static int vdec_mpeg4_init(struct aml_vcodec_ctx *ctx, unsigned long *h_vdec)
 		goto err;
 	}
 
-	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO,
+	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT,
 		"mpeg4 Instance >> %lx\n", (ulong) inst);
 
 	return 0;
@@ -245,9 +245,9 @@ err:
 	if (inst && inst->vsi && inst->vsi->header_buf)
 		vfree(inst->vsi->header_buf);
 	if (inst && inst->vsi)
-		kfree(inst->vsi);
+		aml_media_mem_free(inst->vsi);
 	if (inst)
-		kfree(inst);
+		aml_media_mem_free(inst);
 	*h_vdec = 0;
 
 	return ret;
@@ -341,7 +341,7 @@ static int parse_stream_cpu(struct vdec_mpeg4_inst *inst, u8 *buf, u32 size)
 	int ret = 0;
 	struct mpeg4_param_sets *ps = NULL;
 
-	ps = kzalloc(sizeof(struct mpeg4_param_sets), GFP_KERNEL);
+	ps = aml_media_mem_alloc(sizeof(struct mpeg4_param_sets), GFP_KERNEL);
 	if (ps == NULL)
 		return -ENOMEM;
 
@@ -357,13 +357,13 @@ static int parse_stream_cpu(struct vdec_mpeg4_inst *inst, u8 *buf, u32 size)
 
 	ret = ps->head_parsed ? 0 : -1;
 out:
-	kfree(ps);
+	aml_media_mem_free(ps);
 
 	return ret;
 }
 
 static int vdec_mpeg4_probe(unsigned long h_vdec,
-	struct aml_vcodec_mem *bs, void *out)
+	struct aml_vcodec_mem *bs)
 {
 	struct vdec_mpeg4_inst *inst =
 		(struct vdec_mpeg4_inst *)h_vdec;
@@ -417,9 +417,9 @@ static void vdec_mpeg4_deinit(unsigned long h_vdec)
 		vfree(inst->vsi->header_buf);
 
 	if (inst->vsi)
-		kfree(inst->vsi);
+		aml_media_mem_free(inst->vsi);
 
-	kfree(inst);
+	aml_media_mem_free(inst);
 }
 
 static int vdec_write_nalu(struct vdec_mpeg4_inst *inst,
@@ -513,7 +513,7 @@ static int vdec_mpeg4_get_param(unsigned long h_vdec,
 	}
 
 	default:
-		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO,
+		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_ERROR,
 			"invalid get parameter type=%d\n", type);
 		ret = -EINVAL;
 	}
@@ -528,7 +528,7 @@ static void set_param_ps_info(struct vdec_mpeg4_inst *inst,
 	struct vdec_mpeg4_dec_info *dec = &inst->vsi->dec;
 	struct v4l2_rect *rect = &inst->vsi->crop;
 
-	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO, "%s in\n", __func__);
+	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT, "%s in\n", __func__);
 	/* fill visible area size that be used for EGL. */
 	pic->visible_width	= ps->visible_width;
 	pic->visible_height	= ps->visible_height;
@@ -576,16 +576,17 @@ static void set_pic_info(struct vdec_mpeg4_inst *inst,
 	inst->vsi->pic = *pic;
 }
 
-static void set_param_post_event(struct vdec_mpeg4_inst *inst, u32 *event)
+static void set_param_post_event(struct vdec_mpeg4_inst *inst, u32 *event, struct set_param_info *param)
 {
 	aml_vdec_dispatch_event(inst->ctx, *event);
-	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO,
-		"mpeg4 post event: %d\n", *event);
+	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT,
+		"mpeg4 post event: %d, fun: %s, %d\n",
+		param->event, param->function, param->line);
 }
 
 
 static int vdec_mpeg4_set_param(unsigned long h_vdec,
-	enum vdec_set_param_type type, void *in)
+	enum vdec_set_param_type type, void *in, struct set_param_info *param)
 {
 	int ret = 0;
 	struct vdec_mpeg4_inst *inst = (struct vdec_mpeg4_inst *)h_vdec;
@@ -610,7 +611,7 @@ static int vdec_mpeg4_set_param(unsigned long h_vdec,
 		break;
 
 	case SET_PARAM_POST_EVENT:
-		set_param_post_event(inst, in);
+		set_param_post_event(inst, in, param);
 		break;
 
 	default:

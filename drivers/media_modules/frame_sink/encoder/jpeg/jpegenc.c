@@ -53,6 +53,8 @@
 #include "../../../frame_provider/decoder/utils/firmware.h"
 #include "../../../frame_provider/decoder/utils/vdec.h"
 #include "../../../frame_provider/decoder/utils/vdec_power_ctrl.h"
+#include "../common/encoder_report.h"
+
 #include <linux/amlogic/media/codec_mm/codec_mm.h>
 #include "jpegenc.h"
 #include <linux/of_reserved_mem.h>
@@ -244,20 +246,20 @@ const struct Jpegenc_BuffInfo_s jpegenc_buffspec[] = {
         }
     }, {
         .lev_id = JPEGENC_BUFFER_LEVEL_13M,
-        .max_width = 8192,
-        .max_height = 8192,
-        .min_buffsize = 0xc400000,
+        .max_width = 3840,
+        .max_height = 3840,
+        .min_buffsize = 0x6270000,
         .input = {
             .buf_start = 0,
-            .buf_size = 0xc000000,
+            .buf_size = 0x2a30000,
         },
         .assist = {
-            .buf_start = 0xc001000,
+            .buf_start = 0x2a31000,
             .buf_size = 0x2000,
         },
         .bitstream = {
-            .buf_start = 0xc010000,
-            .buf_size = 0x3f0000,
+            .buf_start = 0x2a80000,
+            .buf_size = 0x37f0000,
         }
     }, {
         .lev_id = JPEGENC_BUFFER_LEVEL_HD,
@@ -546,7 +548,11 @@ static spinlock_t s_dma_buf_lock = __SPIN_LOCK_UNLOCKED(s_dma_buf_lock);
 static struct list_head s_dma_bufp_head = LIST_HEAD_INIT(s_dma_bufp_head);
 
 static spinlock_t s_vpu_lock = __SPIN_LOCK_UNLOCKED(s_vpu_lock);
-static DEFINE_SEMAPHORE(s_vpu_sem);
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
+    static DEFINE_SEMAPHORE(s_vpu_sem);
+#else
+    static DEFINE_SEMAPHORE(s_vpu_sem, 1);
+#endif
 static struct list_head s_vbp_head = LIST_HEAD_INIT(s_vbp_head);
 
 static s32 enc_dma_buf_release(struct file *filp);
@@ -554,6 +560,11 @@ static s32 enc_src_addr_config(struct encdrv_dma_buf_info_t *pinfo,
         struct file *filp);
 static s32 enc_free_buffers(struct file *filp);
 static int enc_dma_buf_get_phys(struct enc_dma_cfg *cfg, unsigned long *addr);
+
+static void set_log_level(const char *module, int level)
+{
+    jpegenc_print_level = level;
+}
 
 static void dump_request(struct jpegenc_request_s *request) {
     jenc_pr(LOG_DEBUG, "jpegenc: dump request start\n");
@@ -3123,7 +3134,8 @@ static s32 set_jpeg_input_format(struct jpegenc_wq_s *wq,
 
             if ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3) || \
                 (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5M) || \
-                (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X)) {
+                (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X) || \
+                (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S7D)) {
                 if ((cmd->input_fmt == JPEGENC_FMT_RGB565)
                     || (cmd->input_fmt >= JPEGENC_MAX_FRAME_FMT))
                     return -1;
@@ -3670,7 +3682,7 @@ s32 jpegenc_loadmc(const char *p)
     if ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T7) || (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S5))
         WRITE_HREG(HCODEC_IMEM_DMA_CTRL, (0x8000 | (0xf << 16))); // ucode test c is 0x8000 | (0xf << 16)
     else if ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3) || (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5M) || \
-        (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X)) {
+        (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X) || (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S7D)) {
         jenc_pr(LOG_INFO, "t3 HCODEC_IMEM_DMA_CTRL (0x8000 | (0xf << 16))\n");
         WRITE_HREG(HCODEC_IMEM_DMA_CTRL, (0x8000 | (0xf << 16))); // Endian : 4'b1000);
     } else if (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_SC2) {
@@ -3816,10 +3828,10 @@ static s32 jpegenc_poweron(u32 clock)
 
             /* Remove HCODEC ISO */
             WRITE_AOREG(AO_RTI_GEN_PWR_ISO0,
-                READ_AOREG(AO_RTI_GEN_PWR_ISO0) &
-				((get_cpu_type() == MESON_CPU_MAJOR_ID_SM1 ||
-				  get_cpu_type() >= MESON_CPU_MAJOR_ID_TM2)
-				 ? ~0x1 : ~0x30));
+                    READ_AOREG(AO_RTI_GEN_PWR_ISO0) &
+                    ((get_cpu_type() == MESON_CPU_MAJOR_ID_SM1 ||
+                      get_cpu_type() >= MESON_CPU_MAJOR_ID_TM2)
+                    ? ~0x1 : ~0x30));
             udelay(10);
         }
         /* Disable auto-clock gate */
@@ -3847,10 +3859,10 @@ static s32 jpegenc_poweroff(void)
         }else if (get_cpu_major_id() >= AM_MESON_CPU_MAJOR_ID_M8) {
             /* enable HCODEC isolation */
             WRITE_AOREG(AO_RTI_GEN_PWR_ISO0,
-                READ_AOREG(AO_RTI_GEN_PWR_ISO0) |
-				((get_cpu_type() == MESON_CPU_MAJOR_ID_SM1 ||
-				  get_cpu_type() >= MESON_CPU_MAJOR_ID_TM2)
-				 ? 0x1 : 0x30));
+                    READ_AOREG(AO_RTI_GEN_PWR_ISO0) |
+                    ((get_cpu_type() == MESON_CPU_MAJOR_ID_SM1 ||
+                      get_cpu_type() >= MESON_CPU_MAJOR_ID_TM2)
+                    ? 0x1 : 0x30));
             /* power off HCODEC memories */
             WRITE_VREG(DOS_MEM_PD_HCODEC, 0xffffffffUL);
         }
@@ -3905,7 +3917,7 @@ static s32 jpegenc_init(void)
 
     jenc_pr(LOG_ALL, "start to load microcode\n");
 
-    if (!legacy_load && ((get_cpu_major_id() >= AM_MESON_CPU_MAJOR_ID_T7 )
+    if (fw_tee_enabled() && !legacy_load && ((get_cpu_major_id() >= AM_MESON_CPU_MAJOR_ID_T7 )
         || (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_SC2 ))) {
         char *buf = vmalloc(0x1000 * 16);
         int ret = -1;
@@ -4503,7 +4515,11 @@ static s32 jpegenc_mmap(struct file *filp, struct vm_area_struct *vma)
         return -EAGAIN;
     }
     jenc_pr(LOG_INFO, "vma_size is %ld, off is %ld\n", vma_size, off);
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
     vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP | VM_IO;
+#else
+    vm_flags_set(vma, VM_DONTEXPAND | VM_DONTDUMP | VM_IO);
+#endif
     /* vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot); */
     if (remap_pfn_range(vma, vma->vm_start, off >> PAGE_SHIFT,
         vma->vm_end - vma->vm_start, vma->vm_page_prot)) {
@@ -4581,8 +4597,8 @@ static s32 jpegenc_wq_uninit(void)
     return  r;
 }
 
-static ssize_t encode_status_show(struct class *cla,
-    struct class_attribute *attr, char *buf)
+static ssize_t encode_status_show(KV_CLASS_CONST struct class *cla,
+    KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf)
 {
     s32 irq_num;
     u32 hw_status, width, height;
@@ -4837,13 +4853,13 @@ static s32 enc_free_buffers(struct file *filp)
     return 0;
 }
 
-static ssize_t power_ctrl_show(struct class *cla, struct class_attribute *attr, char *buf) {
+static ssize_t power_ctrl_show(KV_CLASS_CONST struct class *cla, KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf) {
     jenc_pr(LOG_INFO, "power status: %lu\n", pwr_ctrl_status_psci_smc(PDID_T7_DOS_HCODEC));
     jenc_pr(LOG_INFO, "jpeg clk: %ld\n", clk_get_rate(g_jpeg_enc_clks.jpeg_enc_clk));
     return 1;//snprintf(buf, PAGE_SIZE, "power control show done\n");
 }
 
-static ssize_t power_ctrl_store(struct class *class,struct class_attribute *attr,
+static ssize_t power_ctrl_store(KV_CLASS_CONST struct class *class,KV_CLASS_ATTR_CONST struct class_attribute *attr,
         const char *buf, size_t count) {
     if (strncmp(buf, "poweron", 7) == 0) {
         jenc_pr(LOG_INFO, "now powering on:\n");
@@ -4978,7 +4994,8 @@ static s32 jpegenc_probe(struct platform_device *pdev)
 
     if ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3) || \
         (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5M) || \
-        (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X)) {
+        (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X) || \
+        (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S7D)) {
         jenc_pr(LOG_INFO, "jpegenc_probe: jpeg_in_full_hcodec\n");
         jpeg_in_full_hcodec = 1;
         mfdin_ambus_canv_conv = 1;
@@ -5176,6 +5193,11 @@ static struct codec_profile_t jpegenc_profile = {
 
 static s32 __init jpegenc_driver_init_module(void)
 {
+    if (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_TXHD2) {
+        jenc_pr(LOG_DEBUG, "The chip is not support jpegenc!!\n");
+        return -1;
+    }
+
     jenc_pr(LOG_DEBUG, "jpegenc module init\n");
 
     if (platform_driver_register(&jpegenc_driver)) {
@@ -5186,6 +5208,7 @@ static s32 __init jpegenc_driver_init_module(void)
 #if 0
     vcodec_profile_register(&jpegenc_profile);
 #endif
+    enc_register_set_debug_level_func(DEBUG_AMVENC_JPEG, set_log_level);
     return 0;
 }
 

@@ -232,15 +232,15 @@ static int32_t config_mc_buffer_fb(struct AVS2Decoder_s *dec)
 		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
 			"config_mc_buffer for background (canvas_y %d, canvas_u_v %d)\n",
 		avs2_dec->f_bg->mc_canvas_y, avs2_dec->f_bg->mc_canvas_u_v);
-		WRITE_BACK_16(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (15 << 8) | (0<<1) | 1);   // L0:BG
+		WRITE_BACK_16(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (15 << 8) | (0 << 1) | 1);  // L0:BG
 
 		WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
-			(avs2_dec->f_bg->mc_canvas_u_v<<16)|(avs2_dec->f_bg->mc_canvas_u_v<<8)|avs2_dec->f_bg->mc_canvas_y);
+			(avs2_dec->f_bg->mc_canvas_u_v << 16) | (avs2_dec->f_bg->mc_canvas_u_v << 8) | avs2_dec->f_bg->mc_canvas_y);
 
-		WRITE_BACK_16(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (31 << 8) | (0<<1) | 1);  // L1:BG
+		WRITE_BACK_16(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (31 << 8) | (0 << 1) | 1);  // L1:BG
 
 		WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
-			(avs2_dec->f_bg->mc_canvas_u_v<<16)|(avs2_dec->f_bg->mc_canvas_u_v<<8)|avs2_dec->f_bg->mc_canvas_y);
+			(avs2_dec->f_bg->mc_canvas_u_v << 16) | (avs2_dec->f_bg->mc_canvas_u_v << 8) | avs2_dec->f_bg->mc_canvas_y);
 
 #if (defined NEW_FRONT_BACK_CODE) && (!defined FB_BUF_DEBUG_NO_PIPLINE)
 		for (j = 0; j < MAXREF; j++) {
@@ -258,19 +258,21 @@ static int32_t config_mc_buffer_fb(struct AVS2Decoder_s *dec)
 		return 0;
 
 	if (avs2_dec->img.type == P_IMG) {
-		int valid_ref_cnt;
-		valid_ref_cnt = 0;
+		int valid_ref_cnt = 0;
+
 		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
 			"config_mc_buffer for P_IMG, img type %d\n", avs2_dec->img.type);
 
 		WRITE_BACK_8(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (0 << 8) | (0<<1) | 1);
 		for (i = 0; i < avs2_dec->img.num_of_references; i++) {
 			pic = avs2_dec->fref[i];
+			if (avs2_dec->error_fref[i] != NULL)
+				pic = avs2_dec->error_fref[i];
 			if (pic->referred_by_others != 1)
 				continue;
 			valid_ref_cnt++;
 			WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
-				(pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+				(pic->mc_canvas_u_v << 16) | (pic->mc_canvas_u_v << 8) | pic->mc_canvas_y);
 			if (pic->error_mark)
 				cur_pic->error_mark = 1;
 			avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
@@ -289,19 +291,21 @@ static int32_t config_mc_buffer_fb(struct AVS2Decoder_s *dec)
 		if (valid_ref_cnt != avs2_dec->img.num_of_references)
 			cur_pic->error_mark = 1;
 	} else if (avs2_dec->img.type == F_IMG) {
-		int valid_ref_cnt;
-		valid_ref_cnt = 0;
+		int valid_ref_cnt = 0;
+
 		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
 			"config_mc_buffer for F_IMG, img type %d\n", avs2_dec->img.type);
 
-		WRITE_BACK_8(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (0 << 8) | (0<<1) | 1);
+		WRITE_BACK_8(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (0 << 8) | (0 << 1) | 1);
 		for (i = 0; i < avs2_dec->img.num_of_references; i++) {
 			pic = avs2_dec->fref[i];
+			if (avs2_dec->error_fref[i] != NULL)
+				pic = avs2_dec->error_fref[i];
 			if (pic->referred_by_others != 1)
 				continue;
 			valid_ref_cnt++;
 			WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
-				(pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+				(pic->mc_canvas_u_v << 16) | (pic->mc_canvas_u_v << 8) | pic->mc_canvas_y);
 			if (pic->error_mark)
 				cur_pic->error_mark = 1;
 			avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
@@ -322,8 +326,10 @@ static int32_t config_mc_buffer_fb(struct AVS2Decoder_s *dec)
 		WRITE_BACK_16(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (16 << 8) | (0<<1) | 1);
 		for (i = 0; i < avs2_dec->img.num_of_references; i++) {
 			pic = avs2_dec->fref[i];
+			if (avs2_dec->error_fref[i] != NULL)
+				pic = avs2_dec->error_fref[i];
 			WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
-				(pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+				(pic->mc_canvas_u_v << 16) | (pic->mc_canvas_u_v << 8) |  pic->mc_canvas_y);
 			avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
 				"refid %x mc_canvas_u_v %x mc_canvas_y %x\n", i, pic->mc_canvas_u_v, pic->mc_canvas_y);
 		}
@@ -332,10 +338,12 @@ static int32_t config_mc_buffer_fb(struct AVS2Decoder_s *dec)
 			"config_mc_buffer for B_IMG\n");
 
 		pic = avs2_dec->fref[1];
+		if (avs2_dec->error_fref[1] != NULL)
+			pic = avs2_dec->error_fref[1];
 		WRITE_BACK_8(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (0 << 8) | (0<<1) | 1);
 
 		WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
-			(pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+			(pic->mc_canvas_u_v << 16) | (pic->mc_canvas_u_v << 8) | pic->mc_canvas_y);
 		if (pic->error_mark)
 			cur_pic->error_mark = 1;
 		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
@@ -351,8 +359,11 @@ static int32_t config_mc_buffer_fb(struct AVS2Decoder_s *dec)
 		}
 #endif
 		pic = avs2_dec->fref[0];
-		WRITE_BACK_16(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (16 << 8) | (0<<1) | 1);
-		WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+		if (avs2_dec->error_fref[0] != NULL)
+			pic = avs2_dec->error_fref[0];
+		WRITE_BACK_16(avs2_dec, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (16 << 8) | (0 << 1) | 1);
+		WRITE_BACK_32(avs2_dec, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
+			(pic->mc_canvas_u_v  <<16) | (pic->mc_canvas_u_v << 8) | pic->mc_canvas_y);
 		if (pic->error_mark)
 			cur_pic->error_mark = 1;
 		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
@@ -812,24 +823,24 @@ static void config_bufstate_back_hw(struct avs2_decoder *avs2_dec)
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_parser_sao0.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_parser_sao0.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.parser_sao0_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 1);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_parser_sao1.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_parser_sao1.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.parser_sao1_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	//    config mpred_imp_if data write buffer start address
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 2);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_mpred_imp0.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_mpred_imp0.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.mpred_imp0_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 3);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_mpred_imp1.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_mpred_imp1.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.mpred_imp1_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	// config other buffers
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 4);
@@ -837,32 +848,32 @@ static void config_bufstate_back_hw(struct avs2_decoder *avs2_dec)
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_scalelut.buf_end);
 
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.scalelut_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 7);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_vcpu_imem.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_vcpu_imem.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.vcpu_imem_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 8);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_sys_imem.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_sys_imem.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.sys_imem_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	// config lmem buffers
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 5);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_lmem0.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_lmem0.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.lmem0_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 6);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, avs2_dec->fb_buf_lmem1.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, avs2_dec->fb_buf_lmem1.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, avs2_dec->bk.lmem1_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 }
 
 static void read_bufstate_front(struct avs2_decoder *avs2_dec)
@@ -1218,7 +1229,7 @@ int32_t g_WqMDefault8x8[64] = {
 	}
 #endif
 
-	if (back_flag) {
+	if (!efficiency_mode && back_flag) {
 #if 0 // Dual Core : back Microcode will always initial SCALELUT
 		// Initial IQIT_SCALELUT memory -- just to avoid X in simulation
 		printk("[test.c] Initial IQIT_SCALELUT memory -- just to avoid X in simulation...\n");
@@ -1276,77 +1287,77 @@ int32_t g_WqMDefault8x8[64] = {
 #endif
 	}
 
-	if (back_flag) {
-	avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
-		"[test.c] Config AVS2 default seq_wq_matrix ...\n");
-	// 4x4
-	WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR, 64); // default seq_wq_matrix_4x4 begin address
-	for (i = 0; i < 16; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA, g_WqMDefault4x4[i]);
+	if (!efficiency_mode && back_flag) {
+		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
+			"[test.c] Config AVS2 default seq_wq_matrix ...\n");
+		// 4x4
+		WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR, 64); // default seq_wq_matrix_4x4 begin address
+		for (i = 0; i < 16; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA, g_WqMDefault4x4[i]);
 
-	// 8x8
-	WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR, 0); // default seq_wq_matrix_8x8 begin address
-	for (i = 0; i < 64; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA, g_WqMDefault8x8[i]);
+		// 8x8
+		WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR, 0); // default seq_wq_matrix_8x8 begin address
+		for (i = 0; i < 64; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA, g_WqMDefault8x8[i]);
 
-	// 4x4
-	WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR_DBE1, 64); // default seq_wq_matrix_4x4 begin address
-	for (i = 0; i < 16; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA_DBE1, g_WqMDefault4x4[i]);
+		// 4x4
+		WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR_DBE1, 64); // default seq_wq_matrix_4x4 begin address
+		for (i = 0; i < 16; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA_DBE1, g_WqMDefault4x4[i]);
 
-	// 8x8
-	WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR_DBE1, 0); // default seq_wq_matrix_8x8 begin address
-	for (i = 0; i < 64; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA_DBE1, g_WqMDefault8x8[i]);
+		// 8x8
+		WRITE_VREG(HEVC_IQIT_SCALELUT_WR_ADDR_DBE1, 0); // default seq_wq_matrix_8x8 begin address
+		for (i = 0; i < 64; i++) WRITE_VREG(HEVC_IQIT_SCALELUT_DATA_DBE1, g_WqMDefault8x8[i]);
 
-	avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
-		"[test.c] Reset IPP\n");
+		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
+			"[test.c] Reset IPP\n");
+			WRITE_VREG(HEVCD_IPP_TOP_CNTL,
+			(0 << 1) | // enable ipp
+			(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
+			(1 << 0)   // software reset ipp and mpp
+			);
 		WRITE_VREG(HEVCD_IPP_TOP_CNTL,
-		(0 << 1) | // enable ipp
-		(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
-		(1 << 0)   // software reset ipp and mpp
-		);
-	WRITE_VREG(HEVCD_IPP_TOP_CNTL,
-		(1 << 1) | // enable ipp
-		(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
-		(0 << 0)   // software reset ipp and mpp
-		);
-	WRITE_VREG(HEVCD_IPP_TOP_CNTL_DBE1,
-		(0 << 1) | // enable ipp
-		(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
-		(1 << 0)   // software reset ipp and mpp
-		);
-	WRITE_VREG(HEVCD_IPP_TOP_CNTL_DBE1,
-		(1 << 1) | // enable ipp
-		(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
-		(0 << 0)   // software reset ipp and mpp
-		);
+			(1 << 1) | // enable ipp
+			(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
+			(0 << 0)   // software reset ipp and mpp
+			);
+		WRITE_VREG(HEVCD_IPP_TOP_CNTL_DBE1,
+			(0 << 1) | // enable ipp
+			(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
+			(1 << 0)   // software reset ipp and mpp
+			);
+		WRITE_VREG(HEVCD_IPP_TOP_CNTL_DBE1,
+			(1 << 1) | // enable ipp
+			(4 << 3) | // bit[5:3] 000:HEVC, 010:VP9 , 100:avs2, 110:av1 001:avs3
+			(0 << 0)   // software reset ipp and mpp
+			);
 
-	// Init dblk
+		// Init dblk
 #define LPF_LINEBUF_MODE_CTU_BASED
-	//must be defined for DUAL_CORE
+		//must be defined for DUAL_CORE
 
-	data32 = READ_VREG(HEVC_DBLK_CFGB);
-	data32 |= (2 << 0);
-	WRITE_VREG(HEVC_DBLK_CFGB, data32); // [3:0] cfg_video_type -> AVS2
+		data32 = READ_VREG(HEVC_DBLK_CFGB);
+		data32 |= (2 << 0);
+		WRITE_VREG(HEVC_DBLK_CFGB, data32); // [3:0] cfg_video_type -> AVS2
 #ifdef LPF_LINEBUF_MODE_CTU_BASED
-	WRITE_VREG(HEVC_DBLK_CFG0, (0<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
+		WRITE_VREG(HEVC_DBLK_CFG0, (0<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
 #else
-	WRITE_VREG(HEVC_DBLK_CFG0, (1<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
+		WRITE_VREG(HEVC_DBLK_CFG0, (1<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
 #endif
 
-	data32 = READ_VREG(HEVC_DBLK_CFGB_DBE1);
-	data32 |= (2 << 0);
-	WRITE_VREG(HEVC_DBLK_CFGB_DBE1, data32); // [3:0] cfg_video_type -> AVS2
+		data32 = READ_VREG(HEVC_DBLK_CFGB_DBE1);
+		data32 |= (2 << 0);
+		WRITE_VREG(HEVC_DBLK_CFGB_DBE1, data32); // [3:0] cfg_video_type -> AVS2
 #ifdef LPF_LINEBUF_MODE_CTU_BASED
-	WRITE_VREG(HEVC_DBLK_CFG0_DBE1, (0<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
+		WRITE_VREG(HEVC_DBLK_CFG0_DBE1, (0<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
 #else
-	WRITE_VREG(HEVC_DBLK_CFG0_DBE1, (1<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
+		WRITE_VREG(HEVC_DBLK_CFG0_DBE1, (1<<18) | (1 << 0)); // [18]tile based line buffer storage mode [0] rst_sync(will be self cleared)
 #endif
 
-	avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
-		"[test.c] Bitstream level Init for DBLK .Done.\n");
+		avs2_print(dec, AVS2_DBG_BUFMGR_DETAIL,
+			"[test.c] Bitstream level Init for DBLK .Done.\n");
 
-	// Initialize mcrcc and decomp perf counters
+		// Initialize mcrcc and decomp perf counters
 #if 0
-	mcrcc_perfcount_reset();
-	decomp_perfcount_reset();
+		mcrcc_perfcount_reset();
+		decomp_perfcount_reset();
 #endif
 	}//back_flag end
 	if (back_flag) {
@@ -1513,7 +1524,7 @@ static int32_t avs2_hw_init(struct AVS2Decoder_s *dec, uint8_t front_flag, uint8
 #endif
 	// End JT
 
-	if (back_flag) {
+	if (!efficiency_mode && back_flag) {
 		// Set MCR fetch priorities
 		data32 = 0x1 | (0x1 << 2) | (0x1 <<3) | (24 << 4) | (32 << 11) | (24 << 18) | (32 << 25);
 		WRITE_VREG(HEVCD_MPP_DECOMP_AXIURG_CTL, data32);
@@ -1721,12 +1732,6 @@ static void release_free_mmu_buffers(struct AVS2Decoder_s *dec)
 
 #endif
 #endif
-#ifndef MV_USE_FIXED_BUF
-				decoder_bmmu_box_free_idx(
-				dec->bmmu_box,
-				MV_BUFFER_IDX(pic->index));
-				pic->mpred_mv_wr_start_addr = 0;
-#endif
 			}
 		}
 	}
@@ -1795,7 +1800,6 @@ static int BackEnd_StartDecoding(struct AVS2Decoder_s *dec)
 		mutex_unlock(&dec->fb_mutex);
 
 		avs2_print(dec, AVS2_DBG_BUFMGR, "%s pic has error_mark, skip\n", __func__);
-		pic_backend_ref_operation(dec, 0);
 		return 1;
 	}
 
@@ -1837,6 +1841,16 @@ static int BackEnd_StartDecoding(struct AVS2Decoder_s *dec)
 
 	if (dec->front_back_mode == 1)
 		amhevc_reset_b();
+
+	/*
+		HEVC_EFFICIENCY_MODE_BACK
+		bit[0] 1: open efficiency mode, 0: close efficiency mode
+	*/
+	if (efficiency_mode) {
+		WRITE_VREG(HEVC_EFFICIENCY_MODE_BACK, (READ_VREG(HEVC_EFFICIENCY_MODE_BACK) | (1<<0)));
+	} else {
+		WRITE_VREG(HEVC_EFFICIENCY_MODE_BACK, (READ_VREG(HEVC_EFFICIENCY_MODE_BACK) & (~(1<<0))));
+	}
 	avs2_hw_init(dec, 0, 1);
 	if (dec->front_back_mode == 3) {
 		WRITE_VREG(dec->backend_ASSIST_MBOX0_IRQ_REG, 1);
@@ -1949,6 +1963,9 @@ static void config_mpred_hw_fb(struct AVS2Decoder_s *dec)
 	int32_t mv_rd_en;
 	int32_t col_isIntra;
 
+	if (avs2_dec->error_fref[0] != NULL)
+		col_pic = avs2_dec->error_fref[0];
+
 	if (avs2_dec->img.type  != I_IMG) {
 		above_en = 1;
 		mv_wr_en = 1;
@@ -1968,8 +1985,12 @@ static void config_mpred_hw_fb(struct AVS2Decoder_s *dec)
 
 	MV_MEM_UNIT_l=avs2_dec->lcu_size_log2 == 6 ? 0x200 : avs2_dec->lcu_size_log2 == 5 ? 0x80 : 0x20;
 
-	mpred_mv_rd_end_addr = mpred_mv_rd_start_addr + ((avs2_dec->lcu_x_num * avs2_dec->lcu_y_num) * MV_MEM_UNIT_l);
-
+#ifndef MV_USE_FIXED_BUF
+	mpred_mv_rd_end_addr = mpred_mv_rd_start_addr + col_pic->mv_size;
+#else
+	mpred_mv_rd_end_addr = mpred_mv_rd_start_addr +
+		((avs2_dec->lcu_x_num * avs2_dec->lcu_y_num) * MV_MEM_UNIT_l);
+#endif
 	//mpred_above_buf_start = buf_spec->mpred_above.buf_start;
 
 	avs2_print(dec, AVS2_DBG_BUFMGR_MORE,
@@ -2017,25 +2038,46 @@ static void config_mpred_hw_fb(struct AVS2Decoder_s *dec)
 	WRITE_VREG(HEVC_MPRED_COL_POC, avs2_dec->img.imgtr_next_P);
 
 	//below MPRED Ref_POC_xx_Lx registers must follow Ref_POC_xx_L0 -> Ref_POC_xx_L1 in pair write order!!!
-	WRITE_VREG(HEVC_MPRED_L0_REF00_POC, avs2_dec->fref[0]->imgtr_fwRefDistance);
+	if (avs2_dec->error_fref[0] != 0)
+		WRITE_VREG(HEVC_MPRED_L0_REF00_POC, avs2_dec->error_fref[0]->imgtr_fwRefDistance);
+	else
+		WRITE_VREG(HEVC_MPRED_L0_REF00_POC, avs2_dec->fref[0]->imgtr_fwRefDistance);
 	WRITE_VREG(HEVC_MPRED_L1_REF00_POC, avs2_dec->fref[0]->ref_poc[0]);
 
-	WRITE_VREG(HEVC_MPRED_L0_REF01_POC,avs2_dec->fref[1]->imgtr_fwRefDistance);
+	if (avs2_dec->error_fref[1] != 0)
+		WRITE_VREG(HEVC_MPRED_L0_REF01_POC, avs2_dec->error_fref[1]->imgtr_fwRefDistance);
+	else
+		WRITE_VREG(HEVC_MPRED_L0_REF01_POC, avs2_dec->fref[1]->imgtr_fwRefDistance);
 	WRITE_VREG(HEVC_MPRED_L1_REF01_POC,avs2_dec->fref[0]->ref_poc[1]);
 
-	WRITE_VREG(HEVC_MPRED_L0_REF02_POC,avs2_dec->fref[2]->imgtr_fwRefDistance);
+	if (avs2_dec->error_fref[2] != 0)
+		WRITE_VREG(HEVC_MPRED_L0_REF02_POC, avs2_dec->error_fref[2]->imgtr_fwRefDistance);
+	else
+		WRITE_VREG(HEVC_MPRED_L0_REF02_POC,avs2_dec->fref[2]->imgtr_fwRefDistance);
 	WRITE_VREG(HEVC_MPRED_L1_REF02_POC,avs2_dec->fref[0]->ref_poc[2]);
 
-	WRITE_VREG(HEVC_MPRED_L0_REF03_POC,avs2_dec->fref[3]->imgtr_fwRefDistance);
+	if (avs2_dec->error_fref[3] != 0)
+		WRITE_VREG(HEVC_MPRED_L0_REF03_POC, avs2_dec->error_fref[3]->imgtr_fwRefDistance);
+	else
+		WRITE_VREG(HEVC_MPRED_L0_REF03_POC,avs2_dec->fref[3]->imgtr_fwRefDistance);
 	WRITE_VREG(HEVC_MPRED_L1_REF03_POC,avs2_dec->fref[0]->ref_poc[3]);
 
-	WRITE_VREG(HEVC_MPRED_L0_REF04_POC,avs2_dec->fref[4]->imgtr_fwRefDistance);
+	if (avs2_dec->error_fref[4] != 0)
+		WRITE_VREG(HEVC_MPRED_L0_REF04_POC, avs2_dec->error_fref[4]->imgtr_fwRefDistance);
+	else
+		WRITE_VREG(HEVC_MPRED_L0_REF04_POC,avs2_dec->fref[4]->imgtr_fwRefDistance);
 	WRITE_VREG(HEVC_MPRED_L1_REF04_POC,avs2_dec->fref[0]->ref_poc[4]);
 
-	WRITE_VREG(HEVC_MPRED_L0_REF05_POC,avs2_dec->fref[5]->imgtr_fwRefDistance);
+	if (avs2_dec->error_fref[5] != 0)
+		WRITE_VREG(HEVC_MPRED_L0_REF05_POC, avs2_dec->error_fref[5]->imgtr_fwRefDistance);
+	else
+		WRITE_VREG(HEVC_MPRED_L0_REF05_POC,avs2_dec->fref[5]->imgtr_fwRefDistance);
 	WRITE_VREG(HEVC_MPRED_L1_REF05_POC,avs2_dec->fref[0]->ref_poc[5]);
 
-	WRITE_VREG(HEVC_MPRED_L0_REF06_POC,avs2_dec->fref[6]->imgtr_fwRefDistance);
+	if (avs2_dec->error_fref[6] != 0)
+		WRITE_VREG(HEVC_MPRED_L0_REF06_POC, avs2_dec->error_fref[6]->imgtr_fwRefDistance);
+	else
+		WRITE_VREG(HEVC_MPRED_L0_REF06_POC,avs2_dec->fref[6]->imgtr_fwRefDistance);
 	WRITE_VREG(HEVC_MPRED_L1_REF06_POC,avs2_dec->fref[0]->ref_poc[6]);
 
 	WRITE_VREG(HEVC_MPRED_MV_RD_END_ADDR,mpred_mv_rd_end_addr);

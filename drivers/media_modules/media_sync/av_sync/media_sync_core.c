@@ -73,15 +73,13 @@ static u64 last_pcr;
 # define PAGE_SIZE 4096
 #endif
 
-#if IS_ENABLED(CONFIG_AMLOGIC_DVB_DMX)
 extern int demux_get_pcr(int demux_device_index, int index, u64 *pcr);
-#else
-int demux_get_pcr(int demux_device_index, int index, u64 *pcr) {return -1;}
-#endif
 
 extern int register_mediasync_vpts_set_cb(void* pfunc);
 extern int register_mediasync_apts_set_cb(void* pfunc);
 
+typedef int (*pfun_mediasync_video_hold_set)(int dev_id,s32 flag);
+static pfun_mediasync_video_hold_set mediasync_video_hold_set = NULL;
 static u64 get_llabs(s64 value){
 	u64 llvalue;
 	if (value > 0) {
@@ -131,7 +129,7 @@ static MediaSyncManager* get_media_sync_manager(s32 sSyncInsId,const char* from,
 			}
 		}
 	}
-	if (ret == NULL) {
+	if (ret == NULL && media_sync_debug_level) {
 		mediasync_pr_error("Invalid sSyncInsId:%d from %s:%d\n",sSyncInsId,from,line);
 	}
 	return ret;
@@ -763,6 +761,13 @@ static long mediasync_ins_init_syncinfo(mediasync_ins* pInstance) {
 	pInstance->mAudioFormat.format = -1;
 	pInstance->mAudioFormat.samplerate = -1;
 	pInstance->mCacheFrames = 0;
+
+	pInstance->mAudioSwitch.mOn = 0;
+	pInstance->mAudioSwitch.mSetByUser = 0;
+	pInstance->mAudioSwitch.mPts = -1;
+	pInstance->mAudioSwitch.mSystemTimeUs = -1;
+	pInstance->mAudioSwitch.mReserved[0] = 0;
+	pInstance->mAudioSwitch.mReserved[1] = 0;
 	return 0;
 }
 
@@ -784,6 +789,8 @@ static void mediasync_ins_reset_l(mediasync_ins* pInstance) {
 		pInstance->mStcParmUpdateCount = 0;
 		pInstance->isVideoFrameAdvance = 0;
 		pInstance->mFreeRunType = 0;
+		pInstance->mVideoTrickMode = 0;
+		pInstance->mStartStrategy = 0xFF;
 		pInstance->mSlowSyncEnable = media_sync_start_slow_sync_enable;
 		if (media_sync_calculate_cache_enable) {
 			pTable = &pInstance->frame_table[PTS_TYPE_AUDIO];
@@ -851,6 +858,7 @@ long mediasync_ins_alloc(s32 sDemuxId,
 			pInstance->isVideoFrameAdvance = 0;
 			pInstance->mVideoTrickMode = 0;
 			pInstance->mFreeRunType = 0;
+			pInstance->mStartStrategy = 0xFF;
 			snprintf(pInstance->atrace_video,
 				sizeof(pInstance->atrace_video), "msync_v_%d", *sSyncInsId);
 			snprintf(pInstance->atrace_audio,
@@ -1868,7 +1876,7 @@ long mediasync_ins_set_curvideoframeinfo(MediaSyncManager* pSyncManage, mediasyn
 	ATRACE_COUNTER(pInstance->atrace_video, info.framePts);
 	pInstance->mSyncInfo.curVideoInfo.framePts = info.framePts;
 	pInstance->mSyncInfo.curVideoInfo.frameSystemTime = info.frameSystemTime;
-	pInstance->mTrackMediaTime = div_u64(info.framePts * 100 , 9);
+	pInstance->mTrackMediaTime = div_s64(info.framePts * 100 , 9);
 	pInstance->mVideoCacheUpdateCount++;
 	if (media_sync_calculate_cache_enable) {
 		pInstance->frame_table[PTS_TYPE_VIDEO].mLastProcessedPts = info.framePts;
@@ -3078,7 +3086,7 @@ void mediasync_ins_get_video_cache_info_implementation(mediasync_ins* pInstance,
 				if (cacheDuration > 0) {
 					info->cacheDuration = cacheDuration;
 				} else {
-					cacheDuration = 0;
+					info->cacheDuration = 0;
 				}
 				if (pInstance->mVideoDiscontinueInfo.isDiscontinue == 1) {
 					pInstance->mVideoDiscontinueInfo.lastDiscontinuePtsBefore = pInstance->mVideoDiscontinueInfo.discontinuePtsBefore;
@@ -3671,6 +3679,7 @@ long mediasync_ins_ext_ctrls_ioctrl(MediaSyncManager* pSyncManage, ulong arg, un
 	if (pSyncManage == NULL) {
 		return -1;
 	}
+	pInstance = pSyncManage->pInstance;
 
 	if (copy_from_user((void *)&mediasyncUserControl,
 				(void *)arg,
@@ -3719,6 +3728,7 @@ long mediasync_ins_ext_ctrls_ioctrl(MediaSyncManager* pSyncManage, ulong arg, un
 		case GET_SLOW_SYNC_ENABLE:
 		case GET_TRICK_MODE:
 		case GET_AUDIO_WORK_MODE:
+		case GET_START_STRATEGY:
 		{
 			mediasync_ins_ext_ctrls(pSyncManage,&mediasyncUserControl);
 			if (copy_to_user((void *)arg,&mediasyncUserControl,sizeof(mediasyncControl))) {
@@ -3732,11 +3742,32 @@ long mediasync_ins_ext_ctrls_ioctrl(MediaSyncManager* pSyncManage, ulong arg, un
 		case SET_SLOW_SYNC_ENABLE:
 		case SET_TRICK_MODE:
 		case SET_FREE_RUN_TYPE:
+		case SET_START_STRATEGY:
 		{
 			mediasync_ins_ext_ctrls(pSyncManage,&mediasyncUserControl);
 			break;
 		}
-
+		case SET_VIDEO_HOLD:
+		{
+			if (is_compat_ptr == 1) {
+		#ifdef CONFIG_COMPAT
+				mediasyncUserControl.ptr = (ulong)compat_ptr(mediasyncUserControl.ptr);
+		#endif
+			}
+			if (copy_from_user((void *)&pInstance->mHoldVideoInfo,
+						(void *)mediasyncUserControl.ptr,
+						sizeof(pInstance->mHoldVideoInfo))) {
+				pr_info("copy_from_user -EFAULT \n");
+				ret = -EFAULT;
+			} else {
+				mediasync_pr_info(0,pInstance,"set video hold vfm_id:%d value:%d \n",
+					pInstance->mHoldVideoInfo.vfm_id,pInstance->mHoldVideoInfo.flag);
+				if (mediasync_video_hold_set) {
+					mediasync_video_hold_set(pInstance->mHoldVideoInfo.vfm_id,pInstance->mHoldVideoInfo.flag);
+				}
+			}
+			break;
+		}
 		default:
 			break;
 	}
@@ -3817,9 +3848,23 @@ long mediasync_ins_ext_ctrls(MediaSyncManager* pSyncManage,mediasync_control* me
 			break;
 		}
 		case GET_AUDIO_WORK_MODE:
+		{
 			mediasyncControl->value = pInstance->mSyncInfo.audioPacketsInfo.isworkingchannel;
 			ret = 0;
 			break;
+		}
+		case SET_START_STRATEGY:
+		{
+			pInstance->mStartStrategy = mediasyncControl->value;
+			ret = 0;
+			break;
+		}
+		case GET_START_STRATEGY:
+		{
+			mediasyncControl->value = pInstance->mStartStrategy;
+			ret = 0;
+			break;
+		}
 		default:
 			break;
 	}
@@ -3968,6 +4013,64 @@ long mediasync_ins_set_pcr_and_dmx_id(MediaSyncManager* pSyncManage, s32 sDemuxI
 	return 0;
 }
 
+long mediasync_ins_set_audio_switch(MediaSyncManager* pSyncManage, mediasync_audio_switch audioSwitch) {
+
+	mediasync_ins* pInstance = NULL;
+	unsigned long flags = 0;
+	if (pSyncManage == NULL) {
+		return -1;
+	}
+
+	spin_lock_irqsave(&(pSyncManage->m_lock),flags);
+	pInstance = pSyncManage->pInstance;
+	if (pInstance == NULL) {
+		spin_unlock_irqrestore(&(pSyncManage->m_lock),flags);
+		return -1;
+	}
+
+	pInstance->mAudioSwitch.mOn = audioSwitch.mOn;
+	pInstance->mAudioSwitch.mSetByUser = audioSwitch.mSetByUser;
+	pInstance->mAudioSwitch.mPts = audioSwitch.mPts;
+	mediasync_pr_info(1, pInstance, "set audio switch:%d\n", audioSwitch.mOn);
+
+	pInstance->mStcParmUpdateCount++;
+
+	spin_unlock_irqrestore(&(pSyncManage->m_lock),flags);
+
+	return 0;
+}
+
+long mediasync_ins_get_audio_switch(MediaSyncManager* pSyncManage, mediasync_audio_switch* audioSwitch) {
+
+	mediasync_ins* pInstance = NULL;
+	unsigned long flags = 0;
+	if (pSyncManage == NULL) {
+		return -1;
+	}
+
+	spin_lock_irqsave(&(pSyncManage->m_lock),flags);
+	pInstance = pSyncManage->pInstance;
+	if (pInstance == NULL) {
+		spin_unlock_irqrestore(&(pSyncManage->m_lock),flags);
+		return -1;
+	}
+	audioSwitch->mOn = pInstance->mAudioSwitch.mOn;
+	audioSwitch->mSetByUser = pInstance->mAudioSwitch.mSetByUser;
+	audioSwitch->mPts = pInstance->mAudioSwitch.mPts;
+	audioSwitch->mSystemTimeUs = get_system_time_us();
+	spin_unlock_irqrestore(&(pSyncManage->m_lock),flags);
+
+	return 0;
+}
+
+int register_mediasync_video_hold_set_cb(void* pfunc) {
+	if (pfunc == NULL) {
+		return -1;
+	}
+	mediasync_video_hold_set = (pfun_mediasync_video_hold_set)(int (*)(int, s32))(pfunc);
+	return 0;
+}
+EXPORT_SYMBOL(register_mediasync_video_hold_set_cb);
 module_param(media_sync_debug_level, uint, 0664);
 MODULE_PARM_DESC(media_sync_debug_level, "\n mediasync debug level\n");
 

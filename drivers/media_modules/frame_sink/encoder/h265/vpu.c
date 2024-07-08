@@ -57,6 +57,7 @@
 
 #include <linux/amlogic/media/utils/vdec_reg.h>
 #include "../../../common/media_clock/switch/amports_gate.h"
+#include "../common/encoder_report.h"
 
 #include "vpu.h"
 #include "vmm.h"
@@ -120,7 +121,11 @@ static s32 s_interrupt_flag;
 static wait_queue_head_t s_interrupt_wait_q;
 
 static spinlock_t s_vpu_lock = __SPIN_LOCK_UNLOCKED(s_vpu_lock);
-static DEFINE_SEMAPHORE(s_vpu_sem);
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
+	static DEFINE_SEMAPHORE(s_vpu_sem);
+#else
+	static DEFINE_SEMAPHORE(s_vpu_sem, 1);
+#endif
 static struct list_head s_vbp_head = LIST_HEAD_INIT(s_vbp_head);
 static struct list_head s_inst_list_head = LIST_HEAD_INIT(s_inst_list_head);
 static struct tasklet_struct hevc_tasklet;
@@ -151,6 +156,11 @@ static u32 vpu_multi_src_addr_config(struct vpu_multi_dma_buf_info_t *pinfo,
 		struct file *filp);
 static s32 vpu_multi_src_addr_unmap(struct vpu_multi_dma_buf_info_t *dma_info,
 		struct file *filp);
+
+static void set_log_level(const char *module, int level)
+{
+	print_level = level;
+}
 
 static void dma_flush(u32 buf_start, u32 buf_size)
 {
@@ -1857,7 +1867,11 @@ static s32 vpu_map_to_register(struct file *fp, struct vm_area_struct *vm)
 {
 	ulong pfn;
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
 	vm->vm_flags |= VM_IO | VM_RESERVED;
+#else
+	vm_flags_set(vm, VM_IO | VM_RESERVED);
+#endif
 	vm->vm_page_prot =
 		pgprot_noncached(vm->vm_page_prot);
 	pfn = s_vpu_register.phys_addr >> PAGE_SHIFT;
@@ -1869,7 +1883,11 @@ static s32 vpu_map_to_register(struct file *fp, struct vm_area_struct *vm)
 static s32 vpu_map_to_physical_memory(
 	struct file *fp, struct vm_area_struct *vm)
 {
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
 	vm->vm_flags |= VM_IO | VM_RESERVED;
+#else
+	vm_flags_set(vm, VM_IO | VM_RESERVED);
+#endif
 	if (vm->vm_pgoff ==
 		(s_common_memory.phys_addr >> PAGE_SHIFT)) {
 		vm->vm_page_prot =
@@ -1897,7 +1915,11 @@ static s32 vpu_map_to_instance_pool_memory(
 	s8 *vmalloc_area_ptr = (s8 *)s_instance_pool.base;
 	ulong pfn;
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
 	vm->vm_flags |= VM_RESERVED;
+#else
+	vm_flags_set(vm, VM_RESERVED);
+#endif
 
 	/* loop over all pages, map it page individually */
 	while (length > 0) {
@@ -1935,6 +1957,7 @@ static int vpu_dma_buffer_map(struct vpu_dma_cfg *cfg)
 {
 	int ret = -1;
 	int fd = -1;
+	struct page *page = NULL;
 	struct dma_buf *dbuf = NULL;
 	struct dma_buf_attachment *d_att = NULL;
 	struct sg_table *sg = NULL;
@@ -1967,6 +1990,8 @@ static int vpu_dma_buffer_map(struct vpu_dma_cfg *cfg)
 		enc_pr(LOG_ERROR, "failed to get dma sg\n");
 		goto map_attach_err;
 	}
+	page = sg_page(sg->sgl);
+	cfg->paddr = PFN_PHYS(page_to_pfn(page));
 	cfg->dbuf = dbuf;
 	cfg->attach = d_att;
 	cfg->vaddr = vaddr;
@@ -2015,23 +2040,17 @@ static void vpu_dma_buffer_unmap(struct vpu_dma_cfg *cfg)
 
 static int vpu_dma_buffer_get_phys(struct vpu_dma_cfg *cfg, unsigned long *addr)
 {
-	struct sg_table *sg_table;
-	struct page *page;
-	int ret;
-
-	ret = vpu_dma_buffer_map(cfg);
-	if (ret < 0) {
-		printk("vpu_dma_buffer_map failed\n");
-		return ret;
+	int ret = 0;
+	if (cfg->paddr == 0)
+	{ /* only mapp once */
+		ret = vpu_dma_buffer_map(cfg);
+		if (ret < 0) {
+			enc_pr(LOG_ERROR, "vpu_dma_buffer_map failed\n");
+			return ret;
+		}
 	}
-	if (cfg->sg) {
-		sg_table = cfg->sg;
-		page = sg_page(sg_table->sgl);
-		*addr = PFN_PHYS(page_to_pfn(page));
-		ret = 0;
-	}
-	enc_pr(LOG_INFO,"vpu_dma_buffer_get_phys\n");
-
+	if (cfg->paddr) *addr = cfg->paddr;
+	enc_pr(LOG_INFO,"vpu_dma_buffer_get_phys 0x%lx\n", cfg->paddr);
 	return ret;
 }
 
@@ -2250,8 +2269,8 @@ static const struct file_operations vpu_fops = {
 	.mmap = vpu_mmap,
 };
 
-static ssize_t hevcenc_status_show(struct class *cla,
-				  struct class_attribute *attr, char *buf)
+static ssize_t hevcenc_status_show(KV_CLASS_CONST struct class *cla,
+				  KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf)
 {
 	return snprintf(buf, 40, "hevcenc_status_show\n");
 }
@@ -2794,6 +2813,9 @@ static s32 __init vpu_init(void)
 	res = platform_driver_register(&vpu_driver);
 	enc_pr(LOG_INFO,
 		"end vpu_init result=0x%x\n", res);
+
+	if (res == 0)
+		enc_register_set_debug_level_func(DEBUG_AMVENC_265, set_log_level);
 	return res;
 }
 

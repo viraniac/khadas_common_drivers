@@ -30,7 +30,7 @@ struct canvas_status_s {
 };
 
 #define CANVAS_MAX_SIZE (AMVDEC_CANVAS_MAX1 - AMVDEC_CANVAS_START_INDEX + 1 + AMVDEC_CANVAS_MAX2 + 1)
-#define CANVAS_MAX_SIZE_S1A 0x3a
+#define CANVAS_MAX_SIZE_S1A 0x31
 
 /* internal canvas */
 #define CANVAS_ADDR_LMASK       0x1fffffff
@@ -67,7 +67,7 @@ unsigned long vdec_cav_get_addr(int index);
 
 bool is_support_vdec_canvas(void);
 
-void vdec_canvas_port_register(struct vdec_s *vdec);
+int vdec_canvas_port_register(struct vdec_s *vdec);
 
 #endif
 

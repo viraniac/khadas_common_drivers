@@ -83,6 +83,33 @@ struct file_private_data {
 #define DV_TYPE		(2)
 #define HDR10P_TYPE	(4)
 
+struct set_param_info {
+	const char *file;
+	const char *function;
+	int line;
+	u32 event;
+};
+
+#define __VDEC_EVENT_POST(ctx, type, func)		\
+	do {						\
+		struct set_param_info param = {		\
+			.file = __FILE__,		\
+			.function = __FUNCTION__,	\
+			.line = __LINE__,		\
+			.event = type			\
+		};					\
+		func(ctx, type, &param);		\
+	} while (0)
+
+#define vdec_v4l_post_error_event(ctx, type) \
+	__VDEC_EVENT_POST(ctx, type, __vdec_v4l_post_error_event)
+
+#define aml_vdec_dispatch_event(ctx, type) \
+	__VDEC_EVENT_POST(ctx, type, __aml_vdec_dispatch_event)
+
+#define vdec_v4l_post_error_frame_event(ctx) \
+	__VDEC_EVENT_POST(ctx, V4L2_EVENT_REPORT_ERROR_FRAME, __vdec_v4l_post_error_frame_event)
+
 /*
  * struct aml_buf - decoder frame buffer
  * @mem_type	: gather or scatter memory.
@@ -190,13 +217,13 @@ void aml_vcodec_dec_release(struct aml_vcodec_ctx *ctx);
 int aml_vcodec_dec_ctrls_setup(struct aml_vcodec_ctx *ctx);
 void wait_vcodec_ending(struct aml_vcodec_ctx *ctx);
 void vdec_frame_buffer_release(void *data);
-void aml_vdec_dispatch_event(struct aml_vcodec_ctx *ctx, u32 changes);
+void __aml_vdec_dispatch_event(struct aml_vcodec_ctx *ctx, u32 changes, struct set_param_info *param);
 void* v4l_get_vf_handle(int fd);
 void aml_v4l_vpp_release_early(struct aml_vcodec_ctx * ctx);
 void aml_v4l_ctx_release(struct kref *kref);
 void dmabuff_recycle_worker(struct work_struct *work);
 ssize_t aml_buffer_status(struct aml_vcodec_ctx *ctx, char *buf);
-void aml_compressed_info_show(struct aml_vcodec_ctx *ctx);
+ssize_t aml_compressed_info_show(struct aml_vcodec_ctx *ctx, char *buf);
 void cal_compress_buff_info(ulong used_page_num, struct aml_vcodec_ctx *ctx);
 
 ssize_t aml_vdec_basic_information(struct aml_vcodec_ctx *ctx, char *buf);
@@ -229,6 +256,6 @@ ssize_t dump_cma_and_sys_memsize(struct aml_vcodec_ctx *ctx, char *buf);
 
 ulong get_addr(struct vb2_buffer *vb, int i);
 
-
+void aml_vdec_wake_up(struct aml_vcodec_ctx *ctx);
 
 #endif /* _AML_VCODEC_DEC_H_ */

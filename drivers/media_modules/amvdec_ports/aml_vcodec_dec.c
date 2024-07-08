@@ -17,6 +17,7 @@
  *
  * Description:
  */
+#define DEBUG
 #include <media/v4l2-event.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-dma-contig.h>
@@ -46,6 +47,7 @@
 #include "aml_vcodec_adapt.h"
 #include "aml_vcodec_vpp.h"
 #include "aml_vcodec_ge2d.h"
+#include "aml_vcodec_dec_infoserver.h"
 
 #include "../frame_provider/decoder/utils/decoder_bmmu_box.h"
 #include "../frame_provider/decoder/utils/decoder_mmu_box.h"
@@ -56,6 +58,7 @@
 #include "../frame_provider/decoder/utils/aml_buf_helper.h"
 #include "../common/media_utils/media_utils.h"
 #include "../frame_provider/decoder/utils/vdec_v4l2_buffer_ops.h"
+#include "../common/chips/decoder_cpu_ver_info.h"
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 #include <linux/amlogic/media/amdolbyvision/dolby_vision.h>
 #endif
@@ -68,6 +71,7 @@
 #include <linux/meson_ion.h>
 #endif
 
+MODULE_IMPORT_NS(DMA_BUF);
 
 #define OUT_FMT_IDX		(0) //default h264
 #define CAP_FMT_IDX		(14) //capture nv21m
@@ -81,7 +85,7 @@
 #define V4L2_CID_USER_AMLOGIC_BASE (V4L2_CID_USER_BASE + 0x1100)
 #define AML_V4L2_SET_DRMMODE (V4L2_CID_USER_AMLOGIC_BASE + 0)
 #define AML_V4L2_GET_INPUT_BUFFER_NUM (V4L2_CID_USER_AMLOGIC_BASE + 1)
-#define AML_V4L2_SET_DURATION (V4L2_CID_USER_AMLOGIC_BASE + 2)
+#define AML_V4L2_SET_UEVENT_DURATION (V4L2_CID_USER_AMLOGIC_BASE + 2)
 #define AML_V4L2_GET_FILMGRAIN_INFO (V4L2_CID_USER_AMLOGIC_BASE + 3)
 #define AML_V4L2_SET_INPUT_BUFFER_NUM_CACHE (V4L2_CID_USER_AMLOGIC_BASE + 4)
 #define AML_V4L2_GET_DECODER_INFO (V4L2_CID_USER_AMLOGIC_BASE + 5)
@@ -92,11 +96,15 @@
 #define AML_V4L2_GET_INST_ID (V4L2_CID_USER_AMLOGIC_BASE + 8)
 #define AML_V4L2_SET_STREAM_MODE (V4L2_CID_USER_AMLOGIC_BASE + 9)
 #define AML_V4L2_SET_ES_DMABUF_TYPE (V4L2_CID_USER_AMLOGIC_BASE + 10)
+#define AML_V4L2_SET_VF_DURATION (V4L2_CID_USER_AMLOGIC_BASE + 11)
+#define AML_V4L2_GET_WIDTH_ALIGN (V4L2_CID_USER_AMLOGIC_BASE + 12)
+#define AML_V4L2_GET_DECINFO_SET (V4L2_CID_USER_AMLOGIC_BASE + 13)
 
 #define V4L2_EVENT_PRIVATE_EXT_VSC_BASE (V4L2_EVENT_PRIVATE_START + 0x2000)
 #define V4L2_EVENT_PRIVATE_EXT_VSC_EVENT (V4L2_EVENT_PRIVATE_EXT_VSC_BASE + 1)
 #define V4L2_EVENT_PRIVATE_EXT_SEND_ERROR (V4L2_EVENT_PRIVATE_EXT_VSC_BASE + 2)
 #define V4L2_EVENT_PRIVATE_EXT_REPORT_ERROR_FRAME (V4L2_EVENT_PRIVATE_EXT_VSC_BASE + 3)
+#define V4L2_EVENT_PRIVATE_EXT_REPORT_DECINFO (V4L2_EVENT_PRIVATE_EXT_VSC_BASE + 4)
 
 #define WORK_ITEMS_MAX (32)
 #define MAX_DI_INSTANCE (2)
@@ -412,9 +420,10 @@ static struct aml_q_data *aml_vdec_get_q_data(struct aml_vcodec_ctx *ctx,
 	return &ctx->q_data[AML_Q_DATA_DST];
 }
 
-void aml_vdec_dispatch_event(struct aml_vcodec_ctx *ctx, u32 changes)
+void __aml_vdec_dispatch_event(struct aml_vcodec_ctx *ctx, u32 changes, struct set_param_info *param)
 {
 	struct v4l2_event event = {0};
+	const char *event_str = event_to_string(changes);
 
 	switch (changes) {
 	case V4L2_EVENT_SRC_CH_RESOLUTION:
@@ -436,6 +445,14 @@ void aml_vdec_dispatch_event(struct aml_vcodec_ctx *ctx, u32 changes)
 		v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO, "report error frame timestamp: %llu\n",
 			ctx->current_timestamp);
 		break;
+	case V4L2_EVENT_REPORT_DEC_INFO:
+		event.type = V4L2_EVENT_PRIVATE_EXT_REPORT_DECINFO;
+		event.id = ctx->dec_intf.dec_info_args.sub_cmd;
+		memcpy(&event.u.data[0], &ctx->dec_intf.dec_info_args.version_magic, sizeof(int));
+		memcpy(&event.u.data[4], &ctx->dec_intf.dec_info_args.event_cnt, sizeof(int));
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO, "report dec_info type: 0x%x\n",
+			ctx->dec_intf.dec_info_args.sub_cmd);
+		break;
 	default:
 		v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
 			"unsupport dispatch event %x\n", changes);
@@ -443,10 +460,11 @@ void aml_vdec_dispatch_event(struct aml_vcodec_ctx *ctx, u32 changes)
 	}
 
 	v4l2_event_queue_fh(&ctx->fh, &event);
-	if (changes != V4L2_EVENT_SRC_CH_HDRINFO)
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO, "changes: %x\n", changes);
-	else
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO, "changes: %x\n", changes);
+	if ((changes != V4L2_EVENT_SRC_CH_HDRINFO) && (changes != V4L2_EVENT_REPORT_DEC_INFO))
+		v4l_pr_debug(ctx, V4L_DEBUG_CODEC_PRINFO,"Post event: %s\n", event_str);
+
+	v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO,"Post event: %s, type: %x, fun: %s, %d\n",
+		event_str, event.type, param->function, param->line);
 }
 
 static void aml_vdec_flush_decoder(struct aml_vcodec_ctx *ctx)
@@ -559,6 +577,15 @@ static bool ge2d_needed(struct aml_vcodec_ctx *ctx, u32* mode)
 		return false;
 
 	if (is_cpu_t7()) {
+		int dw_mode = DM_YUV_ONLY;
+
+		if (ctx->output_pix_fmt == V4L2_PIX_FMT_H264 && !vdec_if_get_param(ctx, GET_PARAM_DW_MODE, &dw_mode)) {
+			if (dw_mode != DM_YUV_ONLY) {
+				pr_info("h264 mmu already exist,no need to use ge2d\n");
+				return false;
+			}
+		}
+
 		if ((ctx->output_pix_fmt != V4L2_PIX_FMT_H264) &&
 			(ctx->output_pix_fmt != V4L2_PIX_FMT_MPEG1) &&
 			(ctx->output_pix_fmt != V4L2_PIX_FMT_MPEG2) &&
@@ -630,8 +657,11 @@ static u32 v4l_buf_size_decision(struct aml_vcodec_ctx *ctx)
 
 	if (ctx->enable_di_post &&
 		ctx->picinfo.field != V4L2_FIELD_NONE &&
-		is_vdec_core_fmt(ctx))
+		is_vdec_core_fmt(ctx)) {
+		picinfo->dpb_margin = (picinfo->dpb_margin + 1) >> 1;
+		ctx->dpb_size = picinfo->dpb_frames + picinfo->dpb_margin;
 		ctx->dpb_size *= PAIR_DONE;
+	}
 
 	if (ctx->enable_di_post && (is_vdec_core_fmt(ctx)) &&
 		ctx->dpb_size > 2 * V4L_CAP_BUFF_MAX) {
@@ -786,7 +816,7 @@ void vdec_frame_buffer_release(void *data)
 	}
 
 	memset(data, 0, sizeof(struct file_private_data));
-	kfree(data);
+	aml_media_mem_free(data);
 }
 
 void aml_clean_proxy_uvm(struct aml_vcodec_ctx *ctx)
@@ -864,8 +894,8 @@ void fbc_transcode_and_set_vf(struct aml_vcodec_ctx *ctx,
 				/* only Y will contain vframe */
 				comp_buf_set_vframe(ctx, vb2_buf, vf);
 				v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO,
-					"set vf(%px) into %dth buf\n",
-					vf, vb2_buf->index);
+					"set vf(%px, %d) omx_index %d , into %dth buf, dbuf %px vf_ext %px\n",
+					vf, vf->index, vf->omx_index, vb2_buf->index, dma, vf->vf_ext);
 			}
 		}
 	}
@@ -993,17 +1023,22 @@ ssize_t dump_cma_and_sys_memsize(struct aml_vcodec_ctx *ctx, char *buf)
 
 		if (!IS_ERR(fp)) {
 			struct vb2_buffer *vb = vb2_buf;
+			void *y_vaddr = codec_mm_vmap(aml_buf->planes[0].addr, aml_buf->planes[0].length);
+
 			// dump y data
-			u8 *yuv_data_addr = aml_yuv_dump(fp, (u8 *)vb2_plane_vaddr(vb, 0),
+			u8 *uv_vaddr = aml_yuv_dump(fp, (u8 *)y_vaddr,
 				vf->width, vf->height, 64);
 			// dump uv data
 			if (vb->num_planes == 1) {
-				aml_yuv_dump(fp, yuv_data_addr, vf->width,
+				aml_yuv_dump(fp, uv_vaddr, vf->width,
 					vf->height / 2, 64);
 			} else {
-				aml_yuv_dump(fp, (u8 *)vb2_plane_vaddr(vb, 1),
+				uv_vaddr = (u8 *)codec_mm_vmap(aml_buf->planes[1].addr, aml_buf->planes[1].length);
+				aml_yuv_dump(fp, uv_vaddr,
 					vf->width, vf->height / 2, 64);
+				codec_mm_unmap_phyaddr(uv_vaddr);
 			}
+			codec_mm_unmap_phyaddr(y_vaddr);
 
 			pr_info("dump idx: %d %dx%d\n", dump_capture_frame, vf->width, vf->height);
 			dump_capture_frame--;
@@ -1041,6 +1076,7 @@ ssize_t dump_cma_and_sys_memsize(struct aml_vcodec_ctx *ctx, char *buf)
 			ctx->reset_flag = V4L_RESET_MODE_LIGHT;
 			ctx->vpp_cfg.res_chg = true;
 			ctx->last_decoded_picinfo = ctx->picinfo;
+			ctx->resolution_event_done = true;
 			/*
 			 * After all buffers containing decoded frames from
 			 * before the resolution change point ready to be
@@ -1300,65 +1336,90 @@ ssize_t aml_buffer_status(struct aml_vcodec_ctx *ctx, char *buf)
 	return pbuf - buf;
 }
 
-void aml_compressed_info_show(struct aml_vcodec_ctx *ctx)
+ssize_t aml_compressed_info_show(struct aml_vcodec_ctx *ctx, char *buf)
 {
 	struct aml_q_data *outq = NULL;
 	struct vdec_pic_info pic;
 	int i;
+	int buf_size = PAGE_SIZE;
+	int tsize = 0;
 	u32 aerage_mem_size;
 	u32 max_avg_val_by_proup;
 	struct v4l_compressed_buffer_info *buffer = &ctx->compressed_buf_info;
 	u64 used_page_sum = buffer->used_page_sum;
+	char *pbuf = buf;
+	char *alloc_buf = NULL;
 
 	if (!(debug_mode & V4L_DEBUG_CODEC_COUNT))
-		return;
+		return 0;
 
 	if (vdec_if_get_param(ctx, GET_PARAM_PIC_INFO, &pic)) {
 		v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
 			"get pic info err\n");
-		return;
+		return 0;
+	}
+
+	if (!buf) {
+		alloc_buf = vzalloc(buf_size);
+		pbuf = alloc_buf;
+		if (!pbuf) {
+			v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
+				"Failed to alloc memory\n");
+			return 0;
+		}
 	}
 
 	outq = aml_vdec_get_q_data(ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
-
-	pr_info("==== Show mmu buffer info ======== \n");
+	pbuf += sprintf(pbuf, "==== Show mmu buffer info ======== \n");
 	if (buffer->recycle_num == 0) {
-		pr_info("No valid info \n");
-		return;
+		pbuf += sprintf(pbuf, "No valid info \n");
+		goto out;
 	}
+
 	mutex_lock(&ctx->compressed_buf_info_lock);
-	v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
-		"Fmt:%s, DW/TW:(%x, %x), Res:%dx%d, DPB:%d\n",
+	pbuf += sprintf(pbuf, "Fmt:%s, DW/TW:(%x, %x), Res:%dx%d, DPB:%d\n",
 		outq->fmt->name,
 		ctx->config.parm.dec.cfg.double_write_mode,
 		ctx->config.parm.dec.cfg.triple_write_mode,
 		pic.visible_width,
 		pic.visible_height,
 		ctx->dpb_size);
-
 	do_div(used_page_sum, buffer->recycle_num);
 	aerage_mem_size = ((u32)used_page_sum * 100) / PAGE_NUM_ONE_MB;
-	v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
-		"mmu mem recycle num: %u, average used mmu mem %u.%u%u(MB)\n",
+	pbuf += sprintf(pbuf, "mmu mem recycle num: %u, average used mmu mem %u.%u%u(MB)\n",
 		buffer->recycle_num, aerage_mem_size / 100, (aerage_mem_size % 100) / 10, aerage_mem_size % 10);
 
 	max_avg_val_by_proup = buffer->max_avg_val_by_group * 100 / PAGE_NUM_ONE_MB;
-	v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
-		"%d buffer in group, max avg used mem by group %u.%u%u(MB)\n", ctx->dpb_size,
+	pbuf += sprintf(pbuf, "%d buffer in group, max avg used mem by group %u.%u%u(MB)\n", ctx->dpb_size,
 		max_avg_val_by_proup / 100, (max_avg_val_by_proup % 100) / 10, max_avg_val_by_proup % 10);
 
-	v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,"mmu mem used distribution ratio\n");
+	pbuf += sprintf(pbuf, "mmu mem used distribution ratio\n");
 
+	if (alloc_buf) {
+		pr_info("%s\n", alloc_buf);
+		tsize = pbuf - alloc_buf;
+	}
 	for (i = 0; i < MAX_AVBC_BUFFER_SIZE; i++) {
 		u32 count = buffer->used_page_distributed_array[i];
-		//if (count)
-			v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
-				"range %d [%dMB ~ %dMB] distribution num %d ratio %u%%\n",
-				i, i, i+1, count, (count * 100) / buffer->recycle_num);
+		pbuf += sprintf(pbuf, "range %d [%dMB ~ %dMB] distribution num %d ratio %u%%\n",
+			i, i, i+1, count, (count * 100) / buffer->recycle_num);
+
+		if (alloc_buf) {
+			pr_info("%s", alloc_buf + tsize);
+			tsize = pbuf - alloc_buf;
+		}
 	}
 
 	mutex_unlock(&ctx->compressed_buf_info_lock);
-	pr_info("==== End Show mmu buffer info ========");
+	pbuf += sprintf(pbuf, "==== End Show mmu buffer info ========\n");
+out:
+	if (alloc_buf) {
+		pr_info("%s", alloc_buf + tsize);
+		vfree(alloc_buf);
+		return 0;
+	}
+
+	return pbuf - buf;
 }
 
 static void reconfig_vpp_status(struct aml_vcodec_ctx *ctx)
@@ -1619,12 +1680,12 @@ void stop_pipeline(struct aml_vcodec_ctx *ctx)
 {
 	if (ctx->ge2d) {
 		aml_v4l2_ge2d_thread_stop(ctx->ge2d);
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO, "ge2d stop.\n");
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "ge2d stop.\n");
 	}
 
 	if (ctx->vpp) {
 		aml_v4l2_vpp_thread_stop(ctx->vpp);
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO, "vpp stop\n");
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "vpp stop\n");
 	}
 }
 
@@ -1723,7 +1784,7 @@ int aml_thread_start(struct aml_vcodec_ctx *ctx, aml_thread_func func,
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
 	int ret = 0;
 
-	thread = kzalloc(sizeof(*thread), GFP_KERNEL);
+	thread = aml_media_mem_alloc(sizeof(*thread), GFP_KERNEL);
 	if (thread == NULL)
 		return -ENOMEM;
 
@@ -1749,7 +1810,7 @@ int aml_thread_start(struct aml_vcodec_ctx *ctx, aml_thread_func func,
 	return 0;
 
 err:
-	kfree(thread);
+	aml_media_mem_free(thread);
 
 	return ret;
 }
@@ -1771,7 +1832,7 @@ void aml_thread_stop(struct aml_vcodec_ctx *ctx)
 		up(&thread->sem);
 		kthread_stop(thread->task);
 		thread->task = NULL;
-		kfree(thread);
+		aml_media_mem_free(thread);
 	}
 }
 EXPORT_SYMBOL_GPL(aml_thread_stop);
@@ -1905,9 +1966,7 @@ static void aml_uvm_buf_delay_free(struct uvm_buf_obj *obj)
 		dma_buf_put(mbuf->idmabuf[1]);
 	}
 
-	kref_put(&ctx->ctx_ref, aml_v4l_ctx_release);
-
-	kfree(mbuf);
+	aml_media_mem_free(mbuf);
 }
 
 static void aml_uvm_copy_sgt(struct sg_table *dst_table,
@@ -1961,18 +2020,36 @@ static int aml_uvm_buf_delay_alloc(struct aml_vcodec_ctx *ctx,
 
 	if ((vb->vb2_buf.memory != VB2_MEMORY_DMABUF) ||
 		!dbuf ||
-		!dmabuf_is_uvm(dbuf) ||
-		am_buf->is_delay_allocated)
+		!dmabuf_is_uvm(dbuf))
 		return 0;
 
 	obj = dmabuf_get_uvm_buf_obj(dbuf);
 	mbuf = container_of(obj, struct mua_buffer, base);
 
+	if (am_buf->is_delay_allocated) {
+		struct aml_buf *master_buf = am_buf->pair == BUF_MASTER ?
+					am_buf : am_buf->master_buf;
+
+		if (master_buf->pair_state == PAIR_DONE &&
+			am_buf->pair_state == PAIR_DONE)
+			return 0;
+
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_BUFMGR,
+			"Buffers pairing hasn't been completed! Repair!\n");
+		if (ctx->master_buf == NULL &&
+			am_buf->pair_state != PAIR_DONE) {
+			ctx->master_buf = am_buf;
+			am_buf->pair_state = MASTER_DONE;
+			am_buf->pair = BUF_MASTER;
+			aml_buf_get_ref(&ctx->bm, am_buf);
+
+			goto update;
+		}
+	}
+
 	/* free fake dma buffer. */
 	if (mbuf->idmabuf[0])
 		dma_buf_put(mbuf->idmabuf[0]);
-	if (mbuf->idmabuf[1])
-		dma_buf_put(mbuf->idmabuf[1]);
 
 	v4l_dbg(ctx, V4L_DEBUG_CODEC_BUFMGR,
 				"dma buffer size(fake: %zu, real: %d)\n",
@@ -1982,11 +2059,10 @@ static int aml_uvm_buf_delay_alloc(struct aml_vcodec_ctx *ctx,
 	mbuf->size =  ctx->picinfo.y_len_sz + ctx->picinfo.c_len_sz;
 
 	handle = dbuf->priv;
-	if (handle->ua->obj->arg)
-		kref_put(&ctx->ctx_ref, aml_v4l_ctx_release);
 
 	if (ctx->master_buf) {
 		struct aml_buf *master_buf = ctx->master_buf;
+		struct aml_buf *sub_buf = NULL;
 
 		if (master_buf->pair_state == MASTER_DONE) {
 			master_buf->sub_buf[0] = (void *)am_buf;
@@ -1994,8 +2070,7 @@ static int aml_uvm_buf_delay_alloc(struct aml_vcodec_ctx *ctx,
 			am_buf->pair = BUF_SUB0;
 			aml_buf_put(&ctx->bm, am_buf);
 		}
-
-		if (master_buf->pair_state == SUB0_DONE) {
+		else if (master_buf->pair_state == SUB0_DONE) {
 			master_buf->sub_buf[1] = (void *)am_buf;
 			am_buf->master_buf = (void *)master_buf;
 			am_buf->pair = BUF_SUB1;
@@ -2004,6 +2079,14 @@ static int aml_uvm_buf_delay_alloc(struct aml_vcodec_ctx *ctx,
 
 		am_buf->is_delay_allocated = true;
 		master_buf->pair_state++;
+		if (master_buf->sub_buf[0]) {
+			sub_buf = master_buf->sub_buf[0];
+			sub_buf->pair_state = master_buf->pair_state;
+		}
+		if (master_buf->sub_buf[1]) {
+			sub_buf = master_buf->sub_buf[1];
+			sub_buf->pair_state = master_buf->pair_state;
+		}
 		if (master_buf->pair_state == PAIR_DONE)
 			ctx->master_buf = NULL;
 		else
@@ -2093,16 +2176,16 @@ static int aml_uvm_buf_delay_alloc(struct aml_vcodec_ctx *ctx,
 		sgt		= ibuf->sg_table;
 	} else {
 		mbuf->paddr	= sg_dma_address(sgt->sgl);
-		mbuf->sg_table	= ua->sgt;
+		mbuf->sg_table	= ua->sgt[0];
 		mbuf->ibuffer[0] = (void *)idbuf->priv;
 		mbuf->idmabuf[0] = idbuf;
 	}
 	am_buf->idmabuf[0] = idbuf;
 	/* update sg table. */
-	aml_uvm_copy_sgt(ua->sgt, sgt);
+	aml_uvm_copy_sgt(ua->sgt[0], sgt);
 
 	/* fill aml buffer information. */
-	am_buf->cap_sgt	= ua->sgt;
+	am_buf->cap_sgt	= ua->sgt[0];
 	cap_sgt         = vb2_dma_sg_plane_desc(&vb->vb2_buf, 0);
 	memcpy(cap_sgt, am_buf->cap_sgt, sizeof(struct sg_table));
 	am_buf->is_delay_allocated = true;
@@ -2132,8 +2215,7 @@ static int aml_uvm_buf_delay_alloc(struct aml_vcodec_ctx *ctx,
 		}
 	}
 
-	kref_get(&ctx->ctx_ref);
-
+update:
 	aml_buf_update(&ctx->bm, get_addr(&vb->vb2_buf, 0), am_buf);
 
 	v4l_dbg(ctx, V4L_DEBUG_CODEC_BUFMGR,
@@ -2218,7 +2300,7 @@ static int vidioc_decoder_streamon(struct file *file, void *priv,
 						return ret;
 					}
 
-					v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+					v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 						"vpp_wrapper instance count: %d\n",
 						atomic_read(&ctx->dev->vpp_count));
 				}
@@ -2241,6 +2323,7 @@ static int vidioc_decoder_streamon(struct file *file, void *priv,
 		}
 
 		ctx->is_stream_off = false;
+		aml_buf_workqueue_enable(&ctx->bm);
 	} else {
 		ctx->is_out_stream_off = false;
 		ctx->es_wkr_stop = false;
@@ -2702,6 +2785,11 @@ void aml_vcodec_dec_set_default_params(struct aml_vcodec_ctx *ctx)
 		"vcodec state (AML_STATE_IDLE)\n");
 }
 
+void aml_vdec_wake_up(struct aml_vcodec_ctx *ctx)
+{
+	vdec_thread_wakeup(ctx->ada_ctx);
+}
+
 static int vidioc_vdec_qbuf(struct file *file, void *priv,
 	struct v4l2_buffer *buf)
 {
@@ -2820,6 +2908,8 @@ static int vidioc_vdec_subscribe_evt(struct v4l2_fh *fh,
 		return v4l2_event_subscribe(fh, sub, 10, NULL);
 	case V4L2_EVENT_PRIVATE_EXT_SEND_ERROR:
 		return v4l2_event_subscribe(fh, sub, 5, NULL);
+	case V4L2_EVENT_PRIVATE_EXT_REPORT_DECINFO:
+		return v4l2_event_subscribe(fh, sub, 60, NULL);
 	default:
 		return v4l2_ctrl_subscribe_event(fh, sub);
 	}
@@ -2836,7 +2926,8 @@ static int vidioc_vdec_event_unsubscribe(struct v4l2_fh *fh,
 	return v4l2_event_unsubscribe(fh, sub);
 }
 
-static int vidioc_try_fmt(struct v4l2_format *f, struct aml_video_fmt *fmt)
+static int vidioc_try_fmt(struct aml_vcodec_ctx *ctx, struct v4l2_format *f,
+	struct aml_video_fmt *fmt)
 {
 	int i;
 	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
@@ -2855,7 +2946,7 @@ static int vidioc_try_fmt(struct v4l2_format *f, struct aml_video_fmt *fmt)
 				if (pix_mp->field == V4L2_FIELD_ANY)
 					pix_mp->field = V4L2_FIELD_NONE;
 
-				pr_info("%s, field: %u, fmt: %x\n",
+				v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "%s, field: %u, fmt: %x\n",
 					__func__, pix_mp->field,
 					pix_mp->pixelformat);
 			}
@@ -2898,7 +2989,7 @@ static int vidioc_try_fmt(struct v4l2_format *f, struct aml_video_fmt *fmt)
 				if (pix->field == V4L2_FIELD_ANY)
 					pix->field = V4L2_FIELD_NONE;
 
-				pr_info("%s, field: %u, fmt: %x\n",
+				v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "%s, field: %u, fmt: %x\n",
 					__func__, pix->field,
 					pix->pixelformat);
 			}
@@ -2958,7 +3049,7 @@ static int vidioc_try_fmt_vid_cap_out(struct file *file, void *priv,
 		fmt = aml_vdec_find_format(f);
 	}
 
-	vidioc_try_fmt(f, fmt);
+	vidioc_try_fmt(ctx, f, fmt);
 
 	q_data = aml_vdec_get_q_data(ctx, f->type);
 	if (!q_data)
@@ -3129,6 +3220,7 @@ static void update_ctx_dimension(struct aml_vcodec_ctx *ctx, u32 type)
 	struct aml_q_data *q_data;
 	unsigned int dw_mode = DM_YUV_ONLY;
 	unsigned int tw_mode = DM_INVALID;
+	int w_align = 64;
 	int ratio = 1;
 
 	q_data = aml_vdec_get_q_data(ctx, type);
@@ -3139,24 +3231,30 @@ static void update_ctx_dimension(struct aml_vcodec_ctx *ctx, u32 type)
 	if (ctx->internal_dw_scale)
 		ratio = vdec_get_size_ratio(dw_mode);
 
+	/* If it is h264 mmu, but interlace stream, driver will disable mmu and set DW
+	 * to DM_YUV_ONLY. Driver will set width alignment to 64, also satisfy width
+	 * alignment 32
+	 */
+	if ((!is_vdec_core_fmt(ctx) || (dw_mode != DM_YUV_ONLY)) && is_hevc_align32(0))
+		w_align = 32;
+
 	if (V4L2_TYPE_IS_MULTIPLANAR(type)) {
 		q_data->sizeimage[0] = ctx->picinfo.y_len_sz;
 		q_data->sizeimage[1] = ctx->picinfo.c_len_sz;
 
-		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 		q_data->coded_height = ALIGN(ctx->picinfo.coded_height / ratio, 64);
-
-		q_data->bytesperline[0] = ALIGN(ctx->picinfo.coded_width / ratio, 64);
-		q_data->bytesperline[1] = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->bytesperline[0] = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
+		q_data->bytesperline[1] = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 
 		q_data->bytesperline[0] = q_data->bytesperline[0] << is_output_p010(dw_mode);
 		q_data->bytesperline[1] = q_data->bytesperline[1] << is_output_p010(dw_mode);
 	} else {
-		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 		q_data->coded_height = ALIGN(ctx->picinfo.coded_height / ratio, 64);
 		q_data->sizeimage[0] = ctx->picinfo.y_len_sz;
 		q_data->sizeimage[0] += ctx->picinfo.c_len_sz;
-		q_data->bytesperline[0] = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->bytesperline[0] = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 		q_data->bytesperline[0] = q_data->bytesperline[0] << is_output_p010(dw_mode);
 	}
 
@@ -3174,20 +3272,19 @@ static void update_ctx_dimension(struct aml_vcodec_ctx *ctx, u32 type)
 		q_data->sizeimage_tw[0] = ctx->picinfo.y_len_sz_tw;
 		q_data->sizeimage_tw[1] = ctx->picinfo.c_len_sz_tw;
 
-		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 		q_data->coded_height = ALIGN(ctx->picinfo.coded_height / ratio, 64);
-
-		q_data->bytesperline_tw[0] = ALIGN(ctx->picinfo.coded_width / ratio, 64);
-		q_data->bytesperline_tw[1] = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->bytesperline_tw[0] = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
+		q_data->bytesperline_tw[1] = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 
 		q_data->bytesperline_tw[0] = q_data->bytesperline_tw[0] << is_output_p010(tw_mode);
 		q_data->bytesperline_tw[1] = q_data->bytesperline_tw[1] << is_output_p010(tw_mode);
 	} else {
-		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->coded_width = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 		q_data->coded_height = ALIGN(ctx->picinfo.coded_height / ratio, 64);
 		q_data->sizeimage_tw[0] = ctx->picinfo.y_len_sz_tw;
 		q_data->sizeimage_tw[0] += ctx->picinfo.c_len_sz_tw;
-		q_data->bytesperline_tw[0] = ALIGN(ctx->picinfo.coded_width / ratio, 64);
+		q_data->bytesperline_tw[0] = ALIGN(ctx->picinfo.coded_width / ratio, w_align);
 		q_data->bytesperline_tw[0] = q_data->bytesperline_tw[0] << is_output_p010(tw_mode);
 	}
 }
@@ -3216,6 +3313,9 @@ static void copy_v4l2_format_dimension(struct aml_vcodec_ctx *ctx,
 		pix_mp->height		= q_data->coded_height;
 		pix_mp->num_planes	= q_data->fmt->num_planes;
 		pix_mp->pixelformat	= q_data->fmt->fourcc;
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "%d: w: %d, h: %d, size: %d\n",
+			__LINE__, pix_mp->width, pix_mp->height,
+			pix_mp->pixelformat);
 
 		for (i = 0; i < q_data->fmt->num_planes; i++) {
 			pix_mp->plane_fmt[i].bytesperline = q_data->bytesperline[i];
@@ -3232,6 +3332,10 @@ static void copy_v4l2_format_dimension(struct aml_vcodec_ctx *ctx,
 		pix->pixelformat	= q_data->fmt->fourcc;
 		pix->bytesperline	= q_data->bytesperline[0];
 		pix->sizeimage		= q_data->sizeimage[0];
+
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "%d: w: %d, h: %d, size: %d\n",
+			__LINE__, pix_mp->width, pix_mp->height,
+			pix_mp->pixelformat);
 
 		if ((dw_mode == DM_AVBC_ONLY) && tw_mode) {
 			pix->bytesperline	= q_data->bytesperline_tw[0];
@@ -3251,13 +3355,19 @@ static int vidioc_vdec_s_fmt(struct file *file, void *priv,
 	struct aml_video_fmt *fmt;
 	struct vb2_queue *dst_vq;
 
+	if (!ctx) {
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
+			"ctx is NULL\n");
+		return -1;
+	}
+
 	v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 		"%s, type: %u, planes: %u, fmt: %x\n",
 		__func__, f->type,
 		V4L2_TYPE_IS_MULTIPLANAR(f->type) ?
 		f->fmt.pix_mp.num_planes : 1,
 		f->fmt.pix_mp.pixelformat);
-
+	ctx->is_multiplanar = V4L2_TYPE_IS_MULTIPLANAR(f->type) ? true: false;
 	dst_vq = v4l2_m2m_get_vq(ctx->m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	if (!dst_vq) {
 		v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
@@ -3296,7 +3406,7 @@ static int vidioc_vdec_s_fmt(struct file *file, void *priv,
 	}
 
 	q_data->fmt = fmt;
-	vidioc_try_fmt(f, q_data->fmt);
+	vidioc_try_fmt(ctx, f, q_data->fmt);
 
 	if (V4L2_TYPE_IS_OUTPUT(f->type) && ctx->drv_handle && ctx->receive_cmd_stop) {
 		ctx->state = AML_STATE_IDLE;
@@ -3734,13 +3844,16 @@ static int vb2ops_vdec_buf_prepare(struct vb2_buffer *vb)
 
 	q_data = aml_vdec_get_q_data(ctx, vb->vb2_queue->type);
 
-	for (i = 0; i < q_data->fmt->num_planes; i++) {
-		if (vb2_plane_size(vb, i) < q_data->sizeimage[i] &&
-			vb2_plane_size(vb, i) != PAGE_SIZE) {
-			v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
-				"data will not fit into plane %d (%lu < %d)\n",
-				i, vb2_plane_size(vb, i),
-				q_data->sizeimage[i]);
+	if (!(ctx->enable_di_post && ctx->picinfo.field != V4L2_FIELD_NONE &&
+		is_vdec_core_fmt(ctx))) {
+		for (i = 0; i < q_data->fmt->num_planes; i++) {
+			if (vb2_plane_size(vb, i) < q_data->sizeimage[i] &&
+				vb2_plane_size(vb, i) != PAGE_SIZE) {
+				v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
+					"data will not fit into plane %d (%lu < %d)\n",
+					i, vb2_plane_size(vb, i),
+					q_data->sizeimage[i]);
+			}
 		}
 	}
 
@@ -3753,13 +3866,13 @@ void aml_alloc_buffer(struct aml_vcodec_ctx *ctx, int flag)
 
 	if (flag & DV_TYPE) {
 		for (i = 0; i < V4L_CAP_BUFF_MAX; i++) {
-			ctx->aux_infos.bufs[i].md_buf = vzalloc(MD_BUF_SIZE);
+			ctx->aux_infos.bufs[i].md_buf = aml_media_mem_alloc(MD_BUF_SIZE, GFP_KERNEL);
 			if (ctx->aux_infos.bufs[i].md_buf == NULL) {
 				v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
 					"v4l2 alloc %dth dv md buffer fail\n", i);
 			}
 
-			ctx->aux_infos.bufs[i].comp_buf = vzalloc(COMP_BUF_SIZE);
+			ctx->aux_infos.bufs[i].comp_buf = aml_media_mem_alloc(COMP_BUF_SIZE, GFP_KERNEL);
 			if (ctx->aux_infos.bufs[i].comp_buf == NULL) {
 				v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR,
 					"v4l2 alloc %dth dv comp buffer fail\n", i);
@@ -3769,7 +3882,7 @@ void aml_alloc_buffer(struct aml_vcodec_ctx *ctx, int flag)
 
 	if (flag & SEI_TYPE) {
 		for (i = 0; i < V4L_CAP_BUFF_MAX; i++) {
-			ctx->aux_infos.bufs[i].sei_buf = vzalloc(SEI_BUF_SIZE);
+			ctx->aux_infos.bufs[i].sei_buf = aml_media_mem_alloc(SEI_BUF_SIZE, GFP_KERNEL);
 			if (ctx->aux_infos.bufs[i].sei_buf) {
 				ctx->aux_infos.bufs[i].sei_size  = 0;
 				ctx->aux_infos.bufs[i].sei_state = 1;
@@ -3789,7 +3902,7 @@ void aml_alloc_buffer(struct aml_vcodec_ctx *ctx, int flag)
 
 	if (flag & HDR10P_TYPE) {
 		for (i = 0; i < V4L_CAP_BUFF_MAX; i++) {
-			ctx->aux_infos.bufs[i].hdr10p_buf = vzalloc(HDR10P_BUF_SIZE);
+			ctx->aux_infos.bufs[i].hdr10p_buf = aml_media_mem_alloc(HDR10P_BUF_SIZE, GFP_KERNEL);
 			if (ctx->aux_infos.bufs[i].hdr10p_buf) {
 				v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO,
 					"v4l2 alloc %dth hdr10p buffer:%px\n",
@@ -3810,12 +3923,12 @@ void aml_free_buffer(struct aml_vcodec_ctx *ctx, int flag)
 	if (flag & DV_TYPE) {
 		for (i = 0; i < V4L_CAP_BUFF_MAX; i++) {
 			if (ctx->aux_infos.bufs[i].md_buf != NULL) {
-				vfree(ctx->aux_infos.bufs[i].md_buf);
+				aml_media_mem_free(ctx->aux_infos.bufs[i].md_buf);
 				ctx->aux_infos.bufs[i].md_buf = NULL;
 			}
 
 			if (ctx->aux_infos.bufs[i].comp_buf != NULL) {
-				vfree(ctx->aux_infos.bufs[i].comp_buf);
+				aml_media_mem_free(ctx->aux_infos.bufs[i].comp_buf);
 				ctx->aux_infos.bufs[i].comp_buf = NULL;
 			}
 		}
@@ -3827,7 +3940,7 @@ void aml_free_buffer(struct aml_vcodec_ctx *ctx, int flag)
 				v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO,
 					"v4l2 free %dth aux buffer:%px\n",
 					i, ctx->aux_infos.bufs[i].sei_buf);
-				vfree(ctx->aux_infos.bufs[i].sei_buf);
+				aml_media_mem_free(ctx->aux_infos.bufs[i].sei_buf);
 				ctx->aux_infos.bufs[i].sei_state = 0;
 				ctx->aux_infos.bufs[i].sei_size = 0;
 				ctx->aux_infos.bufs[i].sei_buf = NULL;
@@ -3841,7 +3954,7 @@ void aml_free_buffer(struct aml_vcodec_ctx *ctx, int flag)
 				v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO,
 					"v4l2 free %dth hdr10p buffer:%px\n",
 					i, ctx->aux_infos.bufs[i].hdr10p_buf);
-				vfree(ctx->aux_infos.bufs[i].hdr10p_buf);
+				aml_media_mem_free(ctx->aux_infos.bufs[i].hdr10p_buf);
 				ctx->aux_infos.bufs[i].hdr10p_buf = NULL;
 			}
 		}
@@ -4030,7 +4143,7 @@ void aml_v4l_vpp_release_early(struct aml_vcodec_ctx * ctx)
 		atomic_dec(&ctx->dev->vpp_count);
 		ctx->vpp = NULL;
 
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 			"vpp destroy inst count:%d.\n",
 			atomic_read(&ctx->dev->vpp_count));
 	}
@@ -4047,7 +4160,7 @@ void aml_v4l_ctx_release(struct kref *kref)
 		atomic_dec(&ctx->dev->vpp_count);
 		ctx->vpp = NULL;
 
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 			"vpp destroy inst count:%d.\n",
 			atomic_read(&ctx->dev->vpp_count));
 	}
@@ -4055,7 +4168,7 @@ void aml_v4l_ctx_release(struct kref *kref)
 	if (ctx->ge2d) {
 		aml_v4l2_ge2d_destroy(ctx->ge2d);
 
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 			"ge2d destroy.\n");
 	}
 
@@ -4088,7 +4201,7 @@ void aml_v4l_ctx_release(struct kref *kref)
 
 	aml_es_mgr_release(ctx);
 
-	kfree(ctx);
+	aml_media_mem_free(ctx);
 }
 
 static void aml_uvm_buf_free(void *arg)
@@ -4348,7 +4461,7 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 	src_mem.timestamp = vb->timestamp;
 	src_mem.meta_ptr = (ulong)buf->meta_data;
 
-	if (vdec_if_probe(ctx, &src_mem, NULL)) {
+	if (vdec_if_probe(ctx, &src_mem)) {
 		v4l2_m2m_src_buf_remove(ctx->m2m_ctx);
 
 		/* frame mode and non-dbuf mode. */
@@ -4418,8 +4531,6 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 		ctx->picinfo.dpb_margin,
 		CTX_BUF_TOTAL(ctx));
 
-	aml_vdec_dispatch_event(ctx, V4L2_EVENT_SRC_CH_RESOLUTION);
-
 	mutex_lock(&ctx->state_lock);
 	if (ctx->state == AML_STATE_INIT) {
 		ctx->state = AML_STATE_PROBE;
@@ -4428,6 +4539,8 @@ static void vb2ops_vdec_buf_queue(struct vb2_buffer *vb)
 			"vcodec state (AML_STATE_PROBE)\n");
 	}
 	mutex_unlock(&ctx->state_lock);
+
+	aml_vdec_dispatch_event(ctx, V4L2_EVENT_SRC_CH_RESOLUTION);
 }
 
 static void vb2ops_vdec_buf_finish(struct vb2_buffer *vb)
@@ -4460,7 +4573,7 @@ static int vb2ops_vdec_buf_init(struct vb2_buffer *vb)
 					struct vb2_v4l2_buffer, vb2_buf);
 	struct aml_v4l2_buf *buf = container_of(vb2_v4l2,
 					struct aml_v4l2_buf, vb);
-	u32 size, phy_addr = 0;
+	u32 size;
 	int i;
 	int ret;
 
@@ -4482,16 +4595,6 @@ static int vb2ops_vdec_buf_init(struct vb2_buffer *vb)
 			strncpy(buf->mem_owner, owner, sizeof(buf->mem_owner));
 			buf->mem_owner[sizeof(buf->mem_owner) - 1] = '\0';
 			__putname(owner);
-
-			for (i = 0; i < vb->num_planes; i++) {
-				size = vb->planes[i].length;
-				phy_addr = vb2_dma_contig_plane_dma_addr(vb, i);
-				buf->mem[i] = v4l_reqbufs_from_codec_mm(buf->mem_owner,
-						phy_addr, size, vb->index);
-				v4l_dbg(ctx, V4L_DEBUG_CODEC_BUFMGR,
-						"OUT %c alloc, addr: %x, size: %u, idx: %u\n",
-						(i == 0? 'Y':'C'), phy_addr, size, vb->index);
-			}
 		} else if (vb->memory == VB2_MEMORY_DMABUF) {
 			unsigned int dw_mode = DM_YUV_ONLY;
 
@@ -4512,7 +4615,7 @@ static int vb2ops_vdec_buf_init(struct vb2_buffer *vb)
 				dma = vb->planes[i].dbuf;
 
 				if (!dmabuf_is_uvm(dma))
-					v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO, "non-uvm dmabuf\n");
+					v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "non-uvm dmabuf\n");
 			}
 		}
 	}
@@ -4521,7 +4624,7 @@ static int vb2ops_vdec_buf_init(struct vb2_buffer *vb)
 		ulong key;
 		if (vb->memory == VB2_MEMORY_DMABUF)
 			key = (ulong)vb->planes[0].dbuf;
-		if (vb->memory == VB2_MEMORY_MMAP)
+		else if (vb->memory == VB2_MEMORY_MMAP)
 			key = vb2_dma_contig_plane_dma_addr(vb, 0);
 
 		ret = aml_buf_attach(&ctx->bm, key,
@@ -4554,27 +4657,23 @@ static int vb2ops_vdec_buf_init(struct vb2_buffer *vb)
 static void vb2ops_vdec_buf_cleanup(struct vb2_buffer *vb)
 {
 	struct aml_vcodec_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
-	struct vb2_v4l2_buffer *vb2_v4l2 = container_of(vb,
-					struct vb2_v4l2_buffer, vb2_buf);
-	struct aml_v4l2_buf *buf = container_of(vb2_v4l2,
-					struct aml_v4l2_buf, vb);
+	struct dma_buf *dbuf = vb->planes[0].dbuf;
 
 	v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "%s, type: %d, idx: %d\n",
 		__func__, vb->vb2_queue->type, vb->index);
 
 	if (!V4L2_TYPE_IS_OUTPUT(vb->type)) {
-		if (vb->memory == VB2_MEMORY_MMAP) {
-			int i;
+		if (vb->memory == VB2_MEMORY_MMAP ||
+			((vb->memory == VB2_MEMORY_DMABUF) && !dmabuf_is_uvm(dbuf))) {
+			ulong key;
 
-			for (i = 0; i < vb->num_planes ; i++) {
-				v4l_dbg(ctx, V4L_DEBUG_CODEC_BUFMGR,
-					"OUT %c clean, addr: %lx, size: %u, idx: %u\n",
-					(i == 0)? 'Y':'C',
-					buf->mem[i]->phy_addr, buf->mem[i]->buffer_size, vb->index);
-				v4l_freebufs_back_to_codec_mm(buf->mem_owner, buf->mem[i]);
-				buf->mem[i] = NULL;
-			}
-			aml_buf_detach(&ctx->bm, vb2_dma_contig_plane_dma_addr(vb, 0));
+			if (vb->memory == VB2_MEMORY_DMABUF)
+				key = (ulong)vb->planes[0].dbuf;
+			else
+				key = vb2_dma_contig_plane_dma_addr(vb, 0);
+
+			aml_buf_put_dma(&ctx->bm);
+			aml_buf_detach(&ctx->bm, key);
 		}
 	}
 }
@@ -4620,6 +4719,7 @@ static void vb2ops_vdec_stop_streaming(struct vb2_queue *q)
 		ctx->out_buff_cnt = 0;
 		ctx->in_buff_cnt = 0;
 		ctx->write_frames = 0;
+		ctx->master_buf = NULL;
 	}
 
 	if (V4L2_TYPE_IS_OUTPUT(q->type)) {
@@ -4653,7 +4753,7 @@ static void vb2ops_vdec_stop_streaming(struct vb2_queue *q)
 			vdec_tracing(&ctx->vtr, VTRACE_V4L_ST_0, ctx->state);
 			ctx->v4l_resolution_change = false;
 			ctx->reset_flag = V4L_RESET_MODE_NORMAL;
-			v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+			v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 				"force reset to drop es frames.\n");
 			wake_up_interruptible(&ctx->cap_wq);
 			aml_vdec_reset(ctx);
@@ -4690,14 +4790,14 @@ static void vb2ops_vdec_stop_streaming(struct vb2_queue *q)
 
 		aml_buf_reset(&ctx->bm);
 		aml_codec_connect(ctx->ada_ctx); /* for resolution change */
-		aml_compressed_info_show(ctx);
+		aml_compressed_info_show(ctx, NULL);
 		memset(&ctx->compressed_buf_info, 0, sizeof(ctx->compressed_buf_info));
 		ctx->buf_used_count = 0;
 	}
 	if (ctx->is_out_stream_off && ctx->is_stream_off) {
 		ctx->v4l_resolution_change = false;
 		ctx->reset_flag = V4L_RESET_MODE_NORMAL;
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 			"seek force reset to drop es frames.\n");
 		aml_vdec_reset(ctx);
 	}
@@ -4740,6 +4840,21 @@ static void m2mops_vdec_job_abort(void *priv)
 
 	v4l2_m2m_job_finish(ctx->dev->m2m_dev_dec, ctx->m2m_ctx);
 	v4l_dbg(ctx, V4L_DEBUG_CODEC_EXINFO, "%s\n", __func__);
+}
+
+static int get_width_align(struct aml_vcodec_ctx *ctx)
+{
+	int align = 64;
+	u32 dw;
+
+	vdec_v4l_get_dw_mode(ctx, &dw);
+
+	if (is_hevc_align32(0) && (!is_vdec_core_fmt(ctx) ||
+		(ctx->output_pix_fmt == V4L2_PIX_FMT_H264 &&
+		dw != DM_YUV_ONLY)))
+		align = 32;
+
+	return align;
 }
 
 static int aml_vdec_g_v_ctrl(struct v4l2_ctrl *ctrl)
@@ -4786,6 +4901,15 @@ static int aml_vdec_g_v_ctrl(struct v4l2_ctrl *ctrl)
 	case AML_V4L2_GET_INST_ID:
 		ctrl->val = ctx->id;
 		break;
+	case AML_V4L2_GET_WIDTH_ALIGN:
+		ctrl->val = get_width_align(ctx);
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_BUFMGR,
+			"width_align: %d\n", ctrl->val);
+		break;
+	case AML_V4L2_GET_DECINFO_SET:
+		if (aml_vcodec_decinfo_get(ctrl, ctx) < 0)
+			ret = -EINVAL;
+		break;
 	default:
 		ret = -EINVAL;
 	}
@@ -4802,11 +4926,15 @@ static int aml_vdec_try_s_v_ctrl(struct v4l2_ctrl *ctrl)
 		ctx->is_drm_mode = ctrl->val;
 		ctx->param_sets_from_ucode = true;
 		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
-			"set stream mode: %x\n", ctrl->val);
-	} else if (ctrl->id == AML_V4L2_SET_DURATION) {
+			"set DRM mode: %x\n", ctrl->val);
+	} else if (ctrl->id == AML_V4L2_SET_UEVENT_DURATION) {
 		vdec_set_duration(ctrl->val);
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
+			"set uevent duration: %x\n", ctrl->val);
+	} else if (ctrl->id == AML_V4L2_SET_VF_DURATION) {
+		vdec_set_vf_duration(ctrl->val);
 		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
-			"set duration: %x\n", ctrl->val);
+			"set vf duration: %x\n", ctrl->val);
 	} else if (ctrl->id == AML_V4L2_SET_INPUT_BUFFER_NUM_CACHE) {
 		ctx->cache_input_buffer_num = ctrl->val;
 		v4l_dbg(ctx, V4L_DEBUG_CODEC_BUFMGR,
@@ -4816,7 +4944,7 @@ static int aml_vdec_try_s_v_ctrl(struct v4l2_ctrl *ctrl)
 	} else if (ctrl->id == AML_V4L2_SET_STREAM_MODE) {
 		u32 ret;
 		ctx->stream_mode = ctrl->val;
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO, "set streambase: %x\n", ctrl->val);
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "set streambase: %x\n", ctrl->val);
 
 		if (ctx->stream_mode == true) {
 			ptsserver_ins *pIns = NULL;
@@ -4832,8 +4960,11 @@ static int aml_vdec_try_s_v_ctrl(struct v4l2_ctrl *ctrl)
 		}
 	} else if (ctrl->id == AML_V4L2_SET_ES_DMABUF_TYPE) {
 		ctx->output_dma_mode = ctrl->val;
-		v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 			"set dma buf mode: %x\n", ctrl->val);
+	} else if (ctrl->id == AML_V4L2_GET_DECINFO_SET) {
+		memcpy(&ctx->dec_intf.dec_comm, ctrl->p_new.p, sizeof(struct vdec_common_s));
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT, "set dec info");
 	}
 	return 0;
 }
@@ -4890,9 +5021,21 @@ static const struct v4l2_ctrl_config ctrl_set_input_buffer_number_cache = {
 	.def	= 0,
 };
 
-static const struct v4l2_ctrl_config ctrl_st_duration = {
-	.name	= "duration",
-	.id	= AML_V4L2_SET_DURATION,
+static const struct v4l2_ctrl_config ctrl_st_uevent_duration = {
+	.name	= "uevent_duration",
+	.id	= AML_V4L2_SET_UEVENT_DURATION,
+	.ops	= &aml_vcodec_dec_ctrl_ops,
+	.type	= V4L2_CTRL_TYPE_INTEGER,
+	.flags	= V4L2_CTRL_FLAG_WRITE_ONLY,
+	.min	= 0,
+	.max	= 96000,
+	.step	= 1,
+	.def	= 0,
+};
+
+static const struct v4l2_ctrl_config ctrl_st_vf_duration = {
+	.name	= "vf_duration",
+	.id	= AML_V4L2_SET_VF_DURATION,
 	.ops	= &aml_vcodec_dec_ctrl_ops,
 	.type	= V4L2_CTRL_TYPE_INTEGER,
 	.flags	= V4L2_CTRL_FLAG_WRITE_ONLY,
@@ -4976,6 +5119,31 @@ static const struct v4l2_ctrl_config ctrl_gt_decoder_info = {
 	.dims		= { sizeof(struct aml_decoder_status_info) },
 };
 
+static const struct v4l2_ctrl_config ctrl_get_width_align = {
+	.name	= "width align",
+	.id	= AML_V4L2_GET_WIDTH_ALIGN,
+	.ops	= &aml_vcodec_dec_ctrl_ops,
+	.type	= V4L2_CTRL_TYPE_INTEGER,
+	.flags	= V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_VOLATILE,
+	.min	= 0,
+	.max	= 256,
+	.step	= 1,
+	.def	= 0,
+};
+
+static const struct v4l2_ctrl_config ctrl_gt_decinfo_set = {
+	.name		= "decoder info_reporter",
+	.id		= AML_V4L2_GET_DECINFO_SET,
+	.ops		= &aml_vcodec_dec_ctrl_ops,
+	.type		= V4L2_CTRL_COMPOUND_TYPES,
+	.flags		= V4L2_CTRL_FLAG_VOLATILE,
+	.min		= 0,
+	.max		= 0xff,
+	.step		= 1,
+	.def		= 0,
+	.dims		= { sizeof(struct vdec_common_s) },
+};
+
 int aml_vcodec_dec_ctrls_setup(struct aml_vcodec_ctx *ctx)
 {
 	int ret;
@@ -5026,7 +5194,13 @@ int aml_vcodec_dec_ctrls_setup(struct aml_vcodec_ctx *ctx)
 		goto err;
 	}
 
-	ctrl = v4l2_ctrl_new_custom(&ctx->ctrl_hdl, &ctrl_st_duration, NULL);
+	ctrl = v4l2_ctrl_new_custom(&ctx->ctrl_hdl, &ctrl_st_uevent_duration, NULL);
+	if ((ctrl == NULL) || (ctx->ctrl_hdl.error)) {
+		ret = ctx->ctrl_hdl.error;
+		goto err;
+	}
+
+	ctrl = v4l2_ctrl_new_custom(&ctx->ctrl_hdl, &ctrl_st_vf_duration, NULL);
 	if ((ctrl == NULL) || (ctx->ctrl_hdl.error)) {
 		ret = ctx->ctrl_hdl.error;
 		goto err;
@@ -5063,6 +5237,18 @@ int aml_vcodec_dec_ctrls_setup(struct aml_vcodec_ctx *ctx)
 	}
 
 	ctrl = v4l2_ctrl_new_custom(&ctx->ctrl_hdl, &ctrl_get_inst_id, NULL);
+	if ((ctrl == NULL) || (ctx->ctrl_hdl.error)) {
+		ret = ctx->ctrl_hdl.error;
+		goto err;
+	}
+
+	ctrl = v4l2_ctrl_new_custom(&ctx->ctrl_hdl, &ctrl_get_width_align, NULL);
+	if ((ctrl == NULL) || (ctx->ctrl_hdl.error)) {
+		ret = ctx->ctrl_hdl.error;
+		goto err;
+	}
+
+	ctrl = v4l2_ctrl_new_custom(&ctx->ctrl_hdl, &ctrl_gt_decinfo_set, NULL);
 	if ((ctrl == NULL) || (ctx->ctrl_hdl.error)) {
 		ret = ctx->ctrl_hdl.error;
 		goto err;
@@ -5147,7 +5333,7 @@ static int vidioc_vdec_g_pixelaspect(struct file *file, void *fh,
 	return 0;
 }
 
-static int check_dec_cfginfo(struct aml_vdec_cfg_infos *cfg)
+static int check_dec_cfginfo(struct aml_vcodec_ctx *ctx, struct aml_vdec_cfg_infos *cfg)
 {
 	if (cfg->double_write_mode != DM_AVBC_ONLY &&
 		cfg->double_write_mode != DM_YUV_1_1_AVBC &&
@@ -5158,11 +5344,13 @@ static int check_dec_cfginfo(struct aml_vdec_cfg_infos *cfg)
 		cfg->double_write_mode != DM_AVBC_1_1 &&
 		cfg->double_write_mode != DM_YUV_AUTO_1_2_AVBC &&
 		cfg->double_write_mode != DM_YUV_AUTO_1_4_AVBC &&
+		cfg->double_write_mode != DM_YUV_AUTO_14_12_AVBC &&
 		cfg->double_write_mode != DM_YUV_1_1_10BIT_AVBC &&
 		cfg->double_write_mode != DM_YUV_1_4_10BIT_AVBC &&
 		cfg->double_write_mode != DM_YUV_1_2_10BIT_AVBC &&
-		cfg->double_write_mode != DM_YUV_1_8_10BIT_AVBC) {
-		pr_err("Invalid DW:0x%x\n", cfg->double_write_mode);
+		cfg->double_write_mode != DM_YUV_1_8_10BIT_AVBC &&
+		cfg->double_write_mode != DM_YUV_14_11_10BIT_AVBC) {
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR, "Invalid DW:0x%x\n", cfg->double_write_mode);
 		return -1;
 	}
 
@@ -5174,17 +5362,18 @@ static int check_dec_cfginfo(struct aml_vdec_cfg_infos *cfg)
 		cfg->triple_write_mode != DM_YUV_1_1_10BIT_AVBC &&
 		cfg->triple_write_mode != DM_YUV_1_4_10BIT_AVBC &&
 		cfg->triple_write_mode != DM_YUV_1_2_10BIT_AVBC &&
-		cfg->triple_write_mode != DM_YUV_1_8_10BIT_AVBC) {
-		pr_err("Invalid TW:0x%x\n", cfg->triple_write_mode);
+		cfg->triple_write_mode != DM_YUV_1_8_10BIT_AVBC &&
+		cfg->triple_write_mode != DM_YUV_14_11_10BIT_AVBC) {
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR, "Invalid TW:0x%x\n", cfg->triple_write_mode);
 		return -1;
 	}
 
 	if (cfg->ref_buf_margin > 20) {
-		pr_err("Invalid margin %d\n", cfg->ref_buf_margin);
+		v4l_dbg(ctx, V4L_DEBUG_CODEC_ERROR, "Invalid margin %d\n", cfg->ref_buf_margin);
 		return -1;
 	}
 
-	pr_info("DW:%x, TW:%x, Margin:%d\n",
+	v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO, "DW:%x, TW:%x, Margin:%d\n",
 		cfg->double_write_mode,
 		cfg->triple_write_mode,
 		cfg->ref_buf_margin);
@@ -5219,7 +5408,7 @@ static int vidioc_vdec_s_parm(struct file *file, void *fh,
 		ctx->config.type = V4L2_CONFIG_PARM_DECODE;
 
 		if (in->parms_status & V4L2_CONFIG_PARM_DECODE_CFGINFO) {
-			if (check_dec_cfginfo(&in->cfg))
+			if (check_dec_cfginfo(ctx, &in->cfg))
 				return -EINVAL;
 			dec->cfg = in->cfg;
 		}
@@ -5273,7 +5462,8 @@ static int vidioc_vdec_s_parm(struct file *file, void *fh,
 		ctx->internal_dw_scale = dec->cfg.metadata_config_flag & (1 << 13);
 		ctx->second_field_pts_mode = dec->cfg.metadata_config_flag & (1 << 12);
 		ctx->force_di_permission = dec->cfg.metadata_config_flag & (1 << 17);
-		ctx->no_fbc_output = dec->cfg.metadata_config_flag & (1 << 19);
+		if (dec->cfg.double_write_mode != 0x10)
+			ctx->no_fbc_output = dec->cfg.metadata_config_flag & (1 << 19);
 		if (force_di_permission)
 			ctx->force_di_permission = true;
 

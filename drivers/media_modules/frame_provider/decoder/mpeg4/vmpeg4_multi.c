@@ -53,6 +53,7 @@
 #include <media/v4l2-mem2mem.h>
 #include "../utils/vdec_feature.h"
 #include "../../../media_sync/pts_server/pts_server_core.h"
+#include "../../decoder/utils/vdec_profile.h"
 
 #define DRIVER_NAME "ammvdec_mpeg4"
 
@@ -101,7 +102,7 @@
 
 #define VF_POOL_SIZE          64
 #define DECODE_BUFFER_NUM_MAX 16
-#define DECODE_BUFFER_NUM_DEF 8
+#define DECODE_BUFFER_NUM_DEF 3
 #define PUT_INTERVAL        (HZ/100)
 #define MAX_BMMU_BUFFER_NUM (DECODE_BUFFER_NUM_MAX + 1)
 #define WORKSPACE_SIZE		(12*SZ_64K)
@@ -152,11 +153,10 @@ static unsigned int radr;
 static unsigned int rval;
 /* 0x40bit = 8byte */
 static unsigned int frmbase_cont_bitlevel = 0x40;
-static unsigned int dynamic_buf_num_margin;
+static unsigned int dynamic_buf_num_margin = 6;
 
-#define VMPEG4_DEV_NUM        9
-static unsigned int max_decode_instance_num = VMPEG4_DEV_NUM;
-static unsigned int max_process_time[VMPEG4_DEV_NUM];
+static unsigned int max_decode_instance_num = MAX_INSTANCE_MUN;
+static unsigned int max_process_time[MAX_INSTANCE_MUN];
 static unsigned int decode_timeout_val = 200;
 
 static u32 error_frame_skip_level = 1;
@@ -402,6 +402,12 @@ static unsigned char aspect_ratio_table[16] = {
 };
 
 static void reset_process_time(struct vdec_mpeg4_hw_s *hw);
+static u32 get_dynamic_buf_num_margin(struct vdec_mpeg4_hw_s *hw)
+{
+	return((dynamic_buf_num_margin & 0x80000000) == 0) ?
+		hw->dynamic_buf_num_margin :
+		(dynamic_buf_num_margin & 0x7fffffff);
+}
 
 static int vmpeg4_get_buf_num(struct vdec_mpeg4_hw_s *hw)
 {
@@ -1364,6 +1370,7 @@ static irqreturn_t vmpeg4_isr_thread_handler(struct vdec_s *vdec, int irq)
 		return IRQ_HANDLED;
 	} else {
 		reset_process_time(hw);
+		vdec_profile(vdec, VDEC_PROFILE_DECODED_FRAME, CORE_MASK_VDEC_1);
 		picture_type = (reg >> 3) & 7;
 		repeat_cnt = READ_VREG(MP4_NOT_CODED_CNT);
 		vop_time_inc = READ_VREG(MP4_VOP_TIME_INC);
@@ -2383,7 +2390,6 @@ static void check_timer_func(struct timer_list *timer)
 {
 	struct vdec_mpeg4_hw_s *hw = container_of(timer,
 		struct vdec_mpeg4_hw_s, check_timer);
-	struct vdec_s *vdec = hw_to_vdec(hw);
 	unsigned int timeout_val = decode_timeout_val;
 
 	if (radr != 0) {
@@ -2408,14 +2414,6 @@ static void check_timer_func(struct timer_list *timer)
 				timeout_process(hw);
 		}
 		hw->last_vld_level = READ_VREG(VLD_MEM_VIFIFO_LEVEL);
-	}
-
-	if (vdec->next_status == VDEC_STATUS_DISCONNECTED) {
-		mmpeg4_debug_print(DECODE_ID(hw), PRINT_FLAG_ERROR,
-			"vdec requested to be disconnected\n");
-		hw->dec_result = DEC_RESULT_FORCE_EXIT;
-		vdec_schedule_work(&hw->work);
-		return;
 	}
 
 	mod_timer(&hw->check_timer, jiffies + CHECK_INTERVAL);
@@ -2630,7 +2628,7 @@ static s32 vmmpeg4_init(struct vdec_mpeg4_hw_s *hw)
 	int size = -1, fw_size = 0x1000 * 16;
 	struct firmware_s *fw = NULL;
 
-	fw = vmalloc(sizeof(struct firmware_s) + fw_size);
+	fw = fw_firmare_s_creat(fw_size);
 	if (IS_ERR_OR_NULL(fw))
 		return -ENOMEM;
 
@@ -3010,18 +3008,6 @@ static int ammvdec_mpeg4_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, pdata);
 	hw->platform_dev = pdev;
 
-	if (((debug_enable & IGNORE_PARAM_FROM_CONFIG) == 0) && pdata->config_len) {
-		mmpeg4_debug_print(DECODE_ID(hw), 0, "pdata->config: %s\n", pdata->config);
-		if (get_config_int(pdata->config, "parm_v4l_buffer_margin",
-			&config_val) == 0)
-			hw->dynamic_buf_num_margin = config_val;
-		else
-			hw->dynamic_buf_num_margin = dynamic_buf_num_margin;
-	} else {
-		hw->dynamic_buf_num_margin = dynamic_buf_num_margin;
-	}
-	hw->buf_num = vmpeg4_get_buf_num(hw);
-
 	if (pdata->parallel_dec == 1) {
 		int i;
 		for (i = 0; i < DECODE_BUFFER_NUM_MAX; i++)
@@ -3052,7 +3038,7 @@ static int ammvdec_mpeg4_probe(struct platform_device *pdev)
 	if (((debug_enable & IGNORE_PARAM_FROM_CONFIG) == 0) && pdata->config_len) {
 		mmpeg4_debug_print(DECODE_ID(hw), PRINT_FLAG_RUN_FLOW,
 			 "pdata->config: %s\n", pdata->config);
-		if (get_config_int(pdata->config, "parm_v4l_buffer_margin",
+		if (get_config_int(pdata->config, "parm_buffer_margin",
 			&config_val) == 0)
 			hw->dynamic_buf_num_margin = config_val;
 		else
@@ -3089,6 +3075,7 @@ static int ammvdec_mpeg4_probe(struct platform_device *pdev)
 			&vf_tmp_ops, pdata);
 	}
 
+	hw->dynamic_buf_num_margin = get_dynamic_buf_num_margin(hw);
 	hw->buf_num = vmpeg4_get_buf_num(hw);
 
 	if (vmmpeg4_init(hw) < 0) {
@@ -3172,10 +3159,10 @@ static struct platform_driver ammvdec_mpeg4_driver = {
 	}
 };
 
-static struct codec_profile_t amvdec_mpeg4_profile = {
-	.name = "mmpeg4",
-	.profile = "v4l, no_single"
-};
+static void set_debug_flag(const char *module, int debug_flags)
+{
+	debug_enable = debug_flags;
+}
 
 static int __init ammvdec_mpeg4_driver_init_module(void)
 {
@@ -3186,8 +3173,11 @@ static int __init ammvdec_mpeg4_driver_init_module(void)
 		pr_err("failed to register ammvdec_mpeg4 driver\n");
 		return -ENODEV;
 	}
-	vcodec_profile_register(&amvdec_mpeg4_profile);
+
+	vcodec_profile_register_v2("mmpeg4", VFORMAT_MPEG4, 0);
 	vcodec_feature_register(VFORMAT_MPEG4, 0);
+	register_set_debug_flag_func(DEBUG_AMVDEC_MPEG4, set_debug_flag);
+
 	return 0;
 }
 

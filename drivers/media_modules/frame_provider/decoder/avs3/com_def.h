@@ -1546,6 +1546,8 @@ typedef struct avs3_frame_s{
 	u32 hw_front_decode_time;
 	struct vdec_info vinfo;
 	u32 stream_size; // For stream base mode
+	int mv_buf_index;
+	int mv_size;
 #endif
 #ifdef OW_TRIPLE_WRITE
 	unsigned int tw_y_adr;
@@ -1557,6 +1559,10 @@ typedef struct avs3_frame_s{
 
 	u32 triple_write_mode;
 #endif
+	struct avs3_frame_s *copy_pic;
+	int need_mmu_copy;
+	int cur_mmu_4k_number;
+	int drop_flag;
 } avs3_frame_t;
 #endif
 /* picture store structure */

@@ -156,6 +156,7 @@ static void pm_vdec_clock_on(int id)
 		amports_switch_gate("clk_vdec_mux", 1);
 		vdec_clock_hi_enable();
 	} else if (id == VDEC_HCODEC) {
+		amports_switch_gate("clk_hcodec_mux", 1);
 		hcodec_clock_enable();
 	} else if (id == VDEC_HEVC) {
 		/* enable hevc clock */
@@ -195,7 +196,9 @@ static void dos_local_config(bool is_on, int id)
 {
 	if ((get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_S5) &&
 		(get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_T5M) &&
-		(get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_T3X))
+		(get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_T3X) &&
+		(get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_S7) &&
+		(get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_S7D))
 		return;
 
 	if (is_on) {
@@ -213,13 +216,15 @@ static void dos_local_config(bool is_on, int id)
 			case VDEC_HEVCB:
 			case VDEC_HEVC:
 				WRITE_VREG(DOS_MEM_PD_HEVC, 0);
-				WRITE_VREG(DOS_MEM_PD_HEVC_DBE, 0);
+				if (is_support_dual_core())
+					WRITE_VREG(DOS_MEM_PD_HEVC_DBE, 0);
 				WRITE_VREG(DOS_SW_RESET3, 0xffffffff);
 				wait_delay_us(20);
 				WRITE_VREG(DOS_SW_RESET3, 0);
 				wait_delay_us(10);
 				WRITE_VREG(DOS_MEM_PD_HEVC, 0);
-				WRITE_VREG(DOS_MEM_PD_HEVC_DBE, 0);
+				if (is_support_dual_core())
+					WRITE_VREG(DOS_MEM_PD_HEVC_DBE, 0);
 				break;
 			case VDEC_2:
 			case VDEC_HCODEC:
@@ -244,7 +249,8 @@ static void dos_local_config(bool is_on, int id)
 				WRITE_VREG(DOS_SW_RESET3, 0);
 				wait_delay_us(10);
 				WRITE_VREG(DOS_MEM_PD_HEVC, 0xffffffffUL);
-				WRITE_VREG(DOS_MEM_PD_HEVC_DBE, 0xffffffffUL);
+				if (is_support_dual_core())
+					WRITE_VREG(DOS_MEM_PD_HEVC_DBE, 0xffffffffUL);
 				break;
 			case VDEC_2:
 			case VDEC_HCODEC:

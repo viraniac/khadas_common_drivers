@@ -102,7 +102,7 @@ static int attach_DI_buffer(struct aml_v4l2_vpp_buf *vpp_buf)
 	struct aml_v4l2_buf *aml_vb = NULL;
 	struct uvm_hook_mod_info u_info;
 	struct di_buffer_wrap *buf_wrap = NULL;
-	int ret;
+	int ret = 0;
 
 	aml_vb = vpp_buf->aml_vb;
 	if (!aml_vb)
@@ -213,8 +213,12 @@ static void release_DI_buff(struct aml_v4l2_vpp* vpp)
 
 static void update_vpp_num_cache(struct aml_v4l2_vpp *vpp)
 {
-	if (!vpp->ctx->is_stream_off)
+	if (!vpp->ctx->is_stream_off) {
 		atomic_set(&vpp->ctx->vpp_cache_num, VPP_FRAME_SIZE - kfifo_len(&vpp->input));
+		if (!vpp->is_prog && atomic_read(&vpp->ctx->vpp_cache_num) <= 1) {
+			vdec_thread_wakeup(vpp->ctx->ada_ctx);
+		}
+	}
 }
 
 static int is_di_input_buff_full(struct aml_v4l2_vpp *vpp)
@@ -1009,7 +1013,7 @@ int aml_v4l2_vpp_reset(struct aml_v4l2_vpp *vpp)
 
 	sched_setscheduler_nocheck(vpp->task, SCHED_FIFO, &param);
 
-	v4l_dbg(vpp->ctx, V4L_DEBUG_CODEC_PRINFO, "vpp wrapper reset.\n");
+	v4l_dbg(vpp->ctx, V4L_DEBUG_CODEC_PROT, "vpp wrapper reset.\n");
 
 	return 0;
 
@@ -1034,7 +1038,7 @@ int aml_v4l2_vpp_init(
 		cfg->fmt != V4L2_PIX_FMT_NV21 && cfg->fmt != V4L2_PIX_FMT_NV21M)
 		return -EINVAL;
 
-	vpp = kzalloc(sizeof(*vpp), GFP_KERNEL);
+	vpp = aml_media_mem_alloc(sizeof(*vpp), GFP_KERNEL);
 	if (!vpp)
 		return -ENOMEM;
 
@@ -1200,7 +1204,7 @@ int aml_v4l2_vpp_init(
 
 	*vpp_handle = vpp;
 
-	v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+	v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 		"vpp_wrapper init bsize:%d, di(i:%d, o:%d), wkm:%x, bm:%x, fmt:%x, drm:%d, prog:%d, byp:%d, local:%d, NR:%d\n",
 		vpp->buf_size,
 		vpp->di_ibuf_num,
@@ -1235,7 +1239,7 @@ error2:
 error1:
 	di_destroy_instance(vpp->di_handle);
 error:
-	kfree(vpp);
+	aml_media_mem_free(vpp);
 	return ret;
 }
 EXPORT_SYMBOL(aml_v4l2_vpp_init);
@@ -1269,7 +1273,7 @@ int aml_v4l2_vpp_destroy(struct aml_v4l2_vpp* vpp)
 	mutex_destroy(&vpp->output_lock);
 	v4l_dbg(vpp->ctx, V4L_DEBUG_VPP_DETAIL,
 		"vpp_wrapper destroy done\n");
-	kfree(vpp);
+	aml_media_mem_free(vpp);
 
 	return 0;
 }
@@ -1374,19 +1378,22 @@ static int aml_v4l2_vpp_push_vframe(struct aml_v4l2_vpp* vpp, struct vframe_s *v
 		fp = media_open(file_name, O_CREAT | O_RDWR | O_LARGEFILE | O_APPEND, 0600);
 		if (!IS_ERR(fp)) {
 			struct vb2_buffer *vb = &in_buf->aml_vb->vb.vb2_buf;
+			void *y_vaddr = codec_mm_vmap(aml_buf->planes[0].addr, aml_buf->planes[0].length);
 
 			// dump y data
-			u8 *yuv_data_addr = aml_yuv_dump(fp, (u8 *)vb2_plane_vaddr(vb, 0),
+			u8 *uv_vaddr = aml_yuv_dump(fp, (u8 *)y_vaddr,
 				vf->width, vf->height, 64);
-
 			// dump uv data
 			if (vb->num_planes == 1) {
-				aml_yuv_dump(fp, yuv_data_addr, vf->width,
+				aml_yuv_dump(fp, uv_vaddr, vf->width,
 					vf->height / 2, 64);
 			} else {
-				aml_yuv_dump(fp, (u8 *)vb2_plane_vaddr(vb, 1),
+				uv_vaddr = (u8 *)codec_mm_vmap(aml_buf->planes[1].addr, aml_buf->planes[1].length);
+				aml_yuv_dump(fp, uv_vaddr,
 					vf->width, vf->height / 2, 64);
+				codec_mm_unmap_phyaddr(uv_vaddr);
 			}
+			codec_mm_unmap_phyaddr(y_vaddr);
 
 			pr_info("dump idx: %d %dx%d num_planes %d\n",
 				dump_vpp_input,

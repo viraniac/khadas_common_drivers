@@ -74,6 +74,11 @@ struct AVRational{
 	int den; ///< denominator
 };
 
+struct event_info {
+	u32 idx;
+	char *event_str;
+};
+
 #ifndef CONFIG_AMLOGIC_MEDIA_V4L_SOFTWARE_PARSER
 /**
  * YUV colorspace type.
@@ -172,10 +177,14 @@ enum vdec_dec_mode {
 	DM_YUV_AUTO_1_2_AVBC	= 0x100,
 	DM_YUV_AUTO_1_4_AVBC	= 0x200,
 	DM_YUV_AUTO_1_2_AVBC_B	= 0x300,
+	/* (0~540] 1/1, (540~1080] 1/4, (1080~4K] 1/16 */
+	DM_YUV_AUTO_14_12_AVBC	= 0x400,
 	DM_YUV_1_1_10BIT_AVBC	= 0x10001,
 	DM_YUV_1_4_10BIT_AVBC	= 0x10003,
 	DM_YUV_1_2_10BIT_AVBC	= 0x10004,
 	DM_YUV_1_8_10BIT_AVBC	= 0x10008,
+	/* (0~1080] 1/1, (1080~4K] 1/16 */
+	DM_YUV_14_11_10BIT_AVBC	= 0x10200,
 };
 
 //fmt
@@ -185,6 +194,9 @@ const char *av_color_transfer_name(enum AVColorTransferCharacteristic transfer);
 
 //math
 int av_log2(u32 v);
+
+//event
+const char *event_to_string(int event_Id);
 
 //bitstream
 int find_start_code(u8 *data, int data_sz);
@@ -204,5 +216,5 @@ int vdec_get_size_ratio(int dec_mode);
 
 int vdec_get_dec_mode(u32 w, u32 h, int dec_mode);
 
-u32 vdec_get_plane_size(u32 w, u32 h, int dec_mode, int align);
+u32 vdec_get_plane_size(u32 w, u32 h, int dec_mode, int align_h, int align_w);
 #endif

@@ -168,11 +168,17 @@ struct drm_info {
 #define TYPE_PATTERN   0x40
 
 struct vdec_s;
-
-extern void *fetchbuf;
+struct fetch {
+	void *vaddr;
+	atomic_t ref;
+	u64 paddr;
+	u32 size;
+};
+extern struct fetch fetchbuf;
 
 extern u32 stbuf_level(struct stream_buf_s *buf);
 extern u32 stbuf_rp(struct stream_buf_s *buf);
+extern u32 stbuf_wp(struct stream_buf_s *buf);
 extern u32 stbuf_space(struct stream_buf_s *buf);
 extern u32 stbuf_size(struct stream_buf_s *buf);
 extern u32 stbuf_canusesize(struct stream_buf_s *buf);

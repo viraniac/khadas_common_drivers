@@ -18,6 +18,8 @@ static int compute_losless_comp_body_size(struct hevc_state_s *hevc,
 	int width, int height, int mem_saving_mode);
 static int compute_losless_comp_header_size(int width, int height);
 static struct PIC_s *get_ref_pic_by_POC(struct hevc_state_s *hevc, int POC);
+static struct PIC_s *get_pic_by_POC(struct hevc_state_s *hevc, int POC);
+
 static int32_t hevc_hw_init(hevc_stru_t* hevc, uint8_t bit_depth, uint8_t front_flag, uint8_t back_flag);
 static unsigned char is_ref_long_term(struct hevc_state_s *hevc, int poc);
 //static void print_scratch_error(int error_num);
@@ -333,86 +335,91 @@ static int32_t config_mc_buffer_fb(hevc_stru_t* hevc, PIC_t* cur_pic)
 	int32_t i;
 	PIC_t* pic;
 	hevc_print(hevc, H265_DEBUG_BUFMGR,
-		"%s (slice_type : %d)\n",
-		__func__, cur_pic->slice_type);
+		"%s (slice_type : %d)\n", __func__, cur_pic->slice_type);
+
 	if (cur_pic->slice_type != 2) { //P and B pic
 		//WRITE_VREG(HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (0 << 8) | (0<<1) | 1);
 		WRITE_BACK_8(hevc,HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (0 << 8) | (0<<1) | 1);
-		for (i=0; i<cur_pic->RefNum_L0; i++) {
-		pic = get_ref_pic_by_POC(hevc, cur_pic->m_aiRefPOCList0[cur_pic->slice_idx][i]);
-		hevc_print(hevc, H265_DEBUG_BUFMGR,
-			" L0 : %d : pic : 0x%x, POC : %d\n", i, pic, cur_pic->m_aiRefPOCList0[cur_pic->slice_idx][i]);
-		if (pic) {
-#if 0//ndef FB_BUF_DEBUG_NO_PIPLINE
-			for (j = 0; j < MAX_REF_PIC_NUM; j++) {
-			if (pic == cur_pic->ref_pic[j])
-				break;
-			if (cur_pic->ref_pic[j] == NULL) {
-				cur_pic->ref_pic[j] = pic;
-				pic->backend_ref++;
-				break;
-			}
-			}
-#endif
-
-			if (pic->error_mark) {
-			cur_pic->error_mark = 1;
-			if (debug)
-				hevc_print(hevc, 0, " cur_pic->error_mark set to 1 because of pic->error_mark : %d\n", pic->error_mark);
-			}
-			//WRITE_VREG(HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
-			WRITE_BACK_32(hevc,HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+		for (i = 0; i < cur_pic->RefNum_L0; i++) {
+			pic = get_pic_by_POC(hevc,
+					*GET_POC_POS(cur_pic->m_aiRefPOCList0, cur_pic->slice_idx, i));
 			hevc_print(hevc, H265_DEBUG_BUFMGR,
-			"refid %x mc_canvas_u_v %x mc_canvas_y %x\n", i,pic->mc_canvas_u_v,pic->mc_canvas_y);
-		}
-		else{
-			if (debug)
-			hevc_print(hevc, 0, "Error %s, %dth poc (%d) of RPS is not in the pic list0\n", __func__, i, cur_pic->m_aiRefPOCList0[cur_pic->slice_idx][i]);
-			cur_pic->error_mark = 1;
-			//dump_lmem();
-		}
+				"L0: %d, POC: %d\n", i,
+				*GET_POC_POS(cur_pic->m_aiRefPOCList0, cur_pic->slice_idx, i));
+			if (pic) {
+				if (pic->error_mark) {
+					cur_pic->error_mark = 1;
+					hevc_print(hevc, H265_DEBUG_BUFMGR,
+						"L0 cur_pic->error_mark set to 1 because of pic->error_mark : %d\n", pic->error_mark);
+				}
+				//WRITE_VREG(HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+				WRITE_BACK_32(hevc,HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v << 16) | (pic->mc_canvas_u_v << 8) | pic->mc_canvas_y);
+				hevc_print(hevc, H265_DEBUG_BUFMGR,
+					"refid %x mc_canvas_u_v %x mc_canvas_y %x\n", i, pic->mc_canvas_u_v, pic->mc_canvas_y);
+			} else {
+				if (hevc->PB_skip_mode == 0) {
+					if ((error_handle_mode == 1) && (hevc->ref_pic.dw_y_adr != 0)) {
+						WRITE_BACK_32(hevc, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
+							(hevc->ref_pic.mc_canvas_u_v << 16) | (hevc->ref_pic.mc_canvas_u_v << 8) | hevc->ref_pic.mc_canvas_y);
+						hevc_print(hevc, H265_DEBUG_BUFMGR,
+							"%s, set Default Ref to Ref\n", __func__);
+						hevc_print(hevc, H265_DEBUG_BUFMGR,
+							"refid %x mc_canvas_u_v %d mc_canvas_y %d\n",
+							i, hevc->ref_pic.mc_canvas_u_v, hevc->ref_pic.mc_canvas_y);
+					}
+				}
+
+				hevc_print(hevc, H265_DEBUG_BUFMGR,
+					"Error %s, %dth poc (%d) of RPS is not in the pic list0\n",
+					__func__, i,
+					*GET_POC_POS(cur_pic->m_aiRefPOCList0, cur_pic->slice_idx, i));
+				cur_pic->error_mark = 1;
+				//dump_lmem();
+			}
 		}
 	}
 	if (cur_pic->slice_type == 0) { //B pic
-		hevc_print(hevc, H265_DEBUG_BUFMGR,
-		"config_mc_buffer RefNum_L1\n");
+		hevc_print(hevc, H265_DEBUG_BUFMGR, "config_mc_buffer RefNum_L1\n");
+
 		//WRITE_VREG(HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, (16 << 8) | (0<<1) | 1);
 		WRITE_BACK_16(hevc, HEVCD_MPP_ANC_CANVAS_ACCCONFIG_ADDR, 0, (16 << 8) | (0<<1) | 1);
-		for (i=0; i<cur_pic->RefNum_L1; i++) {
-		pic = get_ref_pic_by_POC(hevc, cur_pic->m_aiRefPOCList1[cur_pic->slice_idx][i]);
-		hevc_print(hevc, H265_DEBUG_BUFMGR,
-			" L1 : %d : pic : 0x%x, POC : %d\n", i, pic, cur_pic->m_aiRefPOCList1[cur_pic->slice_idx][i]);
-#if 0 //ndef FB_BUF_DEBUG_NO_PIPLINE
-			for (j = 0; j < MAX_REF_PIC_NUM; j++) {
-			if (pic == cur_pic->ref_pic[j])
-				break;
-			if (cur_pic->ref_pic[j] == NULL) {
-				cur_pic->ref_pic[j] = pic;
-				pic->backend_ref++;
-				break;
-			}
-			}
-#endif
-		if (pic) {
-			if (pic->error_mark) {
-			cur_pic->error_mark = 1;
+		for (i = 0; i < cur_pic->RefNum_L1; i++) {
+			pic = get_pic_by_POC(hevc,
+					*GET_POC_POS(cur_pic->m_aiRefPOCList1, cur_pic->slice_idx, i));
 			hevc_print(hevc, H265_DEBUG_BUFMGR,
-				" L1 cur_pic->error_mark set to 1 because of pic->error_mark : %d\n", pic->error_mark);
-			}
-			//WRITE_VREG(HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
-			WRITE_BACK_32(hevc,HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
-			hevc_print(hevc, H265_DEBUG_BUFMGR,
-			"refid %x mc_canvas_u_v %x mc_canvas_y %x\n", i,pic->mc_canvas_u_v,pic->mc_canvas_y);
+				"L1: %d, POC: %d\n", i,
+				*GET_POC_POS(cur_pic->m_aiRefPOCList1, cur_pic->slice_idx, i));
 
-		}
-		else {
-			if (debug)
-			hevc_print(hevc, 0,
-			"Error %s, %dth poc (%d) of RPS is not in the pic list1\n",
-			__func__, i, cur_pic->m_aiRefPOCList1[cur_pic->slice_idx][i]);
-			cur_pic->error_mark = 1;
-			//dump_lmem();
-		}
+			if (pic) {
+				if (pic->error_mark) {
+					cur_pic->error_mark = 1;
+					hevc_print(hevc, H265_DEBUG_BUFMGR,
+						" L1 cur_pic->error_mark set to 1 because of pic->error_mark : %d\n", pic->error_mark);
+				}
+				//WRITE_VREG(HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v<<16)|(pic->mc_canvas_u_v<<8)|pic->mc_canvas_y);
+				WRITE_BACK_32(hevc,HEVCD_MPP_ANC_CANVAS_DATA_ADDR, (pic->mc_canvas_u_v << 16) | (pic->mc_canvas_u_v << 8) | pic->mc_canvas_y);
+				hevc_print(hevc, H265_DEBUG_BUFMGR,
+					"refid %x mc_canvas_u_v %x mc_canvas_y %x\n", i, pic->mc_canvas_u_v, pic->mc_canvas_y);
+			} else {
+				if (hevc->PB_skip_mode == 0) {
+					if ((error_handle_mode == 1) && (hevc->ref_pic.dw_y_adr != 0)) {
+						WRITE_BACK_32(hevc, HEVCD_MPP_ANC_CANVAS_DATA_ADDR,
+							(hevc->ref_pic.mc_canvas_u_v << 16) | (hevc->ref_pic.mc_canvas_u_v << 8) | hevc->ref_pic.mc_canvas_y);
+						hevc_print(hevc, H265_DEBUG_BUFMGR,
+							"%s, set Default Ref to Ref\n", __func__);
+						hevc_print(hevc, H265_DEBUG_BUFMGR,
+							"refid %x mc_canvas_u_v %d mc_canvas_y %d\n",
+							i, hevc->ref_pic.mc_canvas_u_v, hevc->ref_pic.mc_canvas_y);
+					}
+				}
+
+				hevc_print(hevc, H265_DEBUG_BUFMGR,
+					"Error %s, %dth poc (%d) of RPS is not in the pic list1\n",
+					__func__, i,
+					*GET_POC_POS(cur_pic->m_aiRefPOCList1, cur_pic->slice_idx, i));
+				cur_pic->error_mark = 1;
+				//dump_lmem();
+			}
 		}
 	}
 	return 0;
@@ -858,24 +865,24 @@ static void config_bufstate_back_hw(struct hevc_state_s* hevc)
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_parser_sao0.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_parser_sao0.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.parser_sao0_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 1);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_parser_sao1.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_parser_sao1.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.parser_sao1_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 //    config mpred_imp_if data write buffer start address
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 2);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_mpred_imp0.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_mpred_imp0.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.mpred_imp0_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 3);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_mpred_imp1.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_mpred_imp1.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.mpred_imp1_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 // config other buffers
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 4);
@@ -888,26 +895,26 @@ static void config_bufstate_back_hw(struct hevc_state_s* hevc)
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_vcpu_imem.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_vcpu_imem.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.vcpu_imem_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 8);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_sys_imem.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_sys_imem.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.sys_imem_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 // config lmem buffers
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 5);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_lmem0.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_lmem0.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.lmem0_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 	WRITE_VREG(HEVC_ASSIST_RING_B_INDEX, 6);
 	WRITE_VREG(HEVC_ASSIST_RING_B_START, hevc->fb_buf_lmem1.buf_start);
 	WRITE_VREG(HEVC_ASSIST_RING_B_END, hevc->fb_buf_lmem1.buf_end);
 	WRITE_VREG(HEVC_ASSIST_RING_B_RPTR, hevc->bk.lmem1_ptr);
-	WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
+	//WRITE_VREG(HEVC_ASSIST_RING_B_THRESHOLD, 0);
 
 }
 
@@ -940,7 +947,7 @@ static void read_bufstate_front(struct hevc_state_s* hevc)
 }
 
 /*hw config*/
-void BackEnd_StartDecoding(struct hevc_state_s* hevc)
+int BackEnd_StartDecoding(struct hevc_state_s* hevc)
 {
 	PIC_t* pic = hevc->next_be_decode_pic[hevc->fb_rd_pos];
 	int ret;
@@ -952,10 +959,10 @@ void BackEnd_StartDecoding(struct hevc_state_s* hevc)
 		"Start BackEnd Decoding %d (wr pos %d, rd pos %d)\n",
 		hevc->backend_decoded_count, hevc->fb_wr_pos, hevc->fb_rd_pos);
 
-	mutex_lock(&hevc->fb_mutex);
 	for (i = 0; (i < MAX_REF_PIC_NUM) && (pic->error_mark == 0); i++) {
 		if (pic->ref_pic[i]) {
 			if (pic->ref_pic[i]->error_mark) {
+				mutex_lock(&hevc->fb_mutex);
 				hevc->gvs->error_frame_count++;
 				if (pic->slice_type == I_SLICE) {
 					hevc->gvs->i_concealed_frames++;
@@ -965,14 +972,15 @@ void BackEnd_StartDecoding(struct hevc_state_s* hevc)
 					hevc->gvs->b_concealed_frames++;
 				}
 				pic->error_mark = 1;
+				mutex_unlock(&hevc->fb_mutex);
 				break;
 			}
 		}
 	}
-	mutex_unlock(&hevc->fb_mutex);
 
-	if ((pic->error_mark && (hevc->nal_skip_policy != 0)) ||
-		(hevc->front_back_mode != 1 && hevc->front_back_mode != 3)) {
+	if ((pic->error_mark && (hevc->PB_skip_mode != 0)) ||
+		(hevc->front_back_mode != 1 && hevc->front_back_mode != 3) ||
+		((pic->drop_flag) && (hevc->PB_skip_mode != 0))) {
 
 		mutex_lock(&hevc->fb_mutex);
 		hevc->gvs->drop_frame_count++;
@@ -989,14 +997,19 @@ void BackEnd_StartDecoding(struct hevc_state_s* hevc)
 		print_loopbufs_ptr(hevc, "bk", &hevc->bk);
 		hevc_hw_init(hevc, pic->depth, 0, 1);
 
-		WRITE_VREG(hevc->backend_ASSIST_MBOX0_IRQ_REG, 1);
-		return;
+		hevc_print(hevc, PRINT_FLAG_VDEC_STATUS,
+			"%s pic has error_mark, skip\n", __func__);
+
+		return -1;
 	}
 
 	if (dw_mode != 0x10) {
 		aml_buf = index_to_afbc_aml_buf(hevc, pic->BUF_index);
 		if ((aml_buf == NULL) || (aml_buf->fbc->frame_size < 0))
-			return;
+			return -1;
+
+		hevc_print(hevc, PRINT_FLAG_VDEC_STATUS,
+			"%s cur_mmu_4k_number %d, poc %d\n", __func__, aml_buf->fbc->frame_size, pic->POC);
 
 		ret = decoder_mmu_box_alloc_idx(
 				aml_buf->fbc->mmu,
@@ -1011,7 +1024,7 @@ void BackEnd_StartDecoding(struct hevc_state_s* hevc)
 					hevc->frame_mmu_map_addr_1);
 		if (ret != 0) {
 			pr_err("%s: can not alloc mmu\n", __func__);
-			return;
+			return -1;
 		}
 	}
 	ATRACE_COUNTER(hevc->trace.decode_back_run_time_name, TRACE_RUN_BACK_ALLOC_MMU_END);
@@ -1022,16 +1035,27 @@ void BackEnd_StartDecoding(struct hevc_state_s* hevc)
 #if 1 //def RESET_BACK_PER_PICTURE
 	if (hevc->front_back_mode == 1)
 		amhevc_reset_b();
+
+	/*
+		HEVC_EFFICIENCY_MODE_BACK
+		bit[0] 1: open efficiency mode, 0: close efficiency mode
+	*/
+	if (efficiency_mode) {
+		WRITE_VREG(HEVC_EFFICIENCY_MODE_BACK, (READ_VREG(HEVC_EFFICIENCY_MODE_BACK) | (1<<0)));
+	} else {
+		WRITE_VREG(HEVC_EFFICIENCY_MODE_BACK, (READ_VREG(HEVC_EFFICIENCY_MODE_BACK) & (~(1<<0))));
+	}
 	hevc_hw_init(hevc, pic->depth, 0, 1);
 
 	if (hevc->front_back_mode == 3) {
 		WRITE_VREG(hevc->backend_ASSIST_MBOX0_IRQ_REG, 1);
 		ATRACE_COUNTER(hevc->trace.decode_back_run_time_name, TRACE_RUN_BACK_CONFIGURE_REGISTER_END);
 	} else {
-		u32 data32 = (((pic->slice_idx + 1) & 0xff) | ((pic->tile_cnt << 8) & 0xff00));
+		u32 data32 = (((pic->slice_idx + 1) & 0xff) | ((pic->decoder_tile_cnt << 8) & 0xff00));
 
-		hevc_print(hevc, PRINT_FLAG_VDEC_STATUS, "%s:data32 = 0x%x, pic->slice_idx %d pic->tile_cnt %d\n",
-			__func__, data32, pic->slice_idx, pic->tile_cnt);
+		hevc_print(hevc, PRINT_FLAG_VDEC_STATUS,
+			"%s:data32 = 0x%x, pic->slice_idx %d decoder_tile_cnt %d pic->tile_cnt %d \n",
+			__func__, data32, pic->slice_idx, pic->decoder_tile_cnt, pic->tile_cnt);
 		WRITE_VREG(PIC_INFO_DBE, data32);
 		WRITE_VREG(PIC_DECODE_COUNT_DBE, hevc->backend_decoded_count);
 		WRITE_VREG(HEVC_DEC_STATUS_DBE, HEVC_BE_DECODE_DATA);
@@ -1055,6 +1079,7 @@ void BackEnd_StartDecoding(struct hevc_state_s* hevc)
 	WRITE_VREG(PIC_DECODE_COUNT_DBE, hevc->backend_decoded_count);
 	WRITE_VREG(HEVC_DEC_STATUS_DBE, HEVC_BE_DECODE_DATA);
 #endif
+	return 0;
 }
 
 static void hevc_config_work_space_hw_fb(hevc_stru_t* hevc, uint8_t bit_depth, uint8_t front_flag, uint8_t back_flag)
@@ -1337,8 +1362,7 @@ static void hevc_init_decoder_hw_fb(hevc_stru_t* hevc, uint8_t front_flag, uint8
 #endif
 
 	if (front_flag) {
-#if 0 //Move to ucode
-		if (efficiency_mode == 0) {
+		if (!efficiency_mode) {
 
 			uint32_t data32;
 			//if (debug&H265_DEBUG_BUFMGR)
@@ -1385,7 +1409,7 @@ static void hevc_init_decoder_hw_fb(hevc_stru_t* hevc, uint8_t front_flag, uint8
 				);
 		 */
 		}
-#endif
+
 		WRITE_VREG(HEVC_DEC_STATUS_REG, 0);
 
 #if 0
@@ -1422,8 +1446,7 @@ static void hevc_init_decoder_hw_fb(hevc_stru_t* hevc, uint8_t front_flag, uint8
 		WRITE_VREG(HEVC_PARSER_CMD_SKIP_1, PARSER_CMD_SKIP_CFG_1);
 		WRITE_VREG(HEVC_PARSER_CMD_SKIP_2, PARSER_CMD_SKIP_CFG_2);
 #endif
-#if 0 //Move to ucode
-		if (efficiency_mode == 0) {
+		if (!efficiency_mode) {
 		   WRITE_VREG(HEVC_PARSER_IF_CONTROL,
 			   //  (1 << 8) | // sao_sw_pred_enable
 			   (1 << 5) | // parser_sao_if_en
@@ -1440,9 +1463,8 @@ static void hevc_init_decoder_hw_fb(hevc_stru_t* hevc, uint8_t front_flag, uint8
 		*/
 
 		}
-#endif
 	}
-	if (back_flag) {
+	if (!efficiency_mode && back_flag) {
 #if 1
 //only for simulation
 		// Initial IQIT_SCALELUT memory -- just to avoid X in simulation
@@ -1529,7 +1551,7 @@ static int32_t hevc_hw_init(hevc_stru_t* hevc, uint8_t bit_depth, uint8_t front_
 
 	hevc_init_decoder_hw_fb(hevc, front_flag, back_flag);
 
-	if (back_flag) {
+	if (!efficiency_mode && back_flag) {
 	// Set MCR fetch priorities
 		data32 = 0x1 | (0x1 << 2) | (0x1 <<3) | (24 << 4) | (32 << 11) | (24 << 18) | (32 << 25);
 		WRITE_VREG(HEVCD_MPP_DECOMP_AXIURG_CTL, data32);
@@ -1572,8 +1594,7 @@ static int32_t hevc_hw_init(hevc_stru_t* hevc, uint8_t bit_depth, uint8_t front_
 		data32 = READ_VREG(HEVC_SHIFT_EMULATECODE);
 		if (data32 != 0x9abcdef0) { print_scratch_error(32); return -1; }
 #endif
-#if 0 //Move to ucode
-		if (efficiency_mode == 0) {
+		if (!efficiency_mode) {
 			WRITE_VREG(HEVC_SHIFT_STARTCODE, 0x00000100);
 			WRITE_VREG(HEVC_SHIFT_EMULATECODE, 0x00000300);
 
@@ -1586,7 +1607,6 @@ static int32_t hevc_hw_init(hevc_stru_t* hevc, uint8_t bit_depth, uint8_t front_
 			WRITE_VREG(HEVC_WAIT_FLAG, 1);
 #endif
 		}
-#endif
 
 		/* disable PSCALE for hardware sharing */
 	#ifdef DOS_PROJECT
@@ -1598,11 +1618,8 @@ static int32_t hevc_hw_init(hevc_stru_t* hevc, uint8_t bit_depth, uint8_t front_
 
 		/* enable mailbox interrupt */
 		WRITE_VREG(hevc->ASSIST_MBOX0_MASK, 1);
-#if 0 //Move to ucode
-		if (efficiency_mode == 0) {
-			WRITE_VREG(DEBUG_REG1, 0x0);  //no debug
-		}
-#endif
+		//WRITE_VREG(DEBUG_REG1, 0x0);	//no debug
+
 		WRITE_VREG(NAL_SEARCH_CTL, 0x8); //check vps/sps/pps/i-slice in ucode
 		WRITE_VREG(DECODE_STOP_POS, udebug_flag);
 	}
@@ -1627,12 +1644,12 @@ static int32_t hevc_hw_init(hevc_stru_t* hevc, uint8_t bit_depth, uint8_t front_
 //static void  config_mcrcc_axi_hw (int32_t slice_type)
 static void  config_mcrcc_axi_hw_fb(hevc_stru_t* hevc)
 {
-	int32_t slice_type;
+	int32_t slice_type = hevc->cur_pic->slice_type;
 	//uint32_t rdata32;
 	//uint32_t rdata32_2;
-	slice_type = hevc->cur_pic->slice_type;
-	hevc_print(hevc, H265_DEBUG_BUFMGR_MORE,
-		"%s\n", __func__);
+
+	hevc_print(hevc, H265_DEBUG_BUFMGR_MORE, "%s\n", __func__);
+
 	//WRITE_VREG_V(P_HEVCD_MCRCC_CTL1, 0x2); // reset mcrcc
 	WRITE_BACK_8(hevc, HEVCD_MCRCC_CTL1, 0x2); // reset mcrcc
 
@@ -1758,33 +1775,39 @@ void config_mpred_hw_fb(hevc_stru_t* hevc)
 	if (NON_REF_B) mv_wr_en = 0;
 #endif
 
-	mpred_mv_rd_start_addr=col_pic->mpred_mv_wr_start_addr;
+	if (col_pic == NULL) {
+		mpred_mv_rd_start_addr = cur_pic->mpred_mv_wr_start_addr;
+		col_isIntra = 1;
+	} else {
+		mpred_mv_rd_start_addr = col_pic->mpred_mv_wr_start_addr;
+	}
+
 	//data32 = READ_VREG(HEVC_MPRED_CURR_LCU);
 	//mpred_curr_lcu_x   =data32 & 0xffff;
 	//mpred_curr_lcu_y   =(data32>>16) & 0xffff;
 
-	MV_MEM_UNIT=hevc->lcu_size_log2 == 6 ? 0x200 : hevc->lcu_size_log2 == 5 ? 0x80 : 0x20;
-	mpred_mv_rd_ptr = mpred_mv_rd_start_addr  + (hevc->slice_addr*MV_MEM_UNIT);
+	MV_MEM_UNIT = hevc->lcu_size_log2 == 6 ? 0x200 : hevc->lcu_size_log2 == 5 ? 0x80 : 0x20;
+	mpred_mv_rd_ptr = mpred_mv_rd_start_addr + (hevc->slice_addr * MV_MEM_UNIT);
 
-	mpred_mv_rd_ptr_p1  =mpred_mv_rd_ptr+MV_MEM_UNIT;
-	mpred_mv_rd_end_addr=mpred_mv_rd_start_addr + ((hevc->lcu_x_num*hevc->lcu_y_num)*MV_MEM_UNIT);
+	mpred_mv_rd_ptr_p1 = mpred_mv_rd_ptr+MV_MEM_UNIT;
+
+	mpred_mv_rd_end_addr = mpred_mv_rd_start_addr + ((hevc->lcu_x_num * hevc->lcu_y_num) * MV_MEM_UNIT);
 
 	mpred_above_buf_start = hevc->work_space_buf->mpred_above.buf_start;
 
-	mpred_mv_wr_ptr = cur_pic->mpred_mv_wr_start_addr  + (hevc->slice_addr*MV_MEM_UNIT);
+	mpred_mv_wr_ptr = cur_pic->mpred_mv_wr_start_addr + (hevc->slice_addr * MV_MEM_UNIT);
 
-	if (debug&H265_DEBUG_BUFMGR)
-		printk("%s cur pic index %d  col pic index %d\n",
-		__func__, cur_pic->index, col_pic->index);
+	hevc_print(hevc, H265_DEBUG_BUFMGR_MORE,"%s cur pic index %d  col_isIntra %d\n",
+		__func__, cur_pic->index, col_isIntra);
 
-	WRITE_VREG(HEVC_MPRED_MV_WR_START_ADDR,cur_pic->mpred_mv_wr_start_addr);
-	WRITE_VREG(HEVC_MPRED_MV_RD_START_ADDR,mpred_mv_rd_start_addr);
+	WRITE_VREG(HEVC_MPRED_MV_WR_START_ADDR, cur_pic->mpred_mv_wr_start_addr);
+	WRITE_VREG(HEVC_MPRED_MV_RD_START_ADDR, mpred_mv_rd_start_addr);
 	hevc_print(hevc, H265_DEBUG_BUFMGR_MORE,
 		"[MPRED CO_MV] write 0x%x  read 0x%x -- 0x%X\n", cur_pic->mpred_mv_wr_start_addr, mpred_mv_rd_start_addr, col_pic);
 
-	data32 = ((hevc->lcu_x_num - hevc->tile_width_lcu)*MV_MEM_UNIT);
-	WRITE_VREG(HEVC_MPRED_MV_WR_ROW_JUMP,data32);
-	WRITE_VREG(HEVC_MPRED_MV_RD_ROW_JUMP,data32);
+	data32 = ((hevc->lcu_x_num - hevc->tile_width_lcu) * MV_MEM_UNIT);
+	WRITE_VREG(HEVC_MPRED_MV_WR_ROW_JUMP, data32);
+	WRITE_VREG(HEVC_MPRED_MV_RD_ROW_JUMP, data32);
 
 	data32 = READ_VREG(HEVC_MPRED_CTRL0);
 	data32  =   (
@@ -1860,42 +1883,43 @@ void config_mpred_hw_fb(hevc_stru_t* hevc)
 	data32 = 0;
 	for (i = 0; i < hevc->RefNum_L0; i++) {
 		if (is_ref_long_term(hevc,
-		cur_pic->m_aiRefPOCList0
-			[cur_pic->slice_idx][i]))
+		*GET_POC_POS(cur_pic->m_aiRefPOCList0,
+			cur_pic->slice_idx, i)))
 		data32 = data32 | (1 << i);
 	}
 	for (i = 0; i < hevc->RefNum_L1; i++) {
 		if (is_ref_long_term(hevc,
-		cur_pic->m_aiRefPOCList1
-			[cur_pic->slice_idx][i]))
+		*GET_POC_POS(cur_pic->m_aiRefPOCList1,
+			cur_pic->slice_idx, i)))
 		data32 = data32 | (1 << (i + 16));
 	}
 	hevc_print(hevc, H265_DEBUG_BUFMGR_MORE,
 		"LongTerm_Ref 0x%x\n", data32);
 #else
-	data32  =   (
-		hevc->LongTerm_Ref
-		);
+	data32 = hevc->LongTerm_Ref;
 #endif
-	WRITE_VREG(HEVC_MPRED_LT_REF,data32);
+	WRITE_VREG(HEVC_MPRED_LT_REF, data32);
 
-	data32=0;
-	for (i=0;i<hevc->RefNum_L0;i++)data32=data32|(1<<i);
-	WRITE_VREG(HEVC_MPRED_REF_EN_L0,data32);
+	data32 = 0;
+	for (i = 0; i < hevc->RefNum_L0; i++)
+		data32 = data32 | (1 << i);
+	WRITE_VREG(HEVC_MPRED_REF_EN_L0, data32);
 
-	data32=0;
-	for (i=0;i<hevc->RefNum_L1;i++)data32=data32|(1<<i);
-	WRITE_VREG(HEVC_MPRED_REF_EN_L1,data32);
+	data32 = 0;
+	for (i = 0; i < hevc->RefNum_L1; i++)
+		data32 = data32 | (1 << i);
+	WRITE_VREG(HEVC_MPRED_REF_EN_L1, data32);
 
-	WRITE_VREG(HEVC_MPRED_CUR_POC,hevc->curr_POC);
-	WRITE_VREG(HEVC_MPRED_COL_POC,hevc->Col_POC);
+	WRITE_VREG(HEVC_MPRED_CUR_POC, hevc->curr_POC);
+	if (col_pic != NULL)
+		WRITE_VREG(HEVC_MPRED_COL_POC, hevc->Col_POC);
 
 	//below MPRED Ref_POC_xx_Lx registers must follow Ref_POC_xx_L0 -> Ref_POC_xx_L1 in pair write order!!!
-	ref_poc_L0      = &(cur_pic->m_aiRefPOCList0[cur_pic->slice_idx][0]);
-	ref_poc_L1      = &(cur_pic->m_aiRefPOCList1[cur_pic->slice_idx][0]);
+	ref_poc_L0 = GET_POC_POS(cur_pic->m_aiRefPOCList0, cur_pic->slice_idx, 0);
+	ref_poc_L1 = GET_POC_POS(cur_pic->m_aiRefPOCList1, cur_pic->slice_idx, 0);
 
-	WRITE_VREG(HEVC_MPRED_L0_REF00_POC,ref_poc_L0[0]);
-	WRITE_VREG(HEVC_MPRED_L1_REF00_POC,ref_poc_L1[0]);
+	WRITE_VREG(HEVC_MPRED_L0_REF00_POC, ref_poc_L0[0]);
+	WRITE_VREG(HEVC_MPRED_L1_REF00_POC, ref_poc_L1[0]);
 
 	WRITE_VREG(HEVC_MPRED_L0_REF01_POC,ref_poc_L0[1]);
 	WRITE_VREG(HEVC_MPRED_L1_REF01_POC,ref_poc_L1[1]);
@@ -2090,6 +2114,12 @@ static void config_dw_fb(hevc_stru_t* hevc, PIC_t* pic)
 
 	WRITE_BACK_32(hevc, HEVC_SAO_Y_LENGTH, pic->luma_size);
 	WRITE_BACK_32(hevc, HEVC_SAO_C_LENGTH, pic->chroma_size);
+
+	hevc_print(hevc, H265_DEBUG_BUFMGR_MORE,
+		"config pic, id: %d, Y:(%x, %d) C:(%x, %d). dw_mode %d\n",
+		pic->index,
+		pic->dw_y_adr, pic->luma_size,
+		pic->dw_u_v_adr, pic->chroma_size, dw_mode);
 }
 
 static void config_sao_hw_fb(hevc_stru_t* hevc, param_t* params)

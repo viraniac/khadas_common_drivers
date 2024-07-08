@@ -176,8 +176,8 @@ config AMLOGIC_MEDIA_VENC_MEMALLOC
 	help
 	  Driver for venc memalloc.
 
-config AMLOGIC_MEDIA_VENC_VCENC
-	tristate "Amlogic VENC VCENC"
+config AMLOGIC_MEDIA_VENC_COMMON
+	tristate "Amlogic VENC VCENC COMMON"
 	default m
 	help
 	  Driver for venc vcenc.

@@ -58,7 +58,7 @@ struct decoder_bmmu_box {
 	int mem_flags;		/*can overwrite on idx alloc */
 	u32 alloc_flags;
 	struct mm_list_expand exp_mm_list;
-	struct codec_mm_s *mm_list[1];
+	struct codec_mm_s **mm_list;
 };
 
 struct decoder_bmmu_box_mgr {
@@ -142,6 +142,7 @@ void *decoder_bmmu_box_alloc_box(const char *name,
 	box->exp_num = 0;
 	box->exp_mm_list.mm = NULL;
 	box->exp_mm_list.index = -1;
+	box->mm_list = (struct codec_mm_s **)(box + 1);
 	INIT_LIST_HEAD(&box->exp_mm_list.mm_list);
 	mutex_init(&box->mutex);
 	INIT_LIST_HEAD(&box->list);
@@ -233,10 +234,10 @@ int decoder_bmmu_box_alloc_idx(void *handle, int idx, int size, int aligned_2n,
 	mm = decoder_bmmu_box_get_mm_from_idx(box, idx);
 	if (mm) {
 		int invalid = 0;
-		int keeped = 0;
+		int kept = 0;
 
-		keeped = is_codec_mm_keeped(mm);
-		if (!keeped) {
+		kept = is_codec_mm_kept(mm);
+		if (!kept) {
 			if (mm->page_count * PAGE_SIZE < size) {
 				/*size is small. */
 				invalid = 1;
@@ -446,17 +447,17 @@ int decoder_bmmu_box_alloc_idx_wait(
 {
 	int have_space;
 	int ret = -1;
-	int keeped = 0;
+	int kept = 0;
 
 	if (decoder_bmmu_box_get_mem_size(handle, idx) >= size) {
 		struct decoder_bmmu_box *box = handle;
 		struct codec_mm_s *mm;
 		mutex_lock(&box->mutex);
 		mm = decoder_bmmu_box_get_mm_from_idx(box, idx);
-		keeped = is_codec_mm_keeped(mm);
+		kept = is_codec_mm_kept(mm);
 		mutex_unlock(&box->mutex);
 
-		if (!keeped)
+		if (!kept)
 			return 0;/*have alloced memory before.*/
 	}
 	have_space = decoder_bmmu_box_check_and_wait_size(
@@ -668,7 +669,7 @@ static int decoder_bmmu_box_dump_all(void *buf, int size)
 	return tsize;
 }
 
-static ssize_t box_dump_show(struct class *class, struct class_attribute *attr,
+static ssize_t box_dump_show(KV_CLASS_CONST struct class *class, KV_CLASS_ATTR_CONST struct class_attribute *attr,
 							 char *buf)
 {
 	ssize_t ret = 0;
@@ -696,8 +697,8 @@ struct decoder_bmmu_box *decoder_bmmu_box_find_box_by_name(char *name)
 }
 
 static ssize_t
-box_dump_store(struct class *class,
-		struct class_attribute *attr,
+box_dump_store(KV_CLASS_CONST struct class *class,
+		KV_CLASS_ATTR_CONST struct class_attribute *attr,
 		const char *buf, size_t size)
 {
 	char cmd[16];
@@ -755,8 +756,8 @@ box_dump_store(struct class *class,
 	return size;
 }
 
-static ssize_t debug_show(struct class *class,
-		struct class_attribute *attr,
+static ssize_t debug_show(KV_CLASS_CONST struct class *class,
+		KV_CLASS_ATTR_CONST struct class_attribute *attr,
 		char *buf)
 {
 	ssize_t size = 0;
@@ -769,8 +770,8 @@ static ssize_t debug_show(struct class *class,
 	return size;
 }
 
-static ssize_t debug_store(struct class *class,
-		struct class_attribute *attr,
+static ssize_t debug_store(KV_CLASS_CONST struct class *class,
+		KV_CLASS_ATTR_CONST struct class_attribute *attr,
 		const char *buf, size_t size)
 {
 	unsigned val;

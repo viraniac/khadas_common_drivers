@@ -77,6 +77,8 @@ enum AM_MESON_CPU_MAJOR_ID {
 	AM_MESON_CPU_MAJOR_ID_RES_0x43,
 	AM_MESON_CPU_MAJOR_ID_TXHD2	= 0x44,
 	AM_MESON_CPU_MAJOR_ID_S1A	= 0x45,
+	AM_MESON_CPU_MAJOR_ID_S7	= 0x46,
+	AM_MESON_CPU_MAJOR_ID_S7D	= 0x47,
 	AM_MESON_CPU_MAJOR_ID_MAX,
 };
 
@@ -97,6 +99,7 @@ enum AM_MESON_CPU_MAJOR_ID {
 #define AM_MESON_CPU_MINOR_ID_REVB_TM2   (REVB_MASK | AM_MESON_CPU_MAJOR_ID_TM2)
 #define AM_MESON_CPU_MINOR_ID_S4_S805X2  (REVX_MASK | AM_MESON_CPU_MAJOR_ID_S4)
 #define AM_MESON_CPU_MINOR_ID_T7C        (REVC_MASK | AM_MESON_CPU_MAJOR_ID_T7)
+#define AM_MESON_CPU_MINOR_ID_S7_S805X3  (REVX_MASK | AM_MESON_CPU_MAJOR_ID_S7)
 
 /* for dos_of_dev_s max resolution define */
 #define RESOLUTION_1080P  (1920 * 1088)
@@ -131,6 +134,16 @@ enum AM_MESON_CPU_MAJOR_ID {
 #define FMT_HEVC_VP9_AVS2_AV1      (FMT_AV1  | FMT_HEVC_VP9_AVS2)
 #define FMT_HEVC_VP9_AVS2_AV1_AVS3 (FMT_AVS3 | FMT_HEVC_VP9_AVS2_AV1)
 
+//level_idc
+#define IDC_4        0x40
+#define IDC_4_1      0x41
+#define IDC_5        0x50
+#define IDC_5_1      0x51
+#define IDC_5_2      0x52
+#define IDC_6        0x60
+#define IDC_6_1      0x61
+#define IDC_6_2      0x62
+
 /* dos hardware feature define. */
 struct dos_of_dev_s {
 	enum AM_MESON_CPU_MAJOR_ID chip_id;
@@ -142,6 +155,7 @@ struct dos_of_dev_s {
 	u32 max_vdec_clock;
 	u32 max_hevcf_clock;
 	u32 max_hevcb_clock;
+	u32 max_hcodec_clock;
 	bool hevc_clk_combine_flag;
 
 	/* resolution. necessary!! */
@@ -154,6 +168,7 @@ struct dos_of_dev_s {
 	/* vdec */
 	bool is_vdec_canvas_support;
 	bool is_support_h264_mmu;
+	bool is_mjpeg_endian_rematch;
 
 	/* hevc */
 	bool is_support_dual_core;
@@ -162,10 +177,13 @@ struct dos_of_dev_s {
 	bool is_support_rdma;
 	bool is_support_mmu_copy;
 	int hevc_stream_extra_shift;
+	bool is_vcpu_clk_set;
+	bool is_vp9_adapt_prob_hw_mode;
 
 	bool is_support_axi_ctrl;  /*dos pipeline ctrl by dos or dmc */
 
 	u32 fmt_support_flags;
+	u32 support_h265_level_idc;
 };
 
 
@@ -185,6 +203,9 @@ bool is_cpu_s4_s805x2(void);
 bool is_cpu_t7(void);
 bool is_cpu_t7c(void);
 
+bool is_cpu_s7(void);
+bool is_cpu_s7_s805x3(void);
+
 inline bool is_support_new_dos_dev(void);
 
 struct dos_of_dev_s *dos_dev_get(void);
@@ -197,6 +218,8 @@ inline u32 vdec_max_clk_get(void);
 inline u32 hevcf_max_clk_get(void);
 
 inline u32 hevcb_max_clk_get(void);
+
+inline u32 hcodec_max_clk_get(void);
 
 inline bool is_hevc_clk_combined(void);
 
@@ -230,7 +253,15 @@ inline bool is_support_axi_ctrl(void);
 
 inline bool is_support_format(int format);
 
+inline int get_h265_idc_level(void);
+
 inline int get_hevc_stream_extra_shift_bytes(void);
+
+inline bool is_mjpeg_endian_rematch(void);
+
+inline bool is_vcpu_clk_set(void);
+
+inline bool is_vp9_adapt_prob_hw_mode(void);
 
 void pr_dos_infos(void);
 

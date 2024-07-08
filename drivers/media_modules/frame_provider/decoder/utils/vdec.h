@@ -43,6 +43,7 @@
 #include "frame_check.h"
 #include "vdec_sync.h"
 #include "vdec_canvas_utils.h"
+#include "decoder_report.h"
 #include "../../../media_sync/pts_server/pts_server_core.h"
 #include "../../../amvdec_ports/utils/common.h"
 
@@ -62,13 +63,19 @@ struct device *get_vdec_device(void);
 int vdec_module_init(void);
 void vdec_module_exit(void);
 
-#define MAX_INSTANCE_MUN  9
+#ifdef LIMIT_DECODE_INSTANCE
+#define MAX_INSTANCE_MUN     LIMIT_DECODE_INSTANCE
+#else
+#define MAX_INSTANCE_MUN     9
+#endif
 
 #define VDEC_DEBUG_SUPPORT
 
 #define DEC_FLAG_HEVC_WORKAROUND 0x01
 
 #define VDEC_FIFO_ALIGN 8
+#define VDEC_DBG_ENABLE_TIME_DEBUG (0x400)
+#define VDEC_DBG_ENABLE_HW_TIME_DEBUG (0x2000)
 
 enum vdec_type_e {
 	VDEC_1 = 0,
@@ -153,6 +160,7 @@ enum e_trace_work_status {
 #define VDEC_CFG_FLAG_DV_NEGATIVE  (1 << 1)
 #define VDEC_CFG_FLAG_HIGH_BANDWIDTH  (1 << 2)
 #define VDEC_CFG_FLAG_DIS_ERR_POLICY (1 << 11)
+#define VDEC_CFG_FLAG_MMU_COPY_DISABLE (1 << 12)
 
 #define VDEC_CFG_FLAG_PROG_ONLY (1 << 16)
 
@@ -208,6 +216,10 @@ extern void vdec_poweroff(enum vdec_type_e core);
 extern bool vdec_on(enum vdec_type_e core);
 extern void vdec_power_reset(void);
 
+extern int rate_time_avg_cnt;
+extern int rate_time_avg_threshold_hi;
+extern int rate_time_avg_threshold_lo;
+
 /*irq num as same as .dts*/
 
 /*
@@ -249,6 +261,14 @@ enum frame_type_flag {
 	KEYFRAME_FLAG = 1,	/* Frame is a keyframe (I-frame) */
 	PFRAME_FLAG,		/* Frame is a P-frame */
 	BFRAME_FLAG,		/* Frame is a B-frame */
+};
+
+enum vdec_stuck_state {
+	VDEC_NORMAL = 0,
+	VDEC_FRONT_SLOW,
+	VDEC_BACK_SLOW,
+	VDEC_NO_INPUT,
+	VDEC_NO_YUV_BUF,
 };
 
 extern s32 vdec_request_threaded_irq(enum vdec_irq_num num,
@@ -366,6 +386,19 @@ struct vdec_data_info_s {
 struct vdec_data_core_s {
 	struct vdec_data_info_s vdata[VDEC_DATA_MAX_INSTANCE_NUM];
 	spinlock_t vdec_data_lock;
+};
+
+struct mmu_copy_params {
+	dma_addr_t mmu_copy_map_phy_addr;
+	unsigned long mmu_copy_pre_header_adr;
+	unsigned long mmu_copy_err_header_adr;
+	int pic_w;
+	int pic_h;
+	int err_width;
+	int err_height;
+	u32 x_location;
+	u32 y_location;
+	int count;
 };
 
 struct vdec_info_statistic_s {
@@ -513,8 +546,7 @@ struct vdec_s {
 	u32 inst_cnt;
 	wait_queue_head_t idle_wait;
 	struct vdec_data_info_s *vdata;
-	char frame_mode_size[32];
-	char stream_rp[32];
+	char frame_size[32];
 	spinlock_t power_lock;
 	bool suspend;
 #ifdef NEW_FB_CODE
@@ -530,11 +562,17 @@ struct vdec_s {
 	u64 hw_front_decode_start;
 	u64 hw_back_decode_start;
 #endif
-	char stream_mode_size[32];
+	char frame_code_rate_name[32];
 	char decode_hw_front_time_name[32];
 	char decode_hw_back_time_name[32];
 	char decode_hw_front_spend_time_avg[32];
 	char decode_hw_back_spend_time_avg[32];
+	u64 code_rate[16];
+	uint32_t decoded_count;
+	int have_frame_num;
+	u64 back_run2cb_time;
+	u64 front_run2cb_time;
+	char vdec_stuck_state_name[32];
 };
 
 #define CODEC_MODE(a, b, c, d)\
@@ -810,6 +848,8 @@ extern void vdec_set_step_mode(void);
 ssize_t dump_vdec_debug(char *buf);
 #endif
 int vdec_get_debug_flags(void);
+u32 vdec_get_debug(void);
+void vdec_code_rate(struct vdec_s *vdec, uint32_t size);
 
 void VDEC_PRINT_FUN_LINENO(const char *fun, int line);
 
@@ -866,7 +906,9 @@ st_userdata *get_vdec_userdata_ctx(void);
 
 void vdec_frame_rate_uevent(int dur);
 
-int vdec_get_uevent_dur(void);
+void vdec_set_vf_dur(int dur);
+
+int vdec_get_vf_dur(void);
 
 void vdec_sync_irq(enum vdec_irq_num num);
 
@@ -911,5 +953,17 @@ ssize_t dump_vdec_core(char *buf);
 #endif
 
 u64 vdec_get_stream_size(struct vdec_s *vdec);
+
+void use_t5d_driver_set(bool value);
+
+int vcodec_profile_register_v2(char *name, enum vformat_e vformat, int is_v4l);
+
+int is_mmu_copy_enable(void);
+
+void mmu_copy_work(struct mmu_copy_params params);
+
+void vdec_set_mmu_copy_flag(bool need_copy);
+
+struct firmware_s *fw_firmare_s_creat(int fw_size);
 
 #endif				/* VDEC_H */

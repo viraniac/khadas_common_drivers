@@ -38,6 +38,7 @@
 #define DMC_DEV_ID_DI_PRE                                  16
 #define DMC_DEV_ID_DI_POST                                 17
 #define DMC_DEV_ID_GDC                                     18
+#define DMC_DEV_ID_HEVC_B                                  19
 
 bool __weak tee_enabled(void) { return false; }
 
@@ -84,7 +85,7 @@ int __weak tee_vp9_prob_process(u32 cur_frame_type, u32 prev_frame_type,
 struct firmware_s {
 	char name[32];
 	unsigned int len;
-	char data[0];
+	char *data;
 };
 
 extern int get_decoder_firmware_data(enum vformat_e type,

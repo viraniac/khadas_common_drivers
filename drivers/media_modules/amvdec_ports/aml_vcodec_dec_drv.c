@@ -36,7 +36,9 @@
 #include "aml_vcodec_dec.h"
 #include "aml_vcodec_util.h"
 #include "aml_vcodec_vpp.h"
+#include "aml_vcodec_dec_infoserver.h"
 #include "../frame_provider/decoder/utils/decoder_report.h"
+#include "../common/media_utils/media_kernel_version.h"
 
 #include <linux/file.h>
 #include <linux/anon_inodes.h>
@@ -57,6 +59,8 @@ bool enable_drm_mode;
 extern void aml_vdec_pic_info_update(struct aml_vcodec_ctx *ctx);
 char dump_path[32] = "/data";
 
+u32 debug_mode;
+
 static int fops_vcodec_open(struct file *file)
 {
 	struct aml_vcodec_dev *dev = video_drvdata(file);
@@ -65,21 +69,21 @@ static int fops_vcodec_open(struct file *file)
 	struct vb2_queue *src_vq;
 	int ret = 0;
 
-	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	ctx = aml_media_mem_alloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)
 		return -ENOMEM;
 	kref_init(&ctx->ctx_ref);
 
-	aml_vb = kzalloc(sizeof(*aml_vb), GFP_KERNEL);
+	aml_vb = aml_media_mem_alloc(sizeof(*aml_vb), GFP_KERNEL);
 	if (!aml_vb) {
-		kfree(ctx);
+		aml_media_mem_free(ctx);
 		return -ENOMEM;
 	}
 
 	ctx->meta_infos.meta_bufs = vzalloc(sizeof(struct meta_data) * V4L_CAP_BUFF_MAX);
 	if (ctx->meta_infos.meta_bufs == NULL) {
-		kfree(aml_vb);
-		kfree(ctx);
+		aml_media_mem_free(aml_vb);
+		aml_media_mem_free(ctx);
 		return -ENOMEM;
 	}
 
@@ -152,6 +156,10 @@ static int fops_vcodec_open(struct file *file)
 	aml_vcodec_dec_set_default_params(ctx);
 	ctx->is_stream_off = true;
 	ctx->set_ext_buf_flg = false;
+
+	aml_vcodec_dec_info_init(ctx);
+	ctx->dec_intf.decinfo_event_report = aml_vcodec_decinfo_event_handler;
+
 	ctx->aux_infos.dv_index = 0;
 	ctx->aux_infos.sei_index = 0;
 	ctx->aux_infos.alloc_buffer = aml_alloc_buffer;
@@ -196,8 +204,8 @@ err_ctrls_setup:
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
 	vfree(ctx->meta_infos.meta_bufs);
-	kfree(ctx->empty_flush_buf);
-	kfree(ctx);
+	aml_media_mem_free(ctx->empty_flush_buf);
+	aml_media_mem_free(ctx);
 	mutex_unlock(&dev->dev_mutex);
 
 	return ret;
@@ -215,6 +223,7 @@ static int fops_vcodec_release(struct file *file)
 	vb2_queue_release(&ctx->m2m_ctx->cap_q_ctx.q);
 	vb2_queue_release(&ctx->m2m_ctx->out_q_ctx.q);
 
+	aml_vcodec_dec_info_deinit(ctx);
 	aml_vcodec_dec_release(ctx);
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
@@ -222,7 +231,7 @@ static int fops_vcodec_release(struct file *file)
 
 	list_del_init(&ctx->list);
 
-	kfree(ctx->empty_flush_buf);
+	aml_media_mem_free(ctx->empty_flush_buf);
 	aml_buf_mgr_release(&ctx->bm);
 	aml_v4l_vpp_release_early(ctx);
 	kref_put(&ctx->ctx_ref, aml_v4l_ctx_release);
@@ -265,7 +274,7 @@ int v4l2_alloc_fd(int *fd)
 	}
 
 	file->private_data =
-		kzalloc(sizeof(struct file_private_data), GFP_KERNEL);
+		aml_media_mem_alloc(sizeof(struct file_private_data), GFP_KERNEL);
 	if (!file->private_data) {
 		v4l_dbg(0, V4L_DEBUG_CODEC_ERROR,
 			"alloc priv data failed.\n");
@@ -474,8 +483,8 @@ static const struct v4l2_file_operations aml_vcodec_fops = {
 	.mmap		= v4l2_m2m_fop_mmap,
 };
 
-static ssize_t status_show(struct class *cls,
-	struct class_attribute *attr, char *buf)
+static ssize_t status_show(KV_CLASS_CONST struct class *cls,
+	KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf)
 {
 	struct aml_vcodec_dev *dev = container_of(cls,
 		struct aml_vcodec_dev, v4ldec_class);
@@ -503,13 +512,14 @@ out:
 	return pbuf - buf;
 }
 
-ssize_t show_v4ldec_state(struct aml_vcodec_dev *dev, char *buf) {
-	return status_show(&dev->v4ldec_class, NULL, buf);
+ssize_t show_v4ldec_state(void *dev, char *buf) {
+	struct aml_vcodec_dev *devptr = (struct aml_vcodec_dev *)dev;
+	return status_show(&devptr->v4ldec_class, NULL, buf);
 }
 EXPORT_SYMBOL(show_v4ldec_state);
 
-static ssize_t mmu_mem_info_show(struct class *cls,
-	struct class_attribute *attr, char *buf)
+static ssize_t mmu_mem_info_show(KV_CLASS_CONST struct class *cls,
+	KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf)
 {
 	struct aml_vcodec_dev *dev = container_of(cls,
 		struct aml_vcodec_dev, v4ldec_class);
@@ -524,7 +534,7 @@ static ssize_t mmu_mem_info_show(struct class *cls,
 	}
 
 	list_for_each_entry(ctx, &dev->ctx_list, list) {
-		aml_compressed_info_show(ctx);
+		pbuf += aml_compressed_info_show(ctx, pbuf);
 	}
 out:
 	mutex_unlock(&dev->dev_mutex);
@@ -532,14 +542,14 @@ out:
 	return pbuf - buf;
 }
 
-static ssize_t dump_path_show(struct class *class,
-		struct class_attribute *attr, char *buf)
+static ssize_t dump_path_show(KV_CLASS_CONST struct class *class,
+		KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf)
 {
 	return snprintf(buf, sizeof(dump_path), "%s\n", dump_path);
 }
 
-static ssize_t dump_path_store(struct class *class,
-		struct class_attribute *attr,
+static ssize_t dump_path_store(KV_CLASS_CONST struct class *class,
+		KV_CLASS_ATTR_CONST struct class_attribute *attr,
 		const char *buf, size_t size)
 {
 	ssize_t n;
@@ -647,7 +657,9 @@ static int aml_vcodec_probe(struct platform_device *pdev)
 
 	/*init class*/
 	dev->v4ldec_class.name = "v4ldec";
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
 	dev->v4ldec_class.owner = THIS_MODULE;
+#endif
 	dev->v4ldec_class.class_groups = v4ldec_class_groups;
 	ret = class_register(&dev->v4ldec_class);
 	if (ret) {
@@ -722,6 +734,11 @@ static struct platform_driver aml_vcodec_dec_driver = {
 	},
 };
 
+static void set_debug_flag(const char *module, int debug_flags)
+{
+	debug_mode = debug_flags;
+}
+
 static int __init amvdec_ports_init(void)
 {
 	v4l_dbg(0, V4L_DEBUG_CODEC_BUFMGR,
@@ -732,6 +749,7 @@ static int __init amvdec_ports_init(void)
 		return -ENODEV;
 	}
 
+	register_set_debug_flag_func(DEBUG_AMVDEC_PORTS, set_debug_flag);
 	return 0;
 }
 
@@ -745,7 +763,6 @@ static void __exit amvdec_ports_exit(void)
 module_init(amvdec_ports_init);
 module_exit(amvdec_ports_exit);
 
-u32 debug_mode;
 EXPORT_SYMBOL(debug_mode);
 module_param(debug_mode, uint, 0644);
 

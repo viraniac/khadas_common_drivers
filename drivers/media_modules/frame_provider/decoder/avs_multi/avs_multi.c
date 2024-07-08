@@ -50,6 +50,7 @@
 #include "avs_multi.h"
 #include "../utils/decoder_dma_alloc.h"
 #include "../../../media_sync/pts_server/pts_server_core.h"
+#include "../../decoder/utils/vdec_profile.h"
 
 #define DEBUG_MULTI_FLAG  0
 
@@ -194,14 +195,13 @@ static u32 step;
 
 static u32 start_decoding_delay;
 
-#define AVS_DEV_NUM        9
-static unsigned int max_decode_instance_num = AVS_DEV_NUM;
-static unsigned int max_process_time[AVS_DEV_NUM];
-static unsigned int max_get_frame_interval[AVS_DEV_NUM];
-static unsigned int run_count[AVS_DEV_NUM];
-static unsigned int ins_udebug_flag[AVS_DEV_NUM];
+static unsigned int max_decode_instance_num = MAX_INSTANCE_MUN;
+static unsigned int max_process_time[MAX_INSTANCE_MUN];
+static unsigned int max_get_frame_interval[MAX_INSTANCE_MUN];
+static unsigned int run_count[MAX_INSTANCE_MUN];
+static unsigned int ins_udebug_flag[MAX_INSTANCE_MUN];
 #ifdef DEBUG_MULTI_FRAME_INS
-static unsigned int max_run_count[AVS_DEV_NUM];
+static unsigned int max_run_count[MAX_INSTANCE_MUN];
 #endif
 /*
 error_handle_policy:
@@ -264,7 +264,9 @@ static struct vframe_provider_s vavs_vf_prov;
 #define LONG_CABAC_RV_AI_BUFF_START_ADDR	 0x00000000
 
 /* 4 buffers not enough for multi inc*/
-static u32 vf_buf_num = 8;
+static u32 vf_buf_num = 3;
+static u32 dynamic_buf_num_margin = 6;
+
 /*static u32 vf_buf_num_used;*/
 static u32 canvas_base = 128;
 #ifdef NV21
@@ -1094,7 +1096,6 @@ static void vavs_vf_put(struct vframe_s *vf, void *op_arg)
 			break;
 	}
 	if (i < VF_POOL_SIZE)
-
 		kfifo_put(&hw->recycle_q, (const struct vframe_s *)vf);
 	spin_unlock_irqrestore(&lock, flags);
 
@@ -1618,7 +1619,7 @@ static int vavs_prot_init(struct vdec_avs_hw_s *hw)
 				);
 			}
 #else
-			for (i = 0; i < hw->vf_buf_num_used; i++)
+			for (i = 0; i < (DECODE_BUFFER_NUM_MAX >> 1); i++)
 				WRITE_VREG(buf_spec_reg[i], 0);
 			for (i = 0; i < hw->vf_buf_num_used; i += 2) {
 				WRITE_VREG(buf_spec_reg[i >> 1],
@@ -1775,7 +1776,7 @@ static void vavs_local_init(struct vdec_avs_hw_s *hw)
 {
 	int i;
 
-	hw->vf_buf_num_used = vf_buf_num;
+	hw->vf_buf_num_used = vf_buf_num + dynamic_buf_num_margin;
 
 	hw->vavs_ratio = hw->vavs_amstream_dec_info.ratio;
 
@@ -2097,7 +2098,7 @@ static s32 vavs_init(struct vdec_avs_hw_s *hw)
 	struct firmware_s *fw;
 	u32 fw_size = 0x1000 * 16;
 
-	fw = vmalloc(sizeof(struct firmware_s) + fw_size);
+	fw = fw_firmare_s_creat(fw_size);
 	if (IS_ERR_OR_NULL(fw))
 		return -ENOMEM;
 
@@ -2772,18 +2773,6 @@ static void check_timer_func(struct timer_list *timer)
 	unsigned int timeout_val = decode_timeout_val;
 	unsigned long flags;
 
-	if (hw->m_ins_flag &&
-		(debug &
-		DEBUG_WAIT_DECODE_DONE_WHEN_STOP) == 0 &&
-		vdec->next_status ==
-		VDEC_STATUS_DISCONNECTED) {
-		hw->dec_result = DEC_RESULT_FORCE_EXIT;
-		vdec_schedule_work(&hw->work);
-		debug_print(hw,
-			0, "vdec requested to be disconnected\n");
-		return;
-	}
-
 	/*recycle*/
 	if (!hw->m_ins_flag) {
 		spin_lock_irqsave(&lock, flags);
@@ -2880,13 +2869,6 @@ static void check_timer_func(struct timer_list *timer)
 		udebug_pause_pos != hw->ucode_pause_pos) {
 		hw->ucode_pause_pos = 0;
 		WRITE_VREG(DEBUG_REG1, 0);
-	}
-
-	if (vdec->next_status == VDEC_STATUS_DISCONNECTED) {
-		hw->dec_result = DEC_RESULT_FORCE_EXIT;
-		vdec_schedule_work(&hw->work);
-		pr_info("vdec requested to be disconnected\n");
-		return;
 	}
 
 	mod_timer(&hw->check_timer, jiffies + CHECK_INTERVAL);
@@ -3224,7 +3206,7 @@ static int prepare_display_buf(struct vdec_avs_hw_s *hw,
 					 *	 hw->vavs_amstream_dec_info.rate *
 					 *	 repeat_count >> 1;
 					 */
-					vf->duration = dur * repeat_count >> 1;
+					vf->duration = dur * (repeat_count >> 1);
 					if (hw->next_pts != 0) {
 						hw->next_pts +=
 							((vf->duration) -
@@ -3749,8 +3731,11 @@ static irqreturn_t vmavs_isr_thread_fn(struct vdec_s *vdec, int irq)
 					buffer_index = update_reference(hw, hw->decoding_index);
 				} else {
 					/* drop b frame before reference pic ready */
-					if (hw->refs[0] == -1)
+					if (hw->refs[0] == -1) {
+						WRITE_VREG(AVS_BUFFERIN, ~(1 << hw->decoding_index));
+						hw->buf_use[hw->decoding_index]--;
 						buffer_index = hw->vf_buf_num_used;
+					}
 				}
 
 				if (buffer_index < hw->vf_buf_num_used) {
@@ -3789,6 +3774,7 @@ static irqreturn_t vmavs_isr_thread_fn(struct vdec_s *vdec, int irq)
 				} else
 					hw->decode_status_skip_pic_done_flag = 0;
 				hw->decode_pic_count++;
+				vdec_profile(vdec, VDEC_PROFILE_DECODED_FRAME, CORE_MASK_VDEC_1);
 				if ((hw->decode_pic_count & 0xffff) == 0) {
 					/*make ucode do not handle it as first picture*/
 					hw->decode_pic_count++;
@@ -4298,7 +4284,7 @@ static s32 vavs_init2(struct vdec_avs_hw_s *hw)
 	struct firmware_s *fw;
 	u32 fw_size = 0x1000 * 16;
 
-	fw = vmalloc(sizeof(struct firmware_s) + fw_size);
+	fw = fw_firmare_s_creat(fw_size);
 	if (IS_ERR_OR_NULL(fw))
 		return -ENOMEM;
 
@@ -4875,11 +4861,6 @@ static struct platform_driver ammvdec_avs_driver = {
 	}
 };
 
-static struct codec_profile_t ammvdec_avs_profile = {
-	.name = "mavs",
-	.profile = ""
-};
-
 static struct mconfig mavs_configs[] = {
 	/*MC_PU32("stat", &stat),
 	MC_PU32("debug_flag", &debug_flag),
@@ -4894,6 +4875,10 @@ static struct mconfig mavs_configs[] = {
 };
 static struct mconfig_node mavs_node;
 
+static void set_debug_flag(const char *module, int debug_flags)
+{
+	debug = debug_flags;
+}
 
 static int __init ammvdec_avs_driver_init_module(void)
 {
@@ -4909,17 +4894,15 @@ static int __init ammvdec_avs_driver_init_module(void)
 #else
 	//amvdec_avs_driver = amvdec_avs_driver;
 #endif
-	if (get_cpu_major_id() >= AM_MESON_CPU_MAJOR_ID_GXBB)
-		ammvdec_avs_profile.profile = "mavs+";
 
-	vcodec_profile_register(&ammvdec_avs_profile);
+	register_set_debug_flag_func(DEBUG_AMVDEC_AVS, set_debug_flag);
+	vcodec_profile_register_v2("mavs", VFORMAT_AVS, 0);
 	INIT_REG_NODE_CONFIGS("media.decoder", &mavs_node,
 		"mavs", mavs_configs, CONFIG_FOR_RW);
 	vcodec_feature_register(VFORMAT_AVS, 0);
+
 	return 0;
 }
-
-
 
 static void __exit ammvdec_avs_driver_remove_module(void)
 {
@@ -4944,6 +4927,10 @@ MODULE_PARM_DESC(stat, "\n amvdec_avs stat\n");
  *MODULE_PARM_DESC(step_flag, "\n step_flag\n");
  *******************************************
  */
+
+module_param(dynamic_buf_num_margin, uint, 0664);
+MODULE_PARM_DESC(dynamic_buf_num_margin, "\n dynamic_buf_num_margin\n");
+
 module_param(step, uint, 0664);
 MODULE_PARM_DESC(step, "\n step\n");
 

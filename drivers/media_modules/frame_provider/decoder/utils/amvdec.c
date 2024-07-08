@@ -394,12 +394,12 @@ static s32 aml_loadmc_vdec(const u32 *p, int id)
 	{
 #endif
 		addr_mc[id] = kmalloc(MC_SIZE, GFP_KERNEL);
-		memcpy(addr_mc[id], p, MC_SIZE);
-
 	}
 
 	if (!addr_mc[id])
 		return -ENOMEM;
+
+	memcpy(addr_mc[id], p, MC_SIZE);
 
 	mc_addr_map = dma_map_single(get_vdec_device(),
 		addr_mc[id], MC_SIZE, DMA_TO_DEVICE);
@@ -1094,6 +1094,19 @@ void amvdec_stop(void)
 			break;
 	}
 
+	timeout = jiffies + HZ/80;
+	while (READ_VREG(WRRSP_LMEM) & 0xfff) {
+		if (time_after(jiffies, timeout)) {
+			pr_err("%s, ctrl %x, rsp %x, pc %x status %x,%x\n", __func__,
+				READ_VREG(LMEM_DMA_CTRL),
+				READ_VREG(WRRSP_LMEM),
+				READ_VREG(0x308),
+				READ_VREG(AV_SCRATCH_J),
+				READ_VREG(AV_SCRATCH_9));
+			break;
+		}
+	}
+
 	/* #if MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6 */
 	if (get_cpu_major_id() >= AM_MESON_CPU_MAJOR_ID_M6) {
 		READ_VREG(DOS_SW_RESET0);
@@ -1173,9 +1186,25 @@ void amhevc_stop(void)
 				break;
 		}
 
+		timeout = jiffies + HZ/20;
+		while (READ_VREG(HEVC_WRRSP_LMEM) & 0xfff) {
+			if (time_after(jiffies, timeout)) {
+				pr_err("%s, ctrl %x, rsp %x, pc %x status %x\n", __func__,
+					READ_VREG(HEVC_LMEM_DMA_CTRL),
+					READ_VREG(HEVC_WRRSP_LMEM),
+					READ_VREG(0x3308),
+					READ_VREG(HEVC_ASSIST_SCRATCH_0));
+				break;
+			}
+		}
+
 		READ_VREG(DOS_SW_RESET3);
 		READ_VREG(DOS_SW_RESET3);
 		READ_VREG(DOS_SW_RESET3);
+
+		if (is_vcpu_clk_set()) {
+			CLEAR_VREG_MASK(DOS_GCLK_EN3, (1 << 2)); //turn off vcpu clock
+		}
 
 #ifdef CONFIG_WAKELOCK
 		amvdec_wake_unlock();
@@ -1314,6 +1343,9 @@ EXPORT_SYMBOL(amhevc_reset_f);
 
 void amhevc_reset_b(void)
 {
+	WRITE_VREG(HEVC_ASSIST_FB_CTL,
+		READ_VREG(HEVC_ASSIST_FB_CTL) | ((1 << 8)));
+
 	hevc_arb_ctrl_front_or_back(0, 0);
 	/*
 	* 2: assist

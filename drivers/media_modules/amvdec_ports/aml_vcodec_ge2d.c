@@ -194,6 +194,9 @@ static void update_ge2d_num_cache(struct aml_v4l2_ge2d *ge2d)
 {
 	atomic_set(&ge2d->ctx->ge2d_cache_num,
 		GE2D_FRAME_SIZE - kfifo_len(&ge2d->input));
+	if (atomic_read(&ge2d->ctx->ge2d_cache_num) <= 1) {
+		vdec_thread_wakeup(ge2d->ctx->ada_ctx);
+	}
 }
 
 static int v4l_ge2d_empty_input_done(struct aml_v4l2_ge2d_buf *buf)
@@ -495,16 +498,10 @@ retry:
 		src_fmt = get_input_format(in_buf->vf);
 
 		if (in_buf->vf->canvas0_config[0].endian == 7)
-			src_fmt |= (is_cpu_t7c() ||
-						(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S5) ||
-						(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5M) ||
-						(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X)) ?
+			src_fmt |= is_mjpeg_endian_rematch() ?
 						GE2D_LITTLE_ENDIAN : GE2D_BIG_ENDIAN;
 		else
-			src_fmt |= (is_cpu_t7c() ||
-						(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S5) ||
-						(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5M) ||
-						(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X)) ?
+			src_fmt |= is_mjpeg_endian_rematch() ?
 						GE2D_BIG_ENDIAN : GE2D_LITTLE_ENDIAN;
 
 		/* negotiate format of destination */
@@ -722,7 +719,7 @@ int aml_v4l2_ge2d_init(
 	if (!cfg || !ge2d_handle)
 		return -EINVAL;
 
-	ge2d = kzalloc(sizeof(*ge2d), GFP_KERNEL);
+	ge2d = aml_media_mem_alloc(sizeof(*ge2d), GFP_KERNEL);
 	if (!ge2d)
 		return -ENOMEM;
 
@@ -838,7 +835,7 @@ int aml_v4l2_ge2d_init(
 
 	*ge2d_handle = ge2d;
 
-	v4l_dbg(ctx, V4L_DEBUG_CODEC_PRINFO,
+	v4l_dbg(ctx, V4L_DEBUG_CODEC_PROT,
 		"GE2D_CFG bsize:%d, wkm:%x, bm:%x, drm:%d\n",
 		ge2d->buf_size,
 		ge2d->work_mode,
@@ -864,7 +861,7 @@ error3:
 error2:
 	destroy_ge2d_work_queue(ge2d->ge2d_context);
 error:
-	kfree(ge2d);
+	aml_media_mem_free(ge2d);
 
 	return ret;
 }
@@ -897,7 +894,7 @@ int aml_v4l2_ge2d_destroy(struct aml_v4l2_ge2d* ge2d)
 	v4l_dbg(ge2d->ctx, V4L_DEBUG_GE2D_DETAIL,
 		"ge2d destroy done\n");
 
-	kfree(ge2d);
+	aml_media_mem_free(ge2d);
 
 	return 0;
 }
@@ -964,19 +961,22 @@ static int aml_v4l2_ge2d_push_vframe(struct aml_v4l2_ge2d* ge2d, struct vframe_s
 		fp = media_open(file_name, O_CREAT | O_RDWR | O_LARGEFILE | O_APPEND, 0600);
 		if (!IS_ERR(fp)) {
 			struct vb2_buffer *vb = &in_buf->aml_vb->vb.vb2_buf;
+			void *y_vaddr = codec_mm_vmap(aml_buf->planes[0].addr, aml_buf->planes[0].length);
 
 			// dump y data
-			u8 *yuv_data_addr = aml_yuv_dump(fp, (u8 *)vb2_plane_vaddr(vb, 0),
+			u8 *uv_vaddr = aml_yuv_dump(fp, (u8 *)y_vaddr,
 				vf->width, vf->height, 64);
-
 			// dump uv data
 			if (vb->num_planes == 1) {
-				aml_yuv_dump(fp, yuv_data_addr, vf->width,
+				aml_yuv_dump(fp, uv_vaddr, vf->width,
 					vf->height / 2, 64);
 			} else {
-				aml_yuv_dump(fp, (u8 *)vb2_plane_vaddr(vb, 1),
+				uv_vaddr = (u8 *)codec_mm_vmap(aml_buf->planes[1].addr, aml_buf->planes[1].length);
+				aml_yuv_dump(fp, uv_vaddr,
 					vf->width, vf->height / 2, 64);
+				codec_mm_unmap_phyaddr(uv_vaddr);
 			}
+			codec_mm_unmap_phyaddr(y_vaddr);
 
 			pr_info("dump idx: %d %dx%d num_planes %d\n",
 				dump_ge2d_input,

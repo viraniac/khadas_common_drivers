@@ -234,7 +234,6 @@ Bit[10:8] - film_grain_params_ref_idx, For Write request
 #endif
 
 #ifdef MULTI_INSTANCE_SUPPORT
-#define MAX_DECODE_INSTANCE_NUM     9
 
 #ifdef DEBUG_USE_VP9_DEVICE_NAME
 #define MULTI_DRIVER_NAME "ammvdec_vp9_v4l"
@@ -253,15 +252,15 @@ static u32 suffix_aux_buf_size;
 #if (defined DEBUG_UCODE_LOG) || (defined DEBUG_CMD)
 #define UCODE_LOG_BUF_SIZE   (1024 * 1024)
 #endif
-static unsigned int max_decode_instance_num = MAX_DECODE_INSTANCE_NUM;
-static unsigned int decode_frame_count[MAX_DECODE_INSTANCE_NUM];
-static unsigned int display_frame_count[MAX_DECODE_INSTANCE_NUM];
-static unsigned int max_process_time[MAX_DECODE_INSTANCE_NUM];
-static unsigned int run_count[MAX_DECODE_INSTANCE_NUM];
-static unsigned int input_empty[MAX_DECODE_INSTANCE_NUM];
-static unsigned int not_run_ready[MAX_DECODE_INSTANCE_NUM];
+static unsigned int max_decode_instance_num = MAX_INSTANCE_MUN;
+static unsigned int decode_frame_count[MAX_INSTANCE_MUN];
+static unsigned int display_frame_count[MAX_INSTANCE_MUN];
+static unsigned int max_process_time[MAX_INSTANCE_MUN];
+static unsigned int run_count[MAX_INSTANCE_MUN];
+static unsigned int input_empty[MAX_INSTANCE_MUN];
+static unsigned int not_run_ready[MAX_INSTANCE_MUN];
 #ifdef AOM_AV1_MMU_DW
-static unsigned int dw_mmu_enable[MAX_DECODE_INSTANCE_NUM];
+static unsigned int dw_mmu_enable[MAX_INSTANCE_MUN];
 #endif
 
 static u32 decode_timeout_val = 600;
@@ -375,6 +374,15 @@ static u32 video_signal_type;
 static u32 on_no_keyframe_skiped;
 static u32 without_display_mode;
 static u32 v4l_bitstream_id_enable = 1;
+
+/*
+ *[3:0] 0: default use config from omx.
+ *      1: force enable fence.
+ *      2: disable fence.
+ *[7:4] 0: fence use for driver.
+ *      1: fence fd use for app.
+ */
+static u32 force_config_fence;
 
 #ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
 static u32 force_dv_enable;
@@ -642,6 +650,11 @@ struct afbc_buf {
 	int   used;
 };
 
+struct av1_fence_vf_t {
+  u32 used_size;
+  struct vframe_s *fence_vf[VF_POOL_SIZE];
+};
+
 enum T5D_ROTATE_MODE {
 	T5D_DISABLE_ROTATE,
 	T5D_ROTATE_DW21,
@@ -899,6 +912,10 @@ struct AV1HW_s {
 	ulong frame_dw_mmu_map_handle;
 	ulong rdma_handle;
 	bool timeout;
+	bool enable_fence;
+	int fence_usage;
+	struct av1_fence_vf_t fence_vf_s;
+	struct mutex fence_mutex;
 	/*
 	 * On t5d fg, each frame needs to be decoded twice by dw 0x21 and dw 3 respectively
 	 * 0:disable rotate  1:dw 0x21  2: dw 3
@@ -5403,7 +5420,7 @@ static int av1_local_init(struct AV1HW_s *hw, bool reset_flag)
 	if (hw->ucode_log_addr == NULL) {
 		hw->ucode_log_phy_addr = 0;
 	}
-	pr_info("%s: alloc ucode log buffer %p\n",
+	pr_debug("%s: alloc ucode log buffer %p\n",
 		__func__, hw->ucode_log_addr);
 #endif
 
@@ -5422,7 +5439,7 @@ static int av1_local_init(struct AV1HW_s *hw, bool reset_flag)
 			pr_err("%s: failed to alloc fg buffer\n", __func__);
 		}
 		hw->fg_ptr = hw->fg_addr;
-		pr_info("%s, alloc fg table addr %lx, size 0x%x\n", __func__,
+		pr_debug("%s, alloc fg table addr %lx, size 0x%x\n", __func__,
 			(ulong)hw->fg_phy_addr, FGS_TABLE_SIZE * alloc_num);
 	}
 	if ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3) ||
@@ -5664,11 +5681,11 @@ void parse_metadata(struct AV1HW_s *hw, struct vframe_s *vf, struct PIC_BUFFER_C
 static void set_frame_info(struct AV1HW_s *hw, struct vframe_s *vf, struct PIC_BUFFER_CONFIG_s *pic)
 {
 	unsigned int ar;
-	int uevent_dur = vdec_get_uevent_dur();
+	int vf_dur = vdec_get_vf_dur();
 
 	parse_metadata(hw, vf, pic);
 
-	vf->duration = uevent_dur ? uevent_dur : hw->frame_dur;
+	vf->duration = vf_dur ? vf_dur : hw->frame_dur;
 	vf->duration_pulldown = 0;
 	vf->flag = 0;
 	vf->prop.master_display_colour = hw->vf_dp;
@@ -5803,6 +5820,37 @@ static struct vframe_s *vav1_vf_get(void *op_arg)
 static void av1_recycle_dec_resource(void *priv,
 						struct aml_buf *aml_buf)
 {
+	struct AV1HW_s *hw = (struct AV1HW_s *)priv;
+	struct vframe_s *vf = &aml_buf->vframe;
+	uint8_t index;
+
+	if (hw->enable_fence && vf->fence) {
+		int ret, i;
+
+		mutex_lock(&hw->fence_mutex);
+		ret = dma_fence_get_status(vf->fence);
+		if (ret == 0) {
+			for (i = 0; i < VF_POOL_SIZE; i++) {
+				if (hw->fence_vf_s.fence_vf[i] == NULL) {
+					hw->fence_vf_s.fence_vf[i] = vf;
+					hw->fence_vf_s.used_size++;
+					mutex_unlock(&hw->fence_mutex);
+					return;
+				}
+			}
+		}
+		mutex_unlock(&hw->fence_mutex);
+	}
+
+	index = vf->index & 0xff;
+
+	if (hw->enable_fence && vf->fence) {
+		vdec_fence_put(vf->fence);
+		vf->fence = NULL;
+	}
+
+
+	return;
 }
 
 static void vav1_vf_put(struct vframe_s *vf, void *op_arg)
@@ -5987,6 +6035,12 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 			return -1;
 		}
 
+		if (hw->enable_fence) {
+			/* fill fence information. */
+			if (hw->fence_usage == FENCE_USE_FOR_DRIVER)
+				vf->fence	= pic_config->fence;
+		}
+
 #ifdef MULTI_INSTANCE_SUPPORT
 		if (vdec_frame_based(hw_to_vdec(hw))) {
 			vf->pts = pic_config->pts;
@@ -6137,7 +6191,8 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 			vf->type = VIDTYPE_PROGRESSIVE |
 				VIDTYPE_VIU_FIELD;
 			vf->type |= nv_order;
-			if ((pic_config->double_write_mode == 3 ||
+			if (!v4l2_ctx->no_fbc_output &&
+				(pic_config->double_write_mode == 3 ||
 				pic_config->double_write_mode == 5) &&
 				(!IS_8K_SIZE(pic_config->y_crop_width,
 				pic_config->y_crop_height))) {
@@ -6147,7 +6202,8 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 					vf->type |= VIDTYPE_SCATTER;
 				}
 			}
-			if (pic_config->double_write_mode != 16 &&
+			if (!v4l2_ctx->no_fbc_output &&
+				pic_config->double_write_mode != 16 &&
 				(!IS_8K_SIZE(pic_config->y_crop_width,
 				pic_config->y_crop_height))) {
 				if ((get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_S4 &&
@@ -6262,11 +6318,6 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 
 		vf->src_fmt.play_id = vdec->inst_cnt;
 
-		if (v4l2_ctx->no_fbc_output &&
-			(v4l2_ctx->picinfo.bitdepth != 0 &&
-			 v4l2_ctx->picinfo.bitdepth != 8))
-			v4l2_ctx->fbc_transcode_and_set_vf(v4l2_ctx,
-				aml_buf, vf);
 		av1_inc_vf_ref(hw, pic_config->v4l_buf_index);
 		vdec_vframe_ready(hw_to_vdec(hw), vf);
 		if (pic_config->v4l_buf_index != pic_config->BUF_index)	{
@@ -6324,6 +6375,13 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 		ATRACE_COUNTER(hw->trace.disp_q_name, kfifo_len(&hw->display_q));
 
 		atomic_add(1, &hw->vf_pre_count);
+
+		if ((v4l2_ctx->no_fbc_output &&
+			(v4l2_ctx->picinfo.bitdepth != 0 &&
+			v4l2_ctx->picinfo.bitdepth != 8)) ||
+			v4l2_ctx->enable_di_post)
+			v4l2_ctx->fbc_transcode_and_set_vf(v4l2_ctx,
+				aml_buf, vf);
 		/*count info*/
 		hw->gvs->frame_dur = hw->frame_dur;
 		vdec_count_info(hw->gvs, 0, stream_offset);
@@ -6335,8 +6393,8 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 #endif
 
 		av1_print(hw, AV1_DEBUG_SEI_DETAIL,
-			"%s aux_data_size:%d inst_cnt:%d vf:%p\n",
-			__func__, pic_config->aux_data_size, vdec->inst_cnt, vf);
+			"%s aux_data_size:%d inst_cnt:%d signal_type:0x%x vf:%p\n",
+			__func__, pic_config->aux_data_size, vdec->inst_cnt, vf->signal_type, vf);
 
 		if (debug & AV1_DEBUG_SEI_DETAIL) {
 			int i = 0;
@@ -6375,6 +6433,7 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 			if (v4l2_ctx->is_stream_off) {
 				vav1_vf_put(vav1_vf_get(vdec), vdec);
 			} else {
+				aml_buf_set_vframe(aml_buf, vf);
 				vdec_tracing(&v4l2_ctx->vtr, VTRACE_DEC_PIC_0, aml_buf->index);
 				aml_buf_done(&v4l2_ctx->bm, aml_buf, BUF_USER_DEC);
 			}
@@ -6387,12 +6446,88 @@ static int prepare_display_buf(struct AV1HW_s *hw,
 
 void av1_raw_write_image(AV1Decoder *pbi, PIC_BUFFER_CONFIG *sd)
 {
-	struct AV1HW_s *hw = (struct AV1HW_s *)(pbi->private_data);
+	struct AV1HW_s *hw = (struct AV1HW_s *)pbi->private_data;
+	struct vdec_s *vdec = hw_to_vdec(hw);
 	sd->stream_offset = pbi->pre_stream_offset;
-	if (hw->t5d_fg_run_rotate != T5D_ROTATE_DW3) {
-		prepare_display_buf((struct AV1HW_s *)(pbi->private_data), sd);
+	if (hw->enable_fence) {
+		int i, j, used_size, ret;
+		int signed_count = 0;
+		struct vframe_s *signed_fence[VF_POOL_SIZE];
+		struct aml_buf *buf;
+		/* notify signal to wake up wq of fence. */
+		vdec_timeline_increase(vdec->sync, 1);
+
+		av1_print(hw, PRINT_FLAG_VDEC_STATUS,
+			"%s, enable_fence:%d, vdec_timeline_increase() done\n",
+			__func__, hw->enable_fence);
+
+		mutex_lock(&hw->fence_mutex);
+		used_size = hw->fence_vf_s.used_size;
+		if (used_size) {
+			for (i = 0, j = 0; i < VF_POOL_SIZE && j < used_size; i++) {
+				if (hw->fence_vf_s.fence_vf[i] != NULL) {
+					ret = dma_fence_get_status(hw->fence_vf_s.fence_vf[i]->fence);
+					if (ret == 1) {
+						signed_fence[signed_count] = hw->fence_vf_s.fence_vf[i];
+						hw->fence_vf_s.fence_vf[i] = NULL;
+						hw->fence_vf_s.used_size--;
+						signed_count++;
+					}
+					j++;
+				}
+			}
+		}
+		mutex_unlock(&hw->fence_mutex);
+		for (i = 0; i < signed_count; i++) {
+			if (!signed_fence[i])
+				continue;
+			buf = (struct aml_buf *)signed_fence[i]->v4l_mem_handle;
+			av1_recycle_dec_resource(hw, buf);
+		}
+	} else {
+		if (hw->t5d_fg_run_rotate != T5D_ROTATE_DW3) {
+			prepare_display_buf((struct AV1HW_s *)(pbi->private_data), sd);
+		}
 	}
 	pbi->pre_stream_offset = READ_VREG(HEVC_SHIFT_BYTE_COUNT);
+}
+
+int post_video_frame_early(AV1Decoder *pbi, struct AV1_Common_s *cm)
+{
+	struct AV1HW_s *hw = (struct AV1HW_s *)pbi->private_data;
+	if (hw->enable_fence && cm->show_frame) {
+		struct vdec_s *vdec = hw_to_vdec(hw);
+		struct PIC_BUFFER_CONFIG_s *pic = NULL;
+		if (cm->cur_frame == NULL) {
+			av1_print(hw, 0, "%s: cur_frame not exist!!!\n", __func__);
+			return -1;
+		}
+
+		pic = &cm->cur_frame->buf;
+
+		/* create fence for each buffers. */
+		if (vdec_timeline_create_fence(vdec->sync) < 0)
+			return -1;
+
+		pic->fence		= vdec->sync->fence;
+		pic->bit_depth		= cm->bit_depth;
+		pic->slice_type 	= cm->frame_type;
+		pic->stream_offset	= pbi->pre_stream_offset;
+
+		if (hw->chunk) {
+			pic->pts	= hw->chunk->pts;
+			pic->pts64	= hw->chunk->pts64;
+			pic->timestamp	= hw->chunk->timestamp;
+		}
+
+		/* post video vframe. */
+		prepare_display_buf(hw, pic); // T5D AV1 fence mode is disabled when FG stream(t5d_fg_run_rotate: T5D_ROTATE_DW21, T5D_ROTATE_DW3)
+
+		av1_print(hw, PRINT_FLAG_VDEC_STATUS,
+			"%s, enable_fence:%d, vdec_timeline_create_fence done\n",
+			__func__, hw->enable_fence);
+	}
+	return 0;
 }
 
 static bool is_available_buffer(struct AV1HW_s *hw);
@@ -6412,6 +6547,7 @@ static int notify_v4l_eos(struct vdec_s *vdec)
 			pr_err("[%d] AV1 isn't enough buff for notify eos.\n", ctx->id);
 			return 0;
 		}
+		usleep_range(500, 1000);
 	}
 
 	index = v4l_get_free_fb(hw);
@@ -6428,6 +6564,7 @@ static int notify_v4l_eos(struct vdec_s *vdec)
 	vf->v4l_mem_handle	= (ulong)aml_buf;
 
 	vdec_vframe_ready(vdec, vf);
+	aml_buf_set_vframe(aml_buf, vf);
 	kfifo_put(&hw->display_q, (const struct vframe_s *)vf);
 
 	vdec_tracing(&ctx->vtr, VTRACE_DEC_PIC_0, aml_buf->index);
@@ -7158,11 +7295,14 @@ int av1_continue_decoding(struct AV1HW_s *hw, int obu_type)
 		if (debug &
 			AOM_DEBUG_AUX_DATA)
 			dump_aux_buf(hw);
-		set_pic_aux_data(hw, cur_pic_config, 0, 0);
+
 		set_dv_data(hw);
-		if (cm->show_frame &&
-			hw->dv_data_buf != NULL)
-			copy_dv_data(hw, cur_pic_config);
+		if (cm->show_frame) {
+			if ((hw->dv_data_buf != NULL) && (hw->dv_data_size > 0))
+				copy_dv_data(hw, cur_pic_config);
+			else
+				set_pic_aux_data(hw, cur_pic_config, 0, 0);
+		}
 
 		hw->frame_decoded = 0;
 		pbi->bufmgr_proc_count++;
@@ -7964,6 +8104,7 @@ static int v4l_res_change(struct AV1HW_s *hw)
 				hw->t5d_fg_run_rotate = T5D_ROTATE_DW21;
 				hw->t5d_fg_flags = 1;
 				hw->double_write_mode = 0x21;
+				hw->enable_fence = 0;
 
 				if (hw->dw_frame_mmu_map_addr == NULL) {
 					u32 mmu_map_size = vaom_dw_frame_mmu_map_size(hw);
@@ -8675,6 +8816,7 @@ static irqreturn_t vav1_isr_thread_fn(int irq, void *data)
 						hw->t5d_fg_run_rotate = T5D_ROTATE_DW21;
 						hw->t5d_fg_flags = 1;
 						hw->double_write_mode = 0x21;
+						hw->enable_fence = 0;
 					}
 					if (hw->dw_frame_mmu_map_addr == NULL) {
 						u32 mmu_map_size = vaom_dw_frame_mmu_map_size(hw);
@@ -9264,7 +9406,7 @@ static int vav1_local_init(struct AV1HW_s *hw, bool reset_flag)
 		if (!hw->pts_unstable) {
 			hw->pts_unstable =
 			(hw->vav1_amstream_dec_info.rate == 0)?1:0;
-			pr_info("set pts unstable\n");
+			pr_debug("set pts unstable\n");
 		}
 	}
 
@@ -9291,7 +9433,7 @@ static s32 vav1_init(struct AV1HW_s *hw)
 	if (vav1_local_init(hw, false) < 0)
 		return -EBUSY;
 
-	fw = vmalloc(sizeof(struct firmware_s) + fw_size);
+	fw = fw_firmare_s_creat(fw_size);
 	if (IS_ERR_OR_NULL(fw))
 		return -ENOMEM;
 
@@ -9457,6 +9599,26 @@ static int amvdec_av1_mmu_init(struct AV1HW_s *hw)
 	return 0;
 }
 
+static void vdec_fence_release(struct AV1HW_s *hw,
+			       struct vdec_sync *sync)
+{
+	ulong expires;
+
+	/* notify signal to wake up all fences. */
+	vdec_timeline_increase(sync, VF_POOL_SIZE);
+
+	expires = jiffies + msecs_to_jiffies(2000);
+	while (!check_objs_all_signaled(sync)) {
+		if (time_after(jiffies, expires)) {
+			pr_err("wait fence signaled timeout.\n");
+			break;
+		}
+	}
+
+	/* decreases refcnt of timeline. */
+	vdec_timeline_put(sync);
+}
+
 /****************************************/
 #ifdef CONFIG_PM
 static int av1_suspend(struct device *dev)
@@ -9475,11 +9637,6 @@ static const struct dev_pm_ops av1_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(av1_suspend, av1_resume)
 };
 #endif
-
-static struct codec_profile_t amvdec_av1_profile = {
-	.name = "AV1-T5D-V4L",
-	.profile = ""
-};
 
 static unsigned int get_data_check_sum
 	(struct AV1HW_s *hw, int size)
@@ -9733,7 +9890,6 @@ static void av1_work(struct work_struct *work)
 		hw->process_state = PROC_STATE_INIT;
 
 		if (hw->timeout && vdec_frame_based(vdec)) {
-			av1_buf_ref_process_for_exception(hw);
 			vdec_v4l_post_error_frame_event(ctx);
 			hw->timeout = false;
 		}
@@ -10486,7 +10642,7 @@ static void av1_dump_state(struct vdec_s *vdec)
 		);
 
 	av1_print(hw, 0,
-		"is_framebase(%d), eos %d, dec_result 0x%x dec_frm %d disp_frm %d run %d not_run_ready %d input_empty %d low_latency %d no_head %d \n",
+		"is_framebase(%d), eos %d, dec_result 0x%x dec_frm %d disp_frm %d run %d not_run_ready %d input_empty %d low_latency %d no_head %d enable_fence %d\n",
 		input_frame_based(vdec),
 		hw->eos,
 		hw->dec_result,
@@ -10496,7 +10652,8 @@ static void av1_dump_state(struct vdec_s *vdec)
 		not_run_ready[hw->index],
 		input_empty[hw->index],
 		hw->low_latency_flag,
-		hw->no_head
+		hw->no_head,
+		hw->enable_fence
 		);
 
 	av1_print(hw, 0,
@@ -10618,7 +10775,7 @@ static int ammvdec_av1_probe(struct platform_device *pdev)
 	struct AV1HW_s *hw = NULL;
 	struct aml_vcodec_ctx *ctx = NULL;
 
-	pr_info("ammvdec_av1_t5d_probe\n");
+	pr_debug("ammvdec_av1_t5d_probe\n");
 	if ((get_cpu_major_id() < AM_MESON_CPU_MAJOR_ID_TM2) ||
 		(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5) ||
 		((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_TM2) && !is_meson_rev_b())) {
@@ -10824,8 +10981,20 @@ static int ammvdec_av1_probe(struct platform_device *pdev)
 
 		if (get_config_int(pdata->config,
 			"parm_v4l_low_latency_mode",
+			&config_val) == 0) {
+			hw->low_latency_flag = (config_val & 1) ? 1 : 0;
+			hw->enable_fence = (config_val & 2) ? 1 : 0;
+		}
+
+		if (get_config_int(pdata->config,
+			"parm_enable_fence",
 			&config_val) == 0)
-			hw->low_latency_flag = config_val;
+			hw->enable_fence = config_val;
+
+		if (get_config_int(pdata->config,
+			"parm_fence_usage",
+			&config_val) == 0)
+			hw->fence_usage = config_val;
 
 		if (get_config_int(pdata->config,
 			"parm_v4l_duration",
@@ -10943,10 +11112,20 @@ static int ammvdec_av1_probe(struct platform_device *pdev)
 		hw->max_pic_w = 4096;
 		hw->max_pic_h = 2304;
 	}
-	av1_print(hw, 0,
+	av1_print(hw, AV1_DEBUG_BUFMGR,
 		"vdec_is_support_4k() %d  max_pic_w %d max_pic_h %d buffer_spec_index %d work_buf_size 0x%x\n",
 			vdec_is_support_4k(), hw->max_pic_w, hw->max_pic_h,
 			hw->buffer_spec_index, work_buf_size);
+
+	if (force_config_fence) {
+		hw->enable_fence = true;
+		hw->fence_usage =
+			(force_config_fence >> 4) & 0xf;
+		if (force_config_fence & 0x2)
+			hw->enable_fence = false;
+		av1_print(hw, 0, "enable fence: %d, fence usage: %d\n",
+			hw->enable_fence, hw->fence_usage);
+	}
 
 	if (get_cpu_major_id() < AM_MESON_CPU_MAJOR_ID_GXL ||
 		hw->double_write_mode == 0x10)
@@ -10956,25 +11135,12 @@ static int ammvdec_av1_probe(struct platform_device *pdev)
 
 	video_signal_type = hw->video_signal_type;
 
-	if (pdata->sys_info) {
-		hw->vav1_amstream_dec_info = *pdata->sys_info;
-		if ((unsigned long) hw->vav1_amstream_dec_info.param
-				& 0x08) {
-				hw->low_latency_flag = 1;
-			} else
-				hw->low_latency_flag = 0;
-	} else {
-		hw->vav1_amstream_dec_info.width = 0;
-		hw->vav1_amstream_dec_info.height = 0;
-		hw->vav1_amstream_dec_info.rate = 30;
-	}
-
 #ifdef AOM_AV1_MMU_DW
 	hw->dw_mmu_enable =
 		get_double_write_mode_init(hw) & 0x20 ? 1 : 0;
 
 #endif
-	av1_print(hw, 0,
+	av1_print(hw, AV1_DEBUG_BUFMGR,
 			"no_head %d  low_latency %d video_signal_type 0x%x\n",
 			hw->no_head, hw->low_latency_flag, hw->video_signal_type);
 
@@ -11030,8 +11196,30 @@ static int ammvdec_av1_probe(struct platform_device *pdev)
 	}
 
 	hw->cma_dev = pdata->cma_dev;
+
+	mutex_init(&hw->fence_mutex);
+
+	if (hw->enable_fence) {
+		pdata->sync = vdec_sync_get();
+		if (!pdata->sync) {
+			av1_print(hw, 0, "alloc fence timeline error\n");
+			av1_local_uninit(hw, false);
+			uninit_mmu_buffers(hw);
+			/* devm_kfree(&pdev->dev, (void *)pbi); */
+			vfree((void *)hw);
+			pdata->dec_status = NULL;
+			return -1;
+		}
+		ctx->sync = pdata->sync;
+		pdata->sync->usage = hw->fence_usage;
+		vdec_timeline_create(pdata->sync, DRIVER_NAME);
+		vdec_timeline_get(pdata->sync);
+	}
+
 	if (vav1_init(pdata) < 0) {
 		av1_print(hw, 0, "\namvdec_av1 init failed.\n");
+		if (hw->enable_fence)
+			vdec_timeline_put(pdata->sync);
 		av1_local_uninit(hw, false);
 		uninit_mmu_buffers(hw);
 		vfree((void *)hw);
@@ -11101,6 +11289,9 @@ static int ammvdec_av1_remove(struct platform_device *pdev)
 		}
 	}
 
+	if (hw->enable_fence)
+		vdec_fence_release(hw, vdec->sync);
+
 #ifdef DEBUG_PTS
 	pr_info("pts missed %ld, pts hit %ld, duration %d\n",
 		   hw->pts_missed, hw->pts_hit, hw->frame_dur);
@@ -11165,6 +11356,11 @@ static struct mconfig av1_configs[] = {
 };
 static struct mconfig_node av1_node;
 
+static void set_debug_flag(const char *module, int debug_flags)
+{
+	debug = debug_flags;
+}
+
 static int __init amvdec_av1_driver_init_module(void)
 {
 	int i;
@@ -11180,6 +11376,7 @@ static int __init amvdec_av1_driver_init_module(void)
 
 	error_handle_policy = 0;
 
+	register_set_debug_flag_func(DEBUG_AMVDEC_AV1_T5D_V4L, set_debug_flag);
 #ifdef ERROR_HANDLE_DEBUG
 	dbg_nal_skip_flag = 0;
 	dbg_nal_skip_count = 0;
@@ -11194,19 +11391,11 @@ static int __init amvdec_av1_driver_init_module(void)
 		pr_err("failed to register ammvdec_av1 driver\n");
 		return -ENODEV;
 	}
+
 	if (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5D) {
-		amvdec_av1_profile.profile =
-				"10bit, dwrite, compressed, no_head, uvm, multi_frame_dv";
-	} else if (((get_cpu_major_id() > AM_MESON_CPU_MAJOR_ID_TM2) || is_cpu_tm2_revb())
-		&& (get_cpu_major_id() != AM_MESON_CPU_MAJOR_ID_T5)) {
-		amvdec_av1_profile.profile =
-				"8k, 10bit, dwrite, compressed, no_head, frame_dv, uvm, multi_frame_dv";
-	} else {
-		amvdec_av1_profile.name = "av1_unsupport";
+		use_t5d_driver_set(true);
+		vcodec_profile_register_v2("AV1-V4L", VFORMAT_AV1, 1);
 	}
-
-	vcodec_profile_register(&amvdec_av1_profile);
-
 	INIT_REG_NODE_CONFIGS("media.decoder", &av1_node,
 		"av1-v4l", av1_configs, CONFIG_FOR_RW);
 	vcodec_feature_register(VFORMAT_AV1, 1);
@@ -11463,6 +11652,9 @@ MODULE_PARM_DESC(v4l_bitstream_id_enable, "\n v4l_bitstream_id_enable\n");
 
 module_param(enable_single_slice, uint, 0664);
 MODULE_PARM_DESC(enable_single_slice, "\n  enable_single_slice\n");
+
+module_param(force_config_fence, uint, 0664);
+MODULE_PARM_DESC(force_config_fence, "\n force enable fence\n");
 
 module_init(amvdec_av1_driver_init_module);
 module_exit(amvdec_av1_driver_remove_module);

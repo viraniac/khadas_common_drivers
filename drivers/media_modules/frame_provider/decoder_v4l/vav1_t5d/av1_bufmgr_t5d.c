@@ -2984,8 +2984,9 @@ int aom_decode_frame_from_obus(AV1Decoder *pbi, union param_u *params, int obu_t
         if (byte_alignment(cm, &rb)) return -1;
         AOM_FALLTHROUGH_INTENDED;  // fall through to read tile group.
 #endif
-  default:
-    break;
+        break;
+    default:
+        break;
       }
 	return frame_decoding_finished;
 }
@@ -3263,6 +3264,11 @@ int av1_bufmgr_process(AV1Decoder *pbi, union param_u *params,
       }
   }
   av1_print2(AV1_DEBUG_BUFMGR_DETAIL, "%s: pbi %p cm %p cur_frame %p\n", __func__, pbi, cm, cm->cur_frame);
+
+  cm->bit_depth = params->p.bit_depth;
+
+  if (post_video_frame_early(pbi, cm) < 0)
+    return -3;
 
   return frame_decoded;
 

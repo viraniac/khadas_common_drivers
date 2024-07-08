@@ -90,6 +90,11 @@
 #define DECODE_STATUS_PIC_HEADER_DONE 0x2
 #define DECODE_STATUS_PIC_SKIPPED     0x3
 #define DECODE_STATUS_BUF_INVALID     0x4
+#define DECODE_STATUS_PARAM_CHECK     0x5
+
+/*bit0:1 support vc1 new version, 0: old version
+  bit1:1 support DECODE_STATUS_PARAM_CHECK*/
+#define NEW_DRV_VER         3
 
 #define VF_POOL_SIZE		16
 #define DECODE_BUFFER_NUM_MAX	4
@@ -98,8 +103,7 @@
 #define VF_BUFFER_IDX(n)	(1 + n)
 #define DCAC_BUFF_START_ADDR	0x01f00000
 
-
-#define PUT_INTERVAL        (HZ/100)
+ #define PUT_INTERVAL        (HZ/100)
 
 #if 1	/* /MESON_CPU_TYPE >= MESON_CPU_TYPE_MESON6 */
 /* TODO: move to register headers */
@@ -200,6 +204,7 @@ enum {
 #define VC1_DEBUG_DETAIL                   0x01
 
 #define INVALID_IDX -1  /* Invalid buffer index.*/
+#define MAX_SIZE_2K (1920 * 1088)
 
 static u32 udebug_flag;
 static int debug;
@@ -260,6 +265,7 @@ struct vdec_vc1_hw_s {
 	struct pic_info_t pics[DECODE_BUFFER_NUM_MAX];
 	u32 interlace_flag;
 	u32 new_type;
+	u32 canvas_mode;
 };
 
 struct vdec_vc1_hw_s vc1_hw;
@@ -515,7 +521,7 @@ static int vvc1_config_buf(struct vdec_vc1_hw_s *hw)
 	hw->decoding_index = index;
 	hw->buf_use[hw->decoding_index]++;
 	canvas1_info = (index2canvas(index) << 8) | index;
-	vc1_print(0, VC1_DEBUG_DETAIL,"%s: i %d, buf_use %d, canvas1_info 0x%x\n",
+	vc1_print(0, VC1_DEBUG_DETAIL,"%s: decoding_index %d, buf_use %d, canvas1_info 0x%x\n",
 		__func__, index, hw->buf_use[hw->decoding_index], canvas1_info);
 	WRITE_VREG(CANVAS_BUF_REG, canvas1_info);
 
@@ -560,7 +566,7 @@ static int prepare_display_buf(struct vdec_vc1_hw_s *hw,	struct pic_info_t *pic)
 			if ((repeat_count > 1) && avi_flag) {
 				vf->duration =
 					vvc1_amstream_dec_info.rate *
-					repeat_count >> 1;
+					(repeat_count >> 1);
 				next_pts = pts +
 					(vvc1_amstream_dec_info.rate *
 					 repeat_count >> 1) * 15 / 16;
@@ -585,7 +591,7 @@ static int prepare_display_buf(struct vdec_vc1_hw_s *hw,	struct pic_info_t *pic)
 			if ((repeat_count > 1) && avi_flag) {
 				vf->duration =
 					vvc1_amstream_dec_info.rate *
-					repeat_count >> 1;
+					(repeat_count >> 1);
 				if (next_pts != 0) {
 					next_pts += ((vf->duration) -
 					((vf->duration) >> 4));
@@ -626,21 +632,23 @@ static int prepare_display_buf(struct vdec_vc1_hw_s *hw,	struct pic_info_t *pic)
 			decoder_bmmu_box_get_mem_handle(
 				mm_blk_handle,
 				buffer_index);
-		if (is_support_vdec_canvas()) {
-			vf->canvas0Addr = vf->canvas1Addr = -1;
-			vf->canvas0_config[0] = vc1_canvas_config[buffer_index][0];
-			vf->canvas0_config[1] = vc1_canvas_config[buffer_index][1];
+		//if (is_support_vdec_canvas()) {
+		vf->canvas0Addr = vf->canvas1Addr = -1;
+		vf->canvas0_config[0] = vc1_canvas_config[buffer_index][0];
+		vf->canvas0_config[1] = vc1_canvas_config[buffer_index][1];
 #ifdef NV21
-			vf->plane_num = 2;
+		vf->plane_num = 2;
 #else
-			vf->canvas0_config[2] = vc1_canvas_config[buffer_index][2];
-			vf->plane_num = 3;
+		vf->canvas0_config[2] = vc1_canvas_config[buffer_index][2];
+		vf->plane_num = 3;
 #endif
-		}
+		//}
 		if (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5D && vdec->use_vfm_path &&
 			vdec_stream_based(vdec)) {
 			vf->type |= VIDTYPE_FORCE_SIGN_IP_JOINT;
 		}
+
+		decoder_do_frame_check(vdec, vf);
 		kfifo_put(&display_q, (const struct vframe_s *)vf);
 		ATRACE_COUNTER(MODULE_NAME, vf->pts);
 
@@ -666,7 +674,7 @@ static int prepare_display_buf(struct vdec_vc1_hw_s *hw,	struct pic_info_t *pic)
 		if ((repeat_count > 1) && avi_flag) {
 			vf->duration =
 				vvc1_amstream_dec_info.rate *
-				repeat_count >> 1;
+				(repeat_count >> 1);
 			if (next_pts != 0) {
 				next_pts +=
 					((vf->duration) -
@@ -706,17 +714,17 @@ static int prepare_display_buf(struct vdec_vc1_hw_s *hw,	struct pic_info_t *pic)
 				mm_blk_handle,
 				buffer_index);
 
-		if (is_support_vdec_canvas()) {
-			vf->canvas0Addr = vf->canvas1Addr = -1;
-			vf->canvas0_config[0] = vc1_canvas_config[buffer_index][0];
-			vf->canvas0_config[1] = vc1_canvas_config[buffer_index][1];
+		//if (is_support_vdec_canvas()) {
+		vf->canvas0Addr = vf->canvas1Addr = -1;
+		vf->canvas0_config[0] = vc1_canvas_config[buffer_index][0];
+		vf->canvas0_config[1] = vc1_canvas_config[buffer_index][1];
 #ifdef NV21
-			vf->plane_num = 2;
+		vf->plane_num = 2;
 #else
-			vf->canvas0_config[2] = vc1_canvas_config[buffer_index][2];
-			vf->plane_num = 3;
+		vf->canvas0_config[2] = vc1_canvas_config[buffer_index][2];
+		vf->plane_num = 3;
 #endif
-		}
+		//}
 		if (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5D && vdec->use_vfm_path &&
 			vdec_stream_based(vdec)) {
 			vf->type |= VIDTYPE_FORCE_SIGN_IP_JOINT;
@@ -819,22 +827,23 @@ static int prepare_display_buf(struct vdec_vc1_hw_s *hw,	struct pic_info_t *pic)
 			decoder_bmmu_box_get_mem_handle(
 				mm_blk_handle,
 				buffer_index);
-		if (is_support_vdec_canvas()) {
-			vf->canvas0Addr = vf->canvas1Addr = -1;
-			vf->canvas0_config[0] = vc1_canvas_config[buffer_index][0];
-			vf->canvas0_config[1] = vc1_canvas_config[buffer_index][1];
+		//if (is_support_vdec_canvas()) {
+		vf->canvas0Addr = vf->canvas1Addr = -1;
+		vf->canvas0_config[0] = vc1_canvas_config[buffer_index][0];
+		vf->canvas0_config[1] = vc1_canvas_config[buffer_index][1];
 #ifdef NV21
-			vf->plane_num = 2;
+		vf->plane_num = 2;
 #else
-			vf->canvas0_config[2] = vc1_canvas_config[buffer_index][2];
-			vf->plane_num = 3;
+		vf->canvas0_config[2] = vc1_canvas_config[buffer_index][2];
+		vf->plane_num = 3;
 #endif
-		}
+		//}
 		if (get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5D && vdec->use_vfm_path &&
 			vdec_stream_based(vdec)) {
 			vf->type |= VIDTYPE_FORCE_SIGN_IP_JOINT;
 		}
 		vc1_print(0, VC1_DEBUG_DETAIL, "%s: display_q index %d, pts 0x%x/0x%x\n", __func__, vf->index, vf->pts, vf->pts_us64);
+		decoder_do_frame_check(vdec, vf);
 		kfifo_put(&display_q, (const struct vframe_s *)vf);
 		ATRACE_COUNTER(MODULE_NAME, vf->pts);
 
@@ -845,6 +854,29 @@ static int prepare_display_buf(struct vdec_vc1_hw_s *hw,	struct pic_info_t *pic)
 	return 0;
 }
 
+static int is_oversize(int w, int h)
+{
+	int max = MAX_SIZE_2K;
+
+	if (w <= 0 || h <= 0)
+		return true;
+
+	if (h != 0 && (w > max / h))
+		return true;
+
+	if (w > h) {
+		if (w > 1920 || h > 1088)
+			return true;
+	} else if (w < h) {
+		if (w > 1088 || h > 1920)
+			return true;
+	} else {
+		if (w*h > 1920 *1088)
+			return true;
+	}
+
+	return false;
+}
 
 static irqreturn_t vvc1_isr_thread_handler(int irq, void *dev_id)
 {
@@ -860,10 +892,13 @@ static irqreturn_t vvc1_isr_thread_handler(int irq, void *dev_id)
 	u32 debug_tag;
 	u32 status_reg;
 	int ret;
+	bool is_bi_type;
 
 	debug_tag = READ_VREG(DEBUG_REG1);
 	if (debug_tag != 0) {
-		vc1_print(0, 0, "%s: dbg%x: %x\n", __func__, debug_tag, READ_VREG(DEBUG_REG2));
+		vc1_print(0, 0, "%s: dbg%x: %x, wp 0x%x, rp 0x%x\n", __func__,
+			debug_tag, READ_VREG(DEBUG_REG2),
+			READ_VREG(VLD_MEM_VIFIFO_WP), READ_VREG(VLD_MEM_VIFIFO_RP));
 		WRITE_VREG(DEBUG_REG1, 0);
 		return IRQ_HANDLED;
 	}
@@ -877,6 +912,17 @@ static irqreturn_t vvc1_isr_thread_handler(int irq, void *dev_id)
 		hw->interlace_flag = (READ_VREG(VC1_PIC_INFO) >> 28) & 0x1;
 		vc1_print(0, 0, "%s: SEQ_HEADER_DONE frame_width %d/%d, interlace_flag %d\n", __func__,
 			hw->frame_width, hw->frame_height, hw->interlace_flag);
+		WRITE_VREG(DECODE_STATUS, 0);
+		return IRQ_HANDLED;
+	} else if (status_reg == DECODE_STATUS_PARAM_CHECK) {
+		v_width = READ_VREG(VC1_PIC_INFO) & 0x3fff;
+		v_height = (READ_VREG(VC1_PIC_INFO) >> 14) & 0x3fff;
+
+		if (is_oversize(v_width, v_height)) {
+			WRITE_VREG(VC1_PIC_INFO, 0);
+			vc1_print(0, VC1_DEBUG_DETAIL, "%s: oversize v_width %d, v_height %d\n",
+				__func__, v_width, v_height);
+		}
 		WRITE_VREG(DECODE_STATUS, 0);
 		return IRQ_HANDLED;
 	} else if (status_reg == DECODE_STATUS_PIC_SKIPPED) {//PIC Skipped
@@ -942,9 +988,11 @@ static irqreturn_t vvc1_isr_thread_handler(int irq, void *dev_id)
 
 		repeat_count = READ_VREG(VC1_REPEAT_COUNT);
 		buffer_index = ((reg & 0x7) - 1) & 3;
-		picture_type = (reg >> 3) & 7;//I:0,P:1,B:2
-		vc1_print(0, VC1_DEBUG_DETAIL, "%s: get buffer_index %d, decoding_index %d\n",
-					__func__, buffer_index, hw->decoding_index);
+		is_bi_type = (reg >> 8) & 0x1;
+		if (is_bi_type)
+			picture_type = B_PICTURE + 1;//BI, should set as B_PICTURE
+		else
+			picture_type = (reg >> 3) & 7;//I:0,P:1,B:2
 
 		hw->interlace_flag = (reg & INTERLACE_FLAG) ? 1 : 0;
 		hw->pics[hw->decoding_index].offset = READ_VREG(VC1_OFFSET_REG);
@@ -952,7 +1000,7 @@ static irqreturn_t vvc1_isr_thread_handler(int irq, void *dev_id)
 		hw->pics[hw->decoding_index].buffer_info = reg;
 		hw->pics[hw->decoding_index].index = hw->decoding_index;
 		//hw->pics[hw->decoding_index].decode_pic_count = decode_pic_count;
-		hw->pics[hw->decoding_index].picture_type = (reg >> 3) & 7;
+		hw->pics[hw->decoding_index].picture_type = picture_type;
 		vc1_print(0, VC1_DEBUG_DETAIL, "%s: get buffer_index %d, decoding_index %d, buffer_info 0x%x, index %d, picture_type %d\n",
 					__func__, buffer_index, hw->decoding_index,
 					hw->pics[hw->decoding_index].buffer_info,
@@ -1057,16 +1105,16 @@ static irqreturn_t vvc1_isr_thread_handler(int irq, void *dev_id)
 						buffer_index = hw->vf_buf_num_used;
 						WRITE_VREG(VC1_BUFFERIN, ~(1 << hw->decoding_index));
 						hw->buf_use[hw->decoding_index]--;
-						vc1_print(0, VC1_DEBUG_DETAIL,"%s: index %d, buf_use %d\n",
+						vc1_print(0, VC1_DEBUG_DETAIL,"%s: decoding_index %d, buf_use %d\n",
 							__func__, hw->decoding_index, hw->buf_use[hw->decoding_index]);
 					}
 				}
 
 				if (buffer_index < hw->vf_buf_num_used) {
-					vc1_print(0, VC1_DEBUG_DETAIL, "%s: show index %d\n",	__func__, buffer_index);
+					vc1_print(0, VC1_DEBUG_DETAIL, "%s: show buffer_index %d\n",	__func__, buffer_index);
 					prepare_display_buf(hw, &hw->pics[buffer_index]);
 				} else {
-					vc1_print(0, VC1_DEBUG_DETAIL, "%s: drop pic index %d\n",	__func__, buffer_index);
+					vc1_print(0, VC1_DEBUG_DETAIL, "%s: drop buffer_index %d\n",	__func__, buffer_index);
 				}
 			}
 
@@ -1106,7 +1154,6 @@ static irqreturn_t vvc1_isr_thread_fn(int irq, void *dev_id)
 
 static irqreturn_t vvc1_isr(int irq, void *dev_id)
 {
-
 	if (process_busy)
 		return IRQ_HANDLED;
 
@@ -1244,6 +1291,8 @@ static int vvc1_canvas_init(void)
 	u32 canvas_width, canvas_height;
 	u32 alloc_size, decbuf_size, decbuf_y_size, decbuf_uv_size;
 	unsigned long buf_start;
+	struct vdec_vc1_hw_s *hw = &vc1_hw;
+	int endian = (hw->canvas_mode == CANVAS_BLKMODE_LINEAR) ? 7 : 0;
 
 	if (buf_size <= 0x00400000) {
 		/* SD only */
@@ -1283,59 +1332,59 @@ static int vvc1_canvas_init(void)
 			return ret;
 		if (i == (MAX_BMMU_BUFFER_NUM - 1)) {
 			buf_offset = buf_start - DCAC_BUFF_START_ADDR;
-			continue;
+			break;
 		}
 
 #ifdef NV21
 		config_cav_lut_ex(2 * i + 0,
 			buf_start,
 			canvas_width, canvas_height,
-			CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32, 0, VDEC_1);
-		vc1_canvas_config[i][0].endian = 0;
+			CANVAS_ADDR_NOWRAP, hw->canvas_mode, endian, VDEC_1);
+		vc1_canvas_config[i][0].endian = endian;
 		vc1_canvas_config[i][0].width = canvas_width;
 		vc1_canvas_config[i][0].height = canvas_height;
-		vc1_canvas_config[i][0].block_mode = CANVAS_BLKMODE_32X32;
+		vc1_canvas_config[i][0].block_mode = hw->canvas_mode;
 		vc1_canvas_config[i][0].phy_addr = buf_start;
 
 		config_cav_lut_ex(2 * i + 1,
 			buf_start +
 			decbuf_y_size, canvas_width,
 			canvas_height / 2, CANVAS_ADDR_NOWRAP,
-			CANVAS_BLKMODE_32X32, 0, VDEC_1);
-		vc1_canvas_config[i][1].endian = 0;
+			hw->canvas_mode, 0, VDEC_1);
+		vc1_canvas_config[i][1].endian = endian;
 		vc1_canvas_config[i][1].width = canvas_width;
 		vc1_canvas_config[i][1].height = canvas_height >> 1;
-		vc1_canvas_config[i][1].block_mode = CANVAS_BLKMODE_32X32;
+		vc1_canvas_config[i][1].block_mode = hw->canvas_mode;
 		vc1_canvas_config[i][1].phy_addr = buf_start + decbuf_y_size;
 #else
 		config_cav_lut_ex(3 * i + 0,
 			buf_start,
 			canvas_width, canvas_height,
-			CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32, 0, VDEC_1);
-		vc1_canvas_config[i][0].endian = 0;
+			CANVAS_ADDR_NOWRAP, hw->canvas_mode, endian, VDEC_1);
+		vc1_canvas_config[i][0].endian = endian;
 		vc1_canvas_config[i][0].width = canvas_width;
 		vc1_canvas_config[i][0].height = canvas_height;
-		vc1_canvas_config[i][0].block_mode = CANVAS_BLKMODE_32X32;
+		vc1_canvas_config[i][0].block_mode = hw->canvas_mode;
 		vc1_canvas_config[i][0].phy_addr = buf_start;
 		config_cav_lut_ex(3 * i + 1,
 			buf_start +
 			decbuf_y_size, canvas_width / 2,
 			canvas_height / 2, CANVAS_ADDR_NOWRAP,
-			CANVAS_BLKMODE_32X32, 0, VDEC_1);
-		vc1_canvas_config[i][1].endian = 0;
+			hw->canvas_mode, endian, VDEC_1);
+		vc1_canvas_config[i][1].endian = endian;
 		vc1_canvas_config[i][1].width = canvas_width >> 1;
 		vc1_canvas_config[i][1].height = canvas_height >> 1;
-		vc1_canvas_config[i][1].block_mode = CANVAS_BLKMODE_32X32;
+		vc1_canvas_config[i][1].block_mode = hw->canvas_mode;
 		vc1_canvas_config[i][1].phy_addr = buf_start + decbuf_y_size;
 		config_cav_lut_ex(3 * i + 2,
 			buf_start +
 			decbuf_y_size + decbuf_uv_size,
 			canvas_width / 2, canvas_height / 2,
-			CANVAS_ADDR_NOWRAP, CANVAS_BLKMODE_32X32, 0, VDEC_1);
-		vc1_canvas_config[i][2].endian = 0;
+			CANVAS_ADDR_NOWRAP, hw->canvas_mode, endian, VDEC_1);
+		vc1_canvas_config[i][2].endian = endian;
 		vc1_canvas_config[i][2].width = canvas_width >> 1;
 		vc1_canvas_config[i][2].height = canvas_height >> 1;
-		vc1_canvas_config[i][2].block_mode = CANVAS_BLKMODE_32X32;
+		vc1_canvas_config[i][2].block_mode = hw->canvas_mode;
 		vc1_canvas_config[i][2].phy_addr = buf_start +
 			decbuf_y_size + decbuf_uv_size;
 #endif
@@ -1404,8 +1453,8 @@ static int vvc1_prot_init(void)
 
 	WRITE_VREG(VC1_SOS_COUNT, 0);
 	WRITE_VREG(VC1_BUFFERIN, 0);
-	WRITE_VREG(VC1_BUFFEROUT, 1);//identify new driver version
-	vc1_print(0, VC1_DEBUG_DETAIL,"%s VC1_BUFFEROUT 1\n", __func__);
+	WRITE_VREG(VC1_BUFFEROUT, NEW_DRV_VER);//identify new driver version
+	vc1_print(0, VC1_DEBUG_DETAIL,"%s VC1_BUFFEROUT %d\n", __func__, NEW_DRV_VER);
 
 	/* clear mailbox interrupt */
 	WRITE_VREG(ASSIST_MBOX1_CLR_REG, 1);
@@ -1461,18 +1510,18 @@ static void vvc1_local_init(bool is_reset)
 	memset(&frm, 0, sizeof(frm));
 
 	if (!is_reset) {
-	hw->refs[0] = -1;
-	hw->refs[1] = -1;
-	hw->throw_pb_flag = 1;
-	hw->vf_buf_num_used = DECODE_BUFFER_NUM_MAX;
-	if (hw->vf_buf_num_used > DECODE_BUFFER_NUM_MAX)
+		hw->refs[0] = -1;
+		hw->refs[1] = -1;
+		hw->throw_pb_flag = 1;
 		hw->vf_buf_num_used = DECODE_BUFFER_NUM_MAX;
+		if (hw->vf_buf_num_used > DECODE_BUFFER_NUM_MAX)
+			hw->vf_buf_num_used = DECODE_BUFFER_NUM_MAX;
 
-	for (i = 0; i < hw->vf_buf_num_used; i++) {
-		hw->vfbuf_use[i] = 0;
-		hw->buf_use[i] = 0;
-		hw->ref_use[i] = 0;
-	}
+		for (i = 0; i < hw->vf_buf_num_used; i++) {
+			hw->vfbuf_use[i] = 0;
+			hw->buf_use[i] = 0;
+			hw->ref_use[i] = 0;
+		}
 
 		INIT_KFIFO(display_q);
 		INIT_KFIFO(recycle_q);
@@ -1536,19 +1585,19 @@ static void vvc1_set_clk(struct work_struct *work)
 
 static void error_do_work(struct work_struct *work)
 {
-		vc1_print(0, VC1_DEBUG_DETAIL,"%s \n", __func__);
+	vc1_print(0, VC1_DEBUG_DETAIL,"%s \n", __func__);
 
-		amvdec_stop();
-		msleep(20);
+	amvdec_stop();
+	msleep(20);
 #ifdef CONFIG_AMLOGIC_POST_PROCESS_MANAGER
-		vvc1_ppmgr_reset();
+	vvc1_ppmgr_reset();
 #else
-		vf_light_unreg_provider(&vvc1_vf_prov);
-		vvc1_local_init(true);
-		vf_reg_provider(&vvc1_vf_prov);
+	vf_light_unreg_provider(&vvc1_vf_prov);
+	vvc1_local_init(true);
+	vf_reg_provider(&vvc1_vf_prov);
 #endif
-		vvc1_prot_init();
-		amvdec_start();
+	vvc1_prot_init();
+	amvdec_start();
 }
 
 static void vvc1_put_timer_func(struct timer_list *timer)
@@ -1710,6 +1759,8 @@ static int amvdec_vc1_probe(struct platform_device *pdev)
 	is_reset = 0;
 	vdec = pdata;
 
+	vc1_hw.canvas_mode = pdata->canvas_mode;
+
 	vvc1_vdec_info_init();
 
 	INIT_WORK(&error_wd_work, error_do_work);
@@ -1759,7 +1810,7 @@ static int amvdec_vc1_remove(struct platform_device *pdev)
 	amvdec_disable();
 
 	if (get_cpu_major_id() >= AM_MESON_CPU_MAJOR_ID_TM2)
-		vdec_reset_core(NULL);
+		vdec_reset_core(vdec);
 
 	if (mm_blk_handle) {
 		decoder_bmmu_box_free(mm_blk_handle);
@@ -1794,18 +1845,6 @@ static struct platform_driver amvdec_vc1_driver = {
 	}
 };
 
-#if defined(CONFIG_ARCH_MESON)	/*meson1 only support progressive */
-static struct codec_profile_t amvdec_vc1_profile = {
-	.name = "vc1",
-	.profile = "progressive, wmv3"
-};
-#else
-static struct codec_profile_t amvdec_vc1_profile = {
-	.name = "vc1",
-	.profile = "progressive, interlace, wmv3"
-};
-#endif
-
 static int __init amvdec_vc1_driver_init_module(void)
 {
 	vc1_print(0, 0, "amvdec_vc1 module init\n");
@@ -1814,8 +1853,10 @@ static int __init amvdec_vc1_driver_init_module(void)
 		pr_err("failed to register amvdec_vc1 driver\n");
 		return -ENODEV;
 	}
-	vcodec_profile_register(&amvdec_vc1_profile);
+
+	vcodec_profile_register_v2("vc1", VFORMAT_VC1, 0);
 	vcodec_feature_register(VFORMAT_VC1, 0);
+
 	return 0;
 }
 

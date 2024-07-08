@@ -17,10 +17,20 @@
  *
  * Description:
  */
-#ifndef _MEDIA_FILE_H_
-#define _MEDIA_FILE_H_
-ssize_t media_write(struct file *, const void *, size_t, loff_t *);
-ssize_t media_read(struct file *, void *, size_t, loff_t *);
-struct file *media_open(const char *, int, umode_t);
-int media_close(struct file *, fl_owner_t);
+#ifndef __ENC_REPORT_H__
+#define __ENC_REPORT_H__
+
+MODULE_IMPORT_NS(DMA_BUF);
+
+#define DEBUG_AMVENC_264     "amvenc_264"
+#define DEBUG_AMVENC_265     "amvenc_265"
+#define DEBUG_AMVENC_MULIT   "amvenc_multi"
+#define DEBUG_AMVENC_VERS    "amvenc_vers"
+#define DEBUG_AMVENC_JPEG    "amvenc_jpeg"
+
+typedef void (*enc_set_debug_level_func)(const char *module, int level);
+
+int enc_register_set_debug_level_func(const char *module, enc_set_debug_level_func func);
+
 #endif
+

@@ -24,6 +24,7 @@
 #include "aml_vcodec_dec.h"
 #include "aml_vcodec_util.h"
 #include "../stream_input/amports/streambuf.h"
+#include "../common/chips/decoder_cpu_ver_info.h"
 
 #define AML_VIDEO_MAGIC CODEC_MODE('A', 'M', 'L', 'V')
 
@@ -119,7 +120,7 @@ struct vdec_fb_node {
 int vdec_if_init(struct aml_vcodec_ctx *ctx, unsigned int fourcc);
 
 int vdec_if_probe(struct aml_vcodec_ctx *ctx,
-	struct aml_vcodec_mem *bs, void *out);
+	struct aml_vcodec_mem *bs);
 
 /**
  * vdec_if_deinit() - deinitialize decode driver

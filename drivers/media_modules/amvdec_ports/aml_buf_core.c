@@ -37,6 +37,76 @@ static bool is_dma_mode(ulong key, ulong phy_addr)
 
 static void buf_core_destroy(struct kref *kref);
 
+
+static bool list_add_valid(struct buf_core_mgr_s *bc, struct buf_core_entry *entry)
+{
+	struct list_head *node = &entry->node;
+	struct list_head *prev = bc->free_que.prev;
+	struct list_head *next = &bc->free_que;
+
+	if (prev == NULL || next == NULL) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+		"%s, prev is NULL. or next is NULL. entry(key:%lx) \n",
+		__func__, entry->key);
+		return false;
+	}
+
+	if (next->prev != prev) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+		"%s, entry(key:%lx) next->prev should be prev (%px), but was %px. (next=%px).\n",
+		__func__, entry->key, prev, next->prev, next);
+		return false;
+	}
+
+	if (prev->next != next) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+		"%s, entry(key:%lx) prev->next should be next (%px), but was %px. (prev=%px).\n",
+		__func__, entry->key, next, prev->next, prev);
+		return false;
+	}
+
+	if (node == prev || node == next) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+		"%s, entry(key:%lx) list_add double add: new=%px, prev=%px, next=%px.\n",
+		__func__, entry->key, node, prev, next);
+		return false;
+	}
+
+	return true;
+}
+
+static bool list_del_entry_valid(struct buf_core_mgr_s *bc, struct buf_core_entry *entry)
+{
+	struct list_head *prev, *next;
+	struct list_head *node = &entry->node;
+
+	prev = node->prev;
+	next = node->next;
+
+	if (prev == NULL || next == NULL) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+		"%s, prev is NULL. or next is NULL. entry(key:%lx)\n",
+		__func__, entry->key);
+		return false;
+	}
+
+	if (prev->next != node) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+		"%s, entry(key:%lx) prev->next should be %px, but was %px. \n",
+		__func__, entry->key, node, prev->next);
+		return false;
+	}
+
+	if (next->prev != node) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+		"%s, entry(key:%lx) next->prev should be %px, but was %px. \n",
+		__func__, entry->key, node, next->prev);
+		return false;
+	}
+
+	return true;
+}
+
 static void direction_buf_get(struct buf_core_mgr_s *bc,
 			  struct buf_core_entry *entry,
 			  enum buf_core_user user)
@@ -168,14 +238,6 @@ static void buf_core_update_holder(struct buf_core_mgr_s *bc,
 static void buf_core_free_que(struct buf_core_mgr_s *bc,
 			     struct buf_core_entry *entry)
 {
-	entry->state = BUF_STATE_FREE;
-	entry->holder = BUF_HOLDER_FREE;
-	entry->ref_bit_map = 0;
-	list_add_tail(&entry->node, &bc->free_que);
-	bc->free_num++;
-	entry->inited = true;
-	entry->queued_mask = 0;
-
 	v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_BUFMGR,
 		"%s, user:%d, key:%lx, phy:%lx, idx:%d, st:(%d, %d), ref:(%d, %d), free:%d\n",
 		__func__,
@@ -188,6 +250,17 @@ static void buf_core_free_que(struct buf_core_mgr_s *bc,
 		atomic_read(&entry->ref),
 		kref_read(&bc->core_ref),
 		bc->free_num);
+
+	entry->state = BUF_STATE_FREE;
+	entry->holder = BUF_HOLDER_FREE;
+	entry->ref_bit_map = 0;
+	entry->inited = true;
+	entry->queued_mask = 0;
+	if (!list_add_valid(bc, entry))
+		return;
+	list_add_tail(&entry->node, &bc->free_que);
+	bc->free_num++;
+	bc->wake_up_vdec(bc);
 }
 
 static void buf_core_get(struct buf_core_mgr_s *bc,
@@ -209,6 +282,10 @@ static void buf_core_get(struct buf_core_mgr_s *bc,
 	}
 
 	entry = list_first_entry(&bc->free_que, struct buf_core_entry, node);
+	if (!list_del_entry_valid(bc, entry)) {
+		entry = NULL;
+		goto out;
+	}
 	list_del(&entry->node);
 	bc->free_num--;
 
@@ -378,6 +455,7 @@ static int buf_core_done(struct buf_core_mgr_s *bc,
 		buf_core_update_holder(bc, entry, BUF_USER_DI, BUF_GET);
 	}
 
+out:
 	v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_BUFMGR,
 		"%s, user:%d, key:%lx, phy:%lx, idx:%d, st:(%d, %d), ref:(%d, %d), free:%d\n",
 		__func__, user,
@@ -389,7 +467,7 @@ static int buf_core_done(struct buf_core_mgr_s *bc,
 		atomic_read(&master->ref),
 		kref_read(&bc->core_ref),
 		bc->free_num);
-out:
+
 	mutex_unlock(&bc->mutex);
 
 	return ret;
@@ -399,6 +477,12 @@ static void buf_core_fill(struct buf_core_mgr_s *bc,
 			    struct buf_core_entry *entry,
 			    enum buf_core_user user)
 {
+	mutex_lock(&bc->mutex);
+
+	if (!bc_sanity_check(bc)) {
+		goto out;
+	}
+
 	if (bc->vpp_que && user == BUF_USER_VSINK &&
 		!bc->vpp_que(bc, entry)) {
 		/*
@@ -410,16 +494,8 @@ static void buf_core_fill(struct buf_core_mgr_s *bc,
 		 * is referenced by DI mgr, wait for DI mgr to be used, and
 		 * then call callback to retrieve the buffer.
 		 */
-		mutex_lock(&bc->mutex);
-		if (!entry->inited || entry->state == BUF_STATE_FREE)
+		if (!entry->inited)
 			goto out;
-		mutex_unlock(&bc->mutex);
-	}
-
-	mutex_lock(&bc->mutex);
-
-	if (!bc_sanity_check(bc)) {
-		goto out;
 	}
 
 	v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_BUFMGR,
@@ -506,6 +582,11 @@ static void buf_core_reset(struct buf_core_mgr_s *bc)
 	if (bc->vpp_reset)
 		bc->vpp_reset(bc);
 
+	mutex_lock(&bc->workqueue_mutex);
+	flush_workqueue(bc->recycle_buf_ref_workqueue);
+	bc->workqueue_enabled = false;
+	mutex_unlock(&bc->workqueue_mutex);
+
 	mutex_lock(&bc->mutex);
 
 	v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_BUFMGR,
@@ -516,6 +597,8 @@ static void buf_core_reset(struct buf_core_mgr_s *bc)
 		bc->free_num);
 
 	list_for_each_entry_safe(entry, tmp, &bc->free_que, node) {
+		if (!list_del_entry_valid(bc, entry))
+			continue;
 		list_del(&entry->node);
 	}
 
@@ -546,6 +629,8 @@ static void buf_core_destroy(struct kref *kref)
 	struct buf_core_entry *entry, *tmp;
 
 	list_for_each_entry_safe(entry, tmp, &bc->free_que, node) {
+		if (!list_del_entry_valid(bc, entry))
+			continue;
 		list_del(&entry->node);
 	}
 
@@ -783,11 +868,11 @@ ssize_t buf_core_walk(struct buf_core_mgr_s *bc, char *buf)
 		if (entry->pair == BUF_MASTER) {
 			if (entry->holder == BUF_HOLDER_DEC)
 				dec_holders++;
-			if (entry->holder == BUF_HOLDER_GE2D)
+			else if (entry->holder == BUF_HOLDER_GE2D)
 				ge2d_holders++;
-			if (entry->holder == BUF_HOLDER_VPP)
+			else if (entry->holder == BUF_HOLDER_VPP)
 				vpp_holders++;
-			if (entry->holder == BUF_HOLDER_VSINK)
+			else if (entry->holder == BUF_HOLDER_VSINK)
 				vsink_holders++;
 			if (entry->ref_bit_map & DI_MASK)
 				di_holders++;
@@ -831,6 +916,15 @@ int buf_core_mgr_init(struct buf_core_mgr_s *bc)
 	INIT_LIST_HEAD(&bc->free_que);
 	mutex_init(&bc->mutex);
 	kref_init(&bc->core_ref);
+	mutex_init(&bc->workqueue_mutex);
+	bc->recycle_buf_ref_workqueue =
+		alloc_ordered_workqueue("recycle-buf-ref-worker",
+			__WQ_LEGACY | WQ_MEM_RECLAIM | WQ_HIGHPRI);
+	if (!bc->recycle_buf_ref_workqueue) {
+		v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_ERROR,
+			"Failed to create recycle_buffer workqueue\n");
+		return -1;
+	}
 
 	bc->free_num		= 0;
 	bc->buf_num		= 0;
@@ -865,6 +959,12 @@ EXPORT_SYMBOL(buf_core_mgr_init);
 void buf_core_mgr_release(struct buf_core_mgr_s *bc)
 {
 	v4l_dbg_ext(bc->id, V4L_DEBUG_CODEC_BUFMGR, "%s\n", __func__);
+
+	mutex_lock(&bc->workqueue_mutex);
+	flush_workqueue(bc->recycle_buf_ref_workqueue);
+	destroy_workqueue(bc->recycle_buf_ref_workqueue);
+	bc->workqueue_enabled = false;
+	mutex_unlock(&bc->workqueue_mutex);
 
 	kref_put(&bc->core_ref, buf_core_destroy);
 }

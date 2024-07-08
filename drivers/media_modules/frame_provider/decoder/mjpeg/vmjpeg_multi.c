@@ -49,6 +49,7 @@
 #include "../utils/config_parser.h"
 #include "../utils/vdec_feature.h"
 #include "../../../media_sync/pts_server/pts_server_core.h"
+#include "../../decoder/utils/vdec_profile.h"
 
 #define MEM_NAME "codec_mmjpeg"
 
@@ -78,7 +79,7 @@
 
 #define VF_POOL_SIZE          64
 #define DECODE_BUFFER_NUM_MAX		16
-#define DECODE_BUFFER_NUM_DEF		4
+#define DECODE_BUFFER_NUM_DEF		1
 #define MAX_BMMU_BUFFER_NUM		DECODE_BUFFER_NUM_MAX
 
 #define DEFAULT_MEM_SIZE	(32*SZ_1M)
@@ -88,9 +89,8 @@ static u32 udebug_flag;
 
 static unsigned int radr;
 static unsigned int rval;
-#define VMJPEG_DEV_NUM        9
-static unsigned int max_decode_instance_num = VMJPEG_DEV_NUM;
-static unsigned int max_process_time[VMJPEG_DEV_NUM];
+static unsigned int max_decode_instance_num = MAX_INSTANCE_MUN;
+static unsigned int max_process_time[MAX_INSTANCE_MUN];
 static unsigned int decode_timeout_val = 200;
 static struct vframe_s *vmjpeg_vf_peek(void *);
 static struct vframe_s *vmjpeg_vf_get(void *);
@@ -102,7 +102,7 @@ static int notify_v4l_eos(struct vdec_s *vdec);
 static int pre_decode_buf_level = 0x800;
 static int start_decode_buf_level = 0x2000;
 static u32 without_display_mode;
-static u32 dynamic_buf_num_margin;
+static u32 dynamic_buf_num_margin = 6;
 #undef pr_info
 #define pr_info pr_cont
 unsigned int mmjpeg_debug_mask = 0xff;
@@ -357,7 +357,7 @@ static irqreturn_t vmjpeg_isr_thread_fn(struct vdec_s *vdec, int irq)
 		pr_info("fatal error, no available buffer slot.");
 		return IRQ_HANDLED;
 	}
-
+	vdec_profile(vdec, VDEC_PROFILE_DECODED_FRAME, CORE_MASK_VDEC_1);
 	vf->index = index;
 	set_frame_info(hw, vf);
 
@@ -754,10 +754,7 @@ static void init_scaler(u32 endian)
 	WRITE_VREG(DOS_SW_RESET0, (1 << 10));
 	WRITE_VREG(DOS_SW_RESET0, 0);
 
-	if (is_cpu_t7c() ||
-		(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S5) ||
-		(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T5M) ||
-		(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_T3X)) {
+	if (is_mjpeg_endian_rematch()) {
 		if (endian == 7)
 			WRITE_VREG(PSCALE_CTRL2, (0x1ff << 16) | READ_VREG(PSCALE_CTRL2));
 		else
@@ -946,13 +943,14 @@ static void check_timer_func(struct timer_list *timer)
 		WRITE_VREG(DEC_STATUS_REG, 0);
 	}
 
-	if (vdec->next_status == VDEC_STATUS_DISCONNECTED) {
-		hw->dec_result = DEC_RESULT_FORCE_EXIT;
-		vdec_schedule_work(&hw->work);
-		pr_info("vdec requested to be disconnected\n");
-		return;
-	}
 	mod_timer(&hw->check_timer, jiffies + CHECK_INTERVAL);
+}
+
+static int get_dynamic_buf_num_margin(struct vdec_mjpeg_hw_s *hw)
+{
+	return((dynamic_buf_num_margin & 0x80000000) == 0) ?
+		hw->dynamic_buf_num_margin :
+		(dynamic_buf_num_margin & 0x7fffffff);
 }
 
 static int vmjpeg_get_buf_num(struct vdec_mjpeg_hw_s *hw)
@@ -1055,7 +1053,7 @@ static s32 vmjpeg_init(struct vdec_s *vdec)
 	struct vdec_mjpeg_hw_s *hw =
 		(struct vdec_mjpeg_hw_s *)vdec->private;
 
-	fw = vmalloc(sizeof(struct firmware_s) + fw_size);
+	fw = fw_firmare_s_creat(fw_size);
 	if (IS_ERR_OR_NULL(fw))
 		return -ENOMEM;
 
@@ -1477,7 +1475,7 @@ static int ammvdec_mjpeg_probe(struct platform_device *pdev)
 
 	if (((debug_enable & IGNORE_PARAM_FROM_CONFIG) == 0) && pdata->config_len) {
 		mmjpeg_debug_print(DECODE_ID(hw), 0, "pdata->config: %s\n", pdata->config);
-		if (get_config_int(pdata->config, "parm_v4l_buffer_margin",
+		if (get_config_int(pdata->config, "parm_buffer_margin",
 			&config_val) == 0)
 			hw->dynamic_buf_num_margin = config_val;
 		else
@@ -1509,6 +1507,7 @@ static int ammvdec_mjpeg_probe(struct platform_device *pdev)
 		hw->dynamic_buf_num_margin = dynamic_buf_num_margin;
 	}
 
+	hw->dynamic_buf_num_margin = get_dynamic_buf_num_margin(hw);
 	hw->buf_num = vmjpeg_get_buf_num(hw);
 
 	memcpy(&vf_tmp_ops, &vf_provider_ops, sizeof(struct vframe_operations_s));
@@ -1591,10 +1590,10 @@ static struct platform_driver ammvdec_mjpeg_driver = {
 	}
 };
 
-static struct codec_profile_t ammvdec_mjpeg_profile = {
-	.name = "mmjpeg",
-	.profile = "v4l"
-};
+static void set_debug_flag(const char *module, int debug_flags)
+{
+	debug_enable = debug_flags;
+}
 
 static int __init ammvdec_mjpeg_driver_init_module(void)
 {
@@ -1602,8 +1601,11 @@ static int __init ammvdec_mjpeg_driver_init_module(void)
 		pr_err("failed to register ammvdec_mjpeg driver\n");
 		return -ENODEV;
 	}
-	vcodec_profile_register(&ammvdec_mjpeg_profile);
+
+	vcodec_profile_register_v2("mmjpeg", VFORMAT_MJPEG, 0);
 	vcodec_feature_register(VFORMAT_MJPEG, 0);
+	register_set_debug_flag_func(DEBUG_AMVDEC_MJPEG, set_debug_flag);
+
 	return 0;
 }
 

@@ -443,19 +443,19 @@ void set_clock_gate(struct gate_switch_node *nodes, int num)
 			continue;
 		if (!strcmp(node->name, "clk_vdec_mux")) {
 			gclk.vdec_mux_node = node;
-			pr_info("%s get vdec mux\n", __func__);
+			pr_debug("%s get vdec mux\n", __func__);
 		}
 		else if (!strcmp(node->name, "clk_hcodec_mux")) {
 			gclk.hcodec_mux_node = node;
-			pr_info("%s get hcodec mux\n", __func__);
+			pr_debug("%s get hcodec mux\n", __func__);
 		}
 		else if (!strcmp(node->name, hevc_mux_str)) {
 			gclk.hevc_mux_node = node;
-			pr_info("%s get hevc_mux_str\n", __func__);
+			pr_debug("%s get hevc_mux_str\n", __func__);
 		}
 		else if (!strcmp(node->name, "clk_hevcb_mux")) {
 			gclk.hevc_back_mux_node = node;
-			pr_info("%s get hevcb mux\n", __func__);
+			pr_debug("%s get hevcb mux\n", __func__);
 		}
 	} while(--num);
 }
@@ -891,6 +891,9 @@ static int hcodec_clock_set(int clk)
 		clk = 667;
 	}
 
+	if (0 != hcodec_max_clk_get())
+		clk = hcodec_max_clk_get();
+
 	vdec_set_clk(VDEC_HCODEC, clk * MHz);
 
 	clock_real_clk[VDEC_HCODEC] = clk;
@@ -1061,6 +1064,8 @@ static int vdec_clock_get(enum vdec_type_e core)
 	AM_MESON_CPU_MAJOR_ID_T3X,\
 	AM_MESON_CPU_MAJOR_ID_TXHD2,\
 	AM_MESON_CPU_MAJOR_ID_S1A,\
+	AM_MESON_CPU_MAJOR_ID_S7,\
+	AM_MESON_CPU_MAJOR_ID_S7D,\
 	0}
 #include "clk.h"
 

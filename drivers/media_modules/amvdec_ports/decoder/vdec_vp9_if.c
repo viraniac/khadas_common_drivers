@@ -272,7 +272,7 @@ static int vdec_vp9_init(struct aml_vcodec_ctx *ctx, unsigned long *h_vdec)
 	struct vdec_vp9_inst *inst = NULL;
 	int ret = -1;
 
-	inst = kzalloc(sizeof(*inst), GFP_KERNEL);
+	inst = aml_media_mem_alloc(sizeof(*inst), GFP_KERNEL);
 	if (!inst)
 		return -ENOMEM;
 
@@ -294,7 +294,7 @@ static int vdec_vp9_init(struct aml_vcodec_ctx *ctx, unsigned long *h_vdec)
 	inst->vdec.port.type	= PORT_TYPE_HEVC;
 
 	/* probe info from the stream */
-	inst->vsi = kzalloc(sizeof(struct vdec_vp9_vsi), GFP_KERNEL);
+	inst->vsi = aml_media_mem_alloc(sizeof(struct vdec_vp9_vsi), GFP_KERNEL);
 	if (!inst->vsi) {
 		ret = -ENOMEM;
 		goto err;
@@ -309,7 +309,7 @@ static int vdec_vp9_init(struct aml_vcodec_ctx *ctx, unsigned long *h_vdec)
 
 	init_completion(&inst->comp);
 
-	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO,
+	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT,
 		"vp9 Instance >> %lx\n", (ulong) inst);
 
 	ctx->ada_ctx	= &inst->vdec;
@@ -328,9 +328,9 @@ err:
 	if (inst && inst->vsi && inst->vsi->header_buf)
 		vfree(inst->vsi->header_buf);
 	if (inst && inst->vsi)
-		kfree(inst->vsi);
+		aml_media_mem_free(inst->vsi);
 	if (inst)
-		kfree(inst);
+		aml_media_mem_free(inst);
 	*h_vdec = 0;
 
 	return ret;
@@ -412,7 +412,7 @@ out:
 }
 
 static int vdec_vp9_probe(unsigned long h_vdec,
-	struct aml_vcodec_mem *bs, void *out)
+	struct aml_vcodec_mem *bs)
 {
 	struct vdec_vp9_inst *inst =
 		(struct vdec_vp9_inst *)h_vdec;
@@ -464,9 +464,9 @@ static void vdec_vp9_deinit(unsigned long h_vdec)
 		vfree(inst->vsi->header_buf);
 
 	if (inst->vsi)
-		kfree(inst->vsi);
+		aml_media_mem_free(inst->vsi);
 
-	kfree(inst);
+	aml_media_mem_free(inst);
 
 	ctx->drv_handle = 0;
 
@@ -858,7 +858,8 @@ static void set_param_ps_info(struct vdec_vp9_inst *inst,
 	pic->coded_width	= ps->coded_width;
 	pic->coded_height	= ps->coded_height;
 
-	pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw, 64);
+	pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw, 64,
+		is_hevc_align32(0) ? 32 : 64);
 	pic->c_len_sz		= pic->y_len_sz >> 1;
 
 	/* calc DPB size */
@@ -870,7 +871,7 @@ static void set_param_ps_info(struct vdec_vp9_inst *inst,
 	pic->bitdepth		= ps->bitdepth;
 
 	if (tw) {
-		pic->y_len_sz_tw	= vdec_get_plane_size(pic->coded_width, pic->coded_height, tw, 64);
+		pic->y_len_sz_tw	= vdec_get_plane_size(pic->coded_width, pic->coded_height, tw, 64, 64);
 		pic->c_len_sz_tw	= pic->y_len_sz_tw >> 1;
 	}
 
@@ -903,16 +904,18 @@ static void set_param_hdr_info(struct vdec_vp9_inst *inst,
 			V4L2_CONFIG_PARM_DECODE_HDRINFO;
 		aml_vdec_dispatch_event(inst->ctx,
 			V4L2_EVENT_SRC_CH_HDRINFO);
-		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_EXINFO,
+		inst->ctx->dec_intf.decinfo_event_report(inst->ctx, AML_DECINFO_EVENT_HDR10, hdr);
+		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT,
 			"VP9 set HDR infos\n");
 	}
 }
 
-static void set_param_post_event(struct vdec_vp9_inst *inst, u32 *event)
+static void set_param_post_event(struct vdec_vp9_inst *inst, u32 *event, struct set_param_info *param)
 {
-		aml_vdec_dispatch_event(inst->ctx, *event);
-		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO,
-			"VP9 post event: %d\n", *event);
+	aml_vdec_dispatch_event(inst->ctx, *event);
+	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT,
+		"VP9 post event: %d, fun: %s, %d\n",
+		param->event, param->function, param->line);
 }
 
 static void set_pic_info(struct vdec_vp9_inst *inst,
@@ -941,12 +944,13 @@ static void set_cfg_info(struct vdec_vp9_inst *inst,
 		new_cfg->triple_write_mode);
 
 	if (old_cfg->double_write_mode != dw_new) {
-		pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw_new, 64);
+		pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw_new, 64,
+			is_hevc_align32(0) ? 32 : 64);
 		pic->c_len_sz		= pic->y_len_sz >> 1;
 	}
 
 	if (old_cfg->triple_write_mode != tw_new) {
-		pic->y_len_sz_tw	= vdec_get_plane_size(pic->coded_width, pic->coded_height, tw_new, 64);
+		pic->y_len_sz_tw	= vdec_get_plane_size(pic->coded_width, pic->coded_height, tw_new, 64, 64);
 		pic->c_len_sz_tw	= pic->y_len_sz_tw >> 1;
 	}
 
@@ -954,7 +958,7 @@ static void set_cfg_info(struct vdec_vp9_inst *inst,
 }
 
 static int vdec_vp9_set_param(unsigned long h_vdec,
-	enum vdec_set_param_type type, void *in)
+	enum vdec_set_param_type type, void *in, struct set_param_info *param)
 {
 	int ret = 0;
 	struct vdec_vp9_inst *inst = (struct vdec_vp9_inst *)h_vdec;
@@ -983,7 +987,7 @@ static int vdec_vp9_set_param(unsigned long h_vdec,
 		break;
 
 	case SET_PARAM_POST_EVENT:
-		set_param_post_event(inst, in);
+		set_param_post_event(inst, in, param);
 		break;
 
 	case SET_PARAM_PIC_INFO:

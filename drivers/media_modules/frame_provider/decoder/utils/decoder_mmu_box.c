@@ -19,6 +19,7 @@
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/mm.h>
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/interrupt.h>
@@ -30,6 +31,9 @@
 #include <linux/slab.h>
 #include <linux/amlogic/media/codec_mm/codec_mm_scatter.h>
 #include <linux/platform_device.h>
+#include "../../../common/media_utils/media_kernel_version.h"
+
+extern int is_mmu_copy_enable(void);
 
 struct sc_list_expand {
 	int index;
@@ -45,7 +49,7 @@ struct decoder_mmu_box {
 	struct mutex mutex;
 	struct list_head list;
 	struct sc_list_expand exp_sc_list;
-	struct codec_mm_scatter *sc_list[1];
+	struct codec_mm_scatter **sc_list;
 };
 #define MAX_KEEP_FRAME 4
 #define START_KEEP_ID 0x9
@@ -88,8 +92,8 @@ int decoder_mmu_box_sc_check(void *handle, int is_tvp)
 {
 	struct decoder_mmu_box *box = handle;
 	if (!box) {
-			pr_err("mmu box NULL !!!\n");
-			return 0;
+		pr_debug("mmu box NULL !!!\n");
+		return 0;
 	}
 	return codec_mm_scatter_size(is_tvp);
 }
@@ -123,6 +127,7 @@ void *decoder_mmu_box_alloc_box(const char *name,
 	box->exp_num = 0;
 	box->exp_sc_list.sc = NULL;
 	box->exp_sc_list.index = -1;
+	box->sc_list = (struct codec_mm_scatter **)(box + 1);
 	INIT_LIST_HEAD(&box->exp_sc_list.sc_list);
 
 	mutex_init(&box->mutex);
@@ -209,6 +214,12 @@ int decoder_mmu_box_alloc_idx(
 			box, idx);
 		return -1;
 	}
+
+	if (is_mmu_copy_enable())
+		codec_mm_scatter_alloc_flags_config(0, SC_ALLOC_SYS_DMA32);
+	else
+		codec_mm_scatter_alloc_flags_config(0, 0);
+
 	mutex_lock(&box->mutex);
 	sc = decoder_mmu_box_get_sc_from_idx(box, idx);
 	if (sc) {
@@ -461,8 +472,8 @@ static int decoder_mmu_box_dump_all(void *buf, int size)
 
 
 static ssize_t
-box_dump_show(struct class *class,
-		       struct class_attribute *attr, char *buf)
+box_dump_show(KV_CLASS_CONST struct class *class,
+		       KV_CLASS_ATTR_CONST struct class_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
 
@@ -489,8 +500,8 @@ struct decoder_mmu_box *decoder_mmu_box_find_box_by_name(char *name)
 }
 
 static ssize_t
-box_dump_store(struct class *class,
-		struct class_attribute *attr,
+box_dump_store(KV_CLASS_CONST struct class *class,
+		KV_CLASS_ATTR_CONST struct class_attribute *attr,
 		const char *buf, size_t size)
 {
 	char cmd[16];

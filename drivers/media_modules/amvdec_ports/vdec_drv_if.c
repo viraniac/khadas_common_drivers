@@ -89,11 +89,11 @@ int vdec_if_init(struct aml_vcodec_ctx *ctx, unsigned int fourcc)
 }
 
 int vdec_if_probe(struct aml_vcodec_ctx *ctx,
-	struct aml_vcodec_mem *bs, void *out)
+	struct aml_vcodec_mem *bs)
 {
 	int ret = 0;
 
-	ret = ctx->dec_if->probe(ctx->drv_handle, bs, out);
+	ret = ctx->dec_if->probe(ctx->drv_handle, bs);
 
 	return ret;
 }
@@ -142,7 +142,7 @@ int vdec_if_set_param(struct aml_vcodec_ctx *ctx,
 	if (ctx->drv_handle == 0)
 		return -EIO;
 
-	ret = ctx->dec_if->set_param(ctx->drv_handle, type, in);
+	ret = ctx->dec_if->set_param(ctx->drv_handle, type, in, NULL);
 
 	return ret;
 }

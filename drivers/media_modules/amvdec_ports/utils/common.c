@@ -22,6 +22,7 @@
 #include <linux/vmalloc.h>
 #include <linux/mm.h>
 #include <linux/string.h>
+#include "../aml_vcodec_drv.h"
 #include "../../common/media_utils/media_utils.h"
 
 #include "common.h"
@@ -149,6 +150,30 @@ int av_log2(u32 v)
 		n += ff_log2_tab[v];
 
 	return n;
+}
+
+//event
+static const struct event_info event_strings[] = {
+	{V4L2_EVENT_SRC_CH_RESOLUTION,	"res chg"},
+	{V4L2_EVENT_SRC_CH_HDRINFO,	"hdr"},
+	{V4L2_EVENT_REQUEST_RESET, 	"reset"},
+	{V4L2_EVENT_REQUEST_EXIT, 	"exit"},
+	{V4L2_EVENT_SEND_EOS, 		"eos"},
+	{V4L2_EVENT_SEND_ERROR, 	"dec err"},
+	{V4L2_EVENT_REPORT_DEC_INFO, 	"dec info"},
+	{V4L2_EVENT_REPORT_ERROR_FRAME,	"frame err",}
+};
+
+const char *event_to_string(int event_Id)
+{
+	int i;
+	int size = sizeof(event_strings) / sizeof(event_strings[0]);
+
+	for (i = 0; i < size; i++) {
+		if (event_strings[i].idx == event_Id)
+			return event_strings[i].event_str;
+	}
+	return NULL;
 }
 
 //bitstream
@@ -314,6 +339,12 @@ int vdec_get_dec_mode(u32 w, u32 h, int dec_mode)
 		if (is_over_size(w, h, 1280 * 768))
 			dm = 0x4; /*1:2*/
 		break;
+	case DM_YUV_AUTO_14_12_AVBC:
+		if (is_over_size(w, h, 1920 * 1088))
+			dm = 0x3; /*1:4*/
+		else if (is_over_size(w, h, 960 * 576))
+			dm = 0x4; /*1:2*/
+		break;
 	default:
 		break;
 	}
@@ -352,11 +383,11 @@ static int vdec_size_scale(int length, int dec_mode)
 	return ret;
 }
 
-u32 vdec_get_plane_size(u32 w, u32 h, int dec_mode, int align)
+u32 vdec_get_plane_size(u32 w, u32 h, int dec_mode, int align_h, int align_w)
 {
 	u32 dm = vdec_get_dec_mode(w, h, dec_mode);
-	u32 len = ALIGN(vdec_size_scale(w, dm), align) *
-		ALIGN(vdec_size_scale(h, dm), align);
+	u32 len = ALIGN(vdec_size_scale(w, dm), align_w) *
+		ALIGN(vdec_size_scale(h, dm), align_h);
 
 	return len << is_output_p010(dec_mode);
 }

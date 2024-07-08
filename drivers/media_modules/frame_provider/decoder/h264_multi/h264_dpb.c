@@ -700,7 +700,7 @@ static void decode_poc(struct VideoParameters *p_Vid, struct Slice *pSlice)
 				dpb_print(p_H264_Dpb->decoder_index,
 					PRINT_FLAG_DPB_DETAIL,
 					"frame_num not equal to zero in IDR picture %d",
-					-1020);
+					pSlice->frame_num);
 		} else {
 			if (p_Vid->last_has_mmco_5) {
 				p_Vid->PreviousFrameNumOffset = 0;
@@ -734,40 +734,36 @@ static void decode_poc(struct VideoParameters *p_Vid, struct Slice *pSlice)
 		 * ucode can get offset_for_ref_frame size 128
 		 */
 		if (active_sps->num_ref_frames_in_pic_order_cnt_cycle)
-			for (i = 0; (i < (int) active_sps->
-				num_ref_frames_in_pic_order_cnt_cycle) && (i < 128); i++) {
+			for (i = 0; (i < (int) active_sps->num_ref_frames_in_pic_order_cnt_cycle) &&
+				(i < ARRAY_SIZE(active_sps->offset_for_ref_frame)); i++) {
 				p_Vid->ExpectedDeltaPerPicOrderCntCycle +=
 					active_sps->offset_for_ref_frame[i];
 				dpb_print(p_H264_Dpb->decoder_index,
 					PRINT_FLAG_DEBUG_POC,
 					"%s: offset_for_ref_frame %d\r\n",
 					__func__,
-					active_sps->
-					offset_for_ref_frame[i]);
+					active_sps->offset_for_ref_frame[i]);
 			}
 
 		if (pSlice->AbsFrameNum) {
 			p_Vid->PicOrderCntCycleCnt =
 				(pSlice->AbsFrameNum - 1) /
-				active_sps->
-				num_ref_frames_in_pic_order_cnt_cycle;
+				active_sps->num_ref_frames_in_pic_order_cnt_cycle;
 			p_Vid->FrameNumInPicOrderCntCycle =
 				(pSlice->AbsFrameNum - 1) %
-				active_sps->
-				num_ref_frames_in_pic_order_cnt_cycle;
+				active_sps->num_ref_frames_in_pic_order_cnt_cycle;
 			p_Vid->ExpectedPicOrderCnt =
 				p_Vid->PicOrderCntCycleCnt *
 				p_Vid->ExpectedDeltaPerPicOrderCntCycle;
-			for (i = 0; i <= (int)p_Vid->
-				FrameNumInPicOrderCntCycle; i++) {
+			for (i = 0; i <= (int)p_Vid->FrameNumInPicOrderCntCycle &&
+				(i < ARRAY_SIZE(active_sps->offset_for_ref_frame)); i++) {
 				p_Vid->ExpectedPicOrderCnt +=
 					active_sps->offset_for_ref_frame[i];
 				dpb_print(p_H264_Dpb->decoder_index,
 					PRINT_FLAG_DEBUG_POC,
 					"%s: offset_for_ref_frame %d\r\n",
 					__func__,
-					active_sps->
-					offset_for_ref_frame[i]);
+					active_sps->offset_for_ref_frame[i]);
 			}
 		} else
 			p_Vid->ExpectedPicOrderCnt = 0;
@@ -5859,12 +5855,12 @@ int h264_slice_header_process(struct h264_dpb_stru *p_H264_Dpb, int *frame_num_g
 		currSlice->frame_num,
 		p_Vid->pre_frame_num,
 		p_Vid->max_frame_num);
+
 		if (p_Vid->recovery_point == 0 &&
 			p_Vid->max_frame_num <= FRAME_NUM_MAX_SIZE &&
 			currSlice->frame_num != p_Vid->pre_frame_num &&
 			currSlice->frame_num !=
 			(p_Vid->pre_frame_num + 1) % p_Vid->max_frame_num) {
-
 			/*if (active_sps->
 			 *gaps_in_frame_num_value_allowed_flag
 			 *== 0) {
@@ -5874,7 +5870,9 @@ int h264_slice_header_process(struct h264_dpb_stru *p_H264_Dpb, int *frame_num_g
 			 *}
 			 *if (p_Vid->conceal_mode == 0)
 			 */
-			*frame_num_gap = 1;
+			*frame_num_gap = FrameNumGap_Normal;
+			if ((currSlice->frame_num < p_Vid->pre_frame_num) && (currSlice->frame_num != 0))
+				*frame_num_gap = FrameNumGap_Loop;
 		}
 
 		if (currSlice->nal_reference_idc) {

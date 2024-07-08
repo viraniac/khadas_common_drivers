@@ -311,7 +311,6 @@ static int vdec_ports_init(struct aml_vdec_adapt *ada_ctx)
 		return ret;
 	}
 
-	stbuf_fetch_init();
 	user_buffer_init();
 
 	if ((vdec->port->type & PORT_TYPE_VIDEO)
@@ -670,6 +669,11 @@ void vdec_set_duration(s32 duration)
 	vdec_frame_rate_uevent(duration);
 }
 
+void vdec_set_vf_duration(s32 duration)
+{
+	vdec_set_vf_dur(duration);
+}
+
 void aml_vdec_recycle_dec_resource(struct aml_vcodec_ctx * ctx,
 					struct aml_buf *aml_buf)
 {
@@ -737,6 +741,10 @@ void vdec_write_stream_data_inner(struct aml_vdec_adapt *ada_ctx, char *addr,
 	u32 around_size;
 
 	// calculate whether the remaining space is enougth
+	if (!ada_ctx->vdec) {
+		pr_err("Err: ada_ctx->vdec is NULL\n");
+		return;
+	}
 	if ((ada_ctx->vdec->vbuf.buf_wp + size) >
 		(ada_ctx->vdec->vbuf.buf_start + ada_ctx->vdec->vbuf.buf_size)) {
 		stbuf_around = true;

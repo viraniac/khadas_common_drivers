@@ -26,18 +26,17 @@
 #include <linux/platform_device.h>
 #include <linux/amlogic/cpu_version.h>
 
-typedef struct ptsnode {
+typedef struct __attribute__((packed)) ptsnode {
 	struct list_head node;
 	u32 offset;
-	u32 pts;
 	u64 pts_90k;
 	u64 pts_64;
 	u32 expired_count;
-	u64 duration_count;
-	u64 index;
+	u32 duration_count;
+	u32 index;
 } pts_node;
 
-typedef struct psinstance {
+typedef struct __attribute__((packed)) psinstance {
 	struct list_head pts_list;
 	struct list_head pts_free_list;
 	s32 mPtsServerInsId;
@@ -84,21 +83,19 @@ typedef struct psinstance {
 	u32 mLastCheckinPieceOffset;
 	u32 mLastCheckinPieceSize;
 	u32 mLastCheckoutIndex;
-	u64 mLastCheckinDurationCount;
-	u64 mLastCheckoutDurationCount;
+	u32 mLastCheckinDurationCount;
+	u32 mLastCheckoutDurationCount;
 	u32 mLastShotBound;
 	u32 mStickyWrapFlag;
 	u64 mLastCheckoutPts90k;
 	u64 mFirstCheckinPts90k;
 	u64 mLastCheckinPts90k;
-	spinlock_t mPtsListSlock;
 	s32 mRef;
 } ptsserver_ins;
 
 typedef struct Pts_Server_Manage {
 	ptsserver_ins* pInstance;
 	struct mutex mListLock;
-	spinlock_t mListSlock;
 } PtsServerManage;
 
 typedef struct ps_alloc_para {
@@ -112,12 +109,6 @@ typedef struct checkinptssize {
 	u32 pts;
 	u64 pts_64;
 } checkin_pts_size;
-
-typedef struct checkinptsoffset {
-	u32 offset;
-	u32 pts;
-	u64 pts_64;
-} checkin_pts_offset;
 
 typedef struct checkoutptsoffset {
 	u64 offset;
@@ -157,8 +148,7 @@ long ptsserver_init(void);
 long ptsserver_ins_alloc(s32 *pServerInsId,ptsserver_ins **pIns,ptsserver_alloc_para* allocParm);
 void ptsserver_set_mode(s32 pServerInsId, bool set_mode);
 long ptsserver_set_first_checkin_offset(s32 pServerInsId,start_offset* mStartOffset);
-long ptsserver_checkin_pts_size(s32 pServerInsId,checkin_pts_size* mCheckinPtsSize);
-long ptsserver_checkin_pts_offset(s32 pServerInsId, checkin_pts_offset* mCheckinPtsOffset);
+long ptsserver_checkin_pts_size(s32 pServerInsId,checkin_pts_size* mCheckinPtsSize,bool isOffset);
 long ptsserver_checkout_pts_offset(s32 pServerInsId,checkout_pts_offset* mCheckoutPtsOffset);
 long ptsserver_peek_pts_offset(s32 pServerInsId,checkout_pts_offset* mCheckoutPtsOffset);
 long ptsserver_get_last_checkin_pts(s32 pServerInsId,last_checkin_pts* mLastCheckinPts);
@@ -167,7 +157,7 @@ long ptsserver_ins_release(s32 pServerInsId);
 long ptsserver_set_trick_mode(s32 pServerInsId,s32 mode);
 //audio
 long ptsserver_ins_reset(s32 pServerInsId);
-long ptsserver_static_ins_binder(s32 pServerInsId, ptsserver_ins** pIns, ptsserver_alloc_para allocParm);
+long ptsserver_static_ins_binder(s32 pServerInsId, ptsserver_ins** pIns, ptsserver_alloc_para* allocParm);
 long ptsserver_checkin_apts_size(s32 pServerInsId,checkin_apts_size* mCheckinPtsSize);
 long ptsserver_checkout_apts_offset(s32 pServerInsId,checkout_apts_offset* mCheckoutPtsOffset);
 long ptsserver_get_list_size(s32 pServerInsId, u32* ListSize);

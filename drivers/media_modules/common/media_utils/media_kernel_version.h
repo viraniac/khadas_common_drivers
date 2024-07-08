@@ -17,34 +17,20 @@
  *
  * Description:
  */
-#include <linux/io.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/init.h>
-#include <linux/printk.h>
-#include <linux/fs.h>
+#ifndef __MEDIA_KERNEL_VERSION_H__
+#define __MEDIA_KERNEL_VERSION_H__
 
-ssize_t media_write(struct file *file, const void *buf, size_t count, loff_t *pos)
-{
-	return 0;
-}
-EXPORT_SYMBOL(media_write);
+#include <linux/version.h>
+ssize_t media_write(struct file *, const void *, size_t, loff_t *);
+ssize_t media_read(struct file *, void *, size_t, loff_t *);
+struct file *media_open(const char *, int, umode_t);
+int media_close(struct file *, fl_owner_t);
 
-ssize_t media_read(struct file *file, void *bufs, size_t count, loff_t *pos)
-{
-	return 0;
-}
-EXPORT_SYMBOL(media_read);
-
-struct file *media_open(const char *filename, int flags, umode_t mode)
-{
-	return NULL;
-}
-EXPORT_SYMBOL(media_open);
-
-int media_close(struct file *filp, fl_owner_t id)
-{
-	return 0;
-}
-EXPORT_SYMBOL(media_close);
-
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 3, 13)
+#define KV_CLASS_CONST
+#define KV_CLASS_ATTR_CONST
+#else
+#define KV_CLASS_CONST const      //kernel 6.6 change the type of parameter to const
+#define KV_CLASS_ATTR_CONST const //kernel 6.6 change the type of parameter to const
+#endif
+#endif

@@ -475,6 +475,11 @@ enum FirstInsertFrm_State {
 	FirstInsertFrm_SKIPDONE = 3,
 };
 
+enum FrameNumGap_Value {
+	FrameNumGap_Null = 0,
+	FrameNumGap_Normal = 1,
+	FrameNumGap_Loop = 2  /* loop playback, frame_num become small,and current frame is not idr */
+};
 
 struct SPSParameters {
 	unsigned int profile_idc;
@@ -930,6 +935,8 @@ struct h264_dpb_stru {
 	u32 without_display_mode;
 	int long_term_reference_flag;
 	u32 poc_check_count;
+	u32 size_for_res_change;
+	u32 param1_for_res_change;
 };
 
 

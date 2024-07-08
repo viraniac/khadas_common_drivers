@@ -83,12 +83,14 @@ typedef enum {
 	GET_UPDATE_INFO = 0,
 	GET_SLOW_SYNC_ENABLE,
 	GET_TRICK_MODE,
+	GET_AUDIO_WORK_MODE,
+	GET_START_STRATEGY,
 	SET_VIDEO_FRAME_ADVANCE = 500,
 	SET_SLOW_SYNC_ENABLE,
 	SET_TRICK_MODE,
 	SET_FREE_RUN_TYPE,
-	GET_AUDIO_WORK_MODE,
-
+	SET_VIDEO_HOLD,
+	SET_START_STRATEGY,
 } mediasync_control_cmd;
 
 typedef struct m_control {
@@ -221,7 +223,7 @@ typedef struct update_info{
 	mediasync_audioinfo mAudioInfo;
 	mediasync_videoinfo mVideoInfo;
 	u32 isVideoFrameAdvance;
-	uint32_t mFreeRunType;
+	u32 mFreeRunType;
 } mediasync_update_info;
 
 typedef struct frame_rec_s {
@@ -247,6 +249,19 @@ typedef struct frame_table_s {
 	struct list_head valid_list;
 	struct list_head free_list;
 } frame_table_t;
+
+typedef struct holdvideoinfo {
+	int vfm_id;
+	bool flag;
+}mediasync_holdvideoinfo;
+
+typedef struct audio_switch {
+    int32_t mOn; //audio switch on=1/off=0
+    int32_t mSetByUser; //check if user set audio switch,1=set by user/ 0=inner using
+    int64_t mPts; //after audio switch,audio sync pts
+    int64_t mSystemTimeUs;
+    int32_t mReserved[2];
+} mediasync_audio_switch;
 
 typedef struct instance{
 	s32 mSyncIndex;
@@ -304,7 +319,10 @@ typedef struct instance{
 	u32 mRcordSlope[RECORD_SLOPE_NUM];
 	u32 mRcordSlopeCount;
 	s32 mlastCheckVideocacheDuration;
-	uint32_t mFreeRunType;
+	u32 mFreeRunType;
+	mediasync_holdvideoinfo mHoldVideoInfo;
+	u32 mStartStrategy;
+	mediasync_audio_switch mAudioSwitch;
 }mediasync_ins;
 
 typedef struct Media_Sync_Manage {
@@ -430,4 +448,7 @@ long mediasync_ins_set_pcrslope_implementation(mediasync_ins* pInstance, mediasy
 long mediasync_ins_set_video_smooth_tag(MediaSyncManager* pSyncManage, s32 sSmooth_tag);
 long mediasync_ins_get_video_smooth_tag(MediaSyncManager* pSyncManage, s32* spSmooth_tag);
 long mediasync_ins_set_pcr_and_dmx_id(MediaSyncManager* pSyncManage, s32 sDemuxId, s32 sPcrPid);
+extern int register_mediasync_video_hold_set_cb(void* pfunc);
+long mediasync_ins_set_audio_switch(MediaSyncManager* pSyncManage, mediasync_audio_switch audioSwitch);
+long mediasync_ins_get_audio_switch(MediaSyncManager* pSyncManage, mediasync_audio_switch* audioSwitch);
 #endif

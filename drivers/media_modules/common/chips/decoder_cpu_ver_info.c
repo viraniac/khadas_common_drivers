@@ -70,6 +70,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_4K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC | FMT_VP9,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_G12A - MAJOR_ID_START] = {
@@ -86,6 +87,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_4K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_G12B - MAJOR_ID_START] = {
@@ -102,6 +104,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_4K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_GXLX2 - MAJOR_ID_START] = {
@@ -118,6 +121,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_4K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_SM1 - MAJOR_ID_START] = {
@@ -134,6 +138,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,  //support 8kp24
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_TL1 - MAJOR_ID_START] = {
@@ -150,6 +155,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K, //support 8kp24
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_TM2 - MAJOR_ID_START] = {
@@ -166,6 +172,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_C1 - MAJOR_ID_START] = {
@@ -190,6 +197,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_T5 - MAJOR_ID_START] = {
@@ -206,6 +214,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_4K, //unsupport vp9 & av1
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC | FMT_AVS2,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_T5D - MAJOR_ID_START] = {
@@ -222,6 +231,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_1080P,
 		.hevc_max_resolution = RESOLUTION_1080P,	//unsupport 4k and avs2
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AV1,
+		.support_h265_level_idc = IDC_4_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_T7 - MAJOR_ID_START] = {
@@ -239,6 +249,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_S4 - MAJOR_ID_START] = {
@@ -255,6 +266,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_T3 - MAJOR_ID_START] = {
@@ -274,6 +286,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,	//8kp30, rdma, mmu copy
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_S4D - MAJOR_ID_START] = {
@@ -290,6 +303,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_T5W - MAJOR_ID_START] = {
@@ -306,6 +320,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_S5 - MAJOR_ID_START] = {
@@ -320,10 +335,13 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.is_support_h264_mmu   = true,
 		.is_support_dual_core  = true,
 		.is_support_axi_ctrl = true,
+		.is_mjpeg_endian_rematch = true,
+		.is_vp9_adapt_prob_hw_mode = true,
 		.hevc_stream_extra_shift = 8,
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1_AVS3,
+		.support_h265_level_idc = IDC_6_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_T5M - MAJOR_ID_START] = {
@@ -338,9 +356,11 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.is_support_h264_mmu    = true,
 		.is_support_dual_core = false,
 		.is_support_axi_ctrl = true,
+		.is_mjpeg_endian_rematch = true,
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_4K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_T3X - MAJOR_ID_START] = {
@@ -356,10 +376,13 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.is_support_dual_core = false,
 		.is_support_rdma     = true,
 		.is_support_axi_ctrl = true,
+		.is_mjpeg_endian_rematch = true,
+		.is_vp9_adapt_prob_hw_mode = true,
 		.hevc_stream_extra_shift = 8,
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1_AVS3,
+		.support_h265_level_idc = IDC_6,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_TXHD2 - MAJOR_ID_START] = {
@@ -376,6 +399,7 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_1080P,
 		.hevc_max_resolution = RESOLUTION_4K,	//unsupport avs2,av1
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC | FMT_VP9,
+		.support_h265_level_idc = IDC_5,
 	},
 
 	[AM_MESON_CPU_MAJOR_ID_S1A - MAJOR_ID_START] = {
@@ -392,6 +416,48 @@ static struct dos_of_dev_s dos_dev_data[AM_MESON_CPU_MAJOR_ID_MAX - MAJOR_ID_STA
 		.vdec_max_resolution = RESOLUTION_1080P,
 		.hevc_max_resolution = RESOLUTION_1080P,
 		.fmt_support_flags = FMT_HEVC | FMT_H264 | FMT_MPEG2 | FMT_MPEG4 | FMT_VC1,
+		.support_h265_level_idc = IDC_4_1,
+	},
+
+	[AM_MESON_CPU_MAJOR_ID_S7 - MAJOR_ID_START] = {
+		.chip_id = AM_MESON_CPU_MAJOR_ID_S7,
+		.reg_compat = s7_mm_registers_compat,
+		.max_vdec_clock  = 800,
+		.max_hevcf_clock = 800,
+		.max_hevcb_clock = 800,
+		.hevc_clk_combine_flag  = true,
+		.is_hw_parser_support   = false,
+		.is_vdec_canvas_support = true,
+		.is_support_h264_mmu    = true,
+		.is_support_dual_core = false,
+		.is_mjpeg_endian_rematch = true,
+		.is_vcpu_clk_set = true,
+		.is_vp9_adapt_prob_hw_mode = true,
+		.vdec_max_resolution = RESOLUTION_4K,
+		.hevc_max_resolution = RESOLUTION_4K,
+		.fmt_support_flags = FMT_VDEC_NO_AVS | FMT_HEVC_VP9_AV1,
+		.support_h265_level_idc = IDC_5_1,
+	},
+
+	[AM_MESON_CPU_MAJOR_ID_S7D - MAJOR_ID_START] = {
+		.chip_id = AM_MESON_CPU_MAJOR_ID_S7D,
+		.reg_compat = s7_mm_registers_compat,
+		.max_vdec_clock  = 800,
+		.max_hevcf_clock = 800,
+		.max_hevcb_clock = 800,
+		.max_hcodec_clock = 800,
+		.hevc_clk_combine_flag  = true,
+		.is_hw_parser_support   = false,
+		.is_vdec_canvas_support = true,
+		.is_support_h264_mmu    = true,
+		.is_support_dual_core = false,
+		.is_mjpeg_endian_rematch = true,
+		.is_vcpu_clk_set = true,
+		.is_vp9_adapt_prob_hw_mode = true,
+		.vdec_max_resolution = RESOLUTION_4K,
+		.hevc_max_resolution = RESOLUTION_4K,
+		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
+		.support_h265_level_idc = IDC_5_1,
 	},
 };
 
@@ -457,10 +523,30 @@ static struct dos_of_dev_s dos_dev_sub_table[] = {
 		.is_support_h264_mmu    = true,
 		.is_support_dual_core = false,
 		.is_support_axi_ctrl = true,
+		.is_mjpeg_endian_rematch = true,
 		.vdec_max_resolution = RESOLUTION_4K,
 		.hevc_max_resolution = RESOLUTION_8K,  //fixed endian issue
 		.fmt_support_flags = FMT_VDEC_ALL | FMT_HEVC_VP9_AVS2_AV1,
-	}
+	},
+
+	{
+		.chip_id = AM_MESON_CPU_MINOR_ID_S7_S805X3,
+		.reg_compat = s7_mm_registers_compat,
+		.max_vdec_clock  = 800,
+		.max_hevcf_clock = 500,
+		.max_hevcb_clock = 500,
+		.hevc_clk_combine_flag  = true,
+		.is_hw_parser_support   = false,
+		.is_vdec_canvas_support = true,
+		.is_support_h264_mmu    = true,
+		.is_support_dual_core = false,
+		.is_mjpeg_endian_rematch = true,
+		.is_vcpu_clk_set = true,
+		.is_vp9_adapt_prob_hw_mode = true,
+		.vdec_max_resolution = RESOLUTION_1080P,
+		.hevc_max_resolution = RESOLUTION_1080P,
+		.fmt_support_flags = FMT_VDEC_NO_AVS | FMT_HEVC_VP9_AV1,
+	},
 };
 
 /* dos device match table */
@@ -568,6 +654,14 @@ static const struct of_device_id cpu_ver_of_match[] = {
 		.compatible = "amlogic, cpu-major-id-s1a",
 		.data = &dos_dev_data[AM_MESON_CPU_MAJOR_ID_S1A - MAJOR_ID_START],
 	},
+	{
+		.compatible = "amlogic, cpu-major-id-s7",
+		.data = &dos_dev_data[AM_MESON_CPU_MAJOR_ID_S7 - MAJOR_ID_START],
+	},
+	{
+		.compatible = "amlogic, cpu-major-id-s7d",
+		.data = &dos_dev_data[AM_MESON_CPU_MAJOR_ID_S7D - MAJOR_ID_START],
+	},
 	{},
 };
 
@@ -587,6 +681,10 @@ static const struct of_device_id cpu_sub_id_of_match[] = {
 	{
 		.compatible = "amlogic, cpu-major-id-t7c",
 		.data = &dos_dev_sub_table[3],
+	},
+	{
+		.compatible = "amlogic, cpu-major-id-s7-805x3",
+		.data = &dos_dev_sub_table[4],
 	},
 	{}
 };
@@ -751,6 +849,20 @@ bool is_cpu_t7c(void)
 }
 EXPORT_SYMBOL(is_cpu_t7c);
 
+bool is_cpu_s7(void)
+{
+	return ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S7)
+		&& (get_cpu_sub_id() != CHIP_REVX));
+}
+EXPORT_SYMBOL(is_cpu_s7);
+
+bool is_cpu_s7_s805x3(void)
+{
+	return ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S7)
+		&& (get_cpu_sub_id() == CHIP_REVX));
+}
+EXPORT_SYMBOL(is_cpu_s7_s805x3);
+
 /*
 	feature from dos dev functions
 */
@@ -764,9 +876,11 @@ static u32 force_dos_support;
 
 inline bool is_hevc_align32(int blkmod)
 {
-	if ((get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_TXHD2) ||
-		(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_S1A) ||
-		(get_cpu_major_id() == AM_MESON_CPU_MAJOR_ID_G12A))
+	enum AM_MESON_CPU_MAJOR_ID cpu_major_id = get_cpu_major_id();
+
+	if ((cpu_major_id == AM_MESON_CPU_MAJOR_ID_TXHD2) ||
+		(cpu_major_id == AM_MESON_CPU_MAJOR_ID_S1A) ||
+		(cpu_major_id == AM_MESON_CPU_MAJOR_ID_G12A))
 		return true;
 
 	return false;
@@ -804,6 +918,11 @@ inline u32 hevcb_max_clk_get(void)
 	return platform_dos_dev->max_hevcb_clock;
 }
 EXPORT_SYMBOL(hevcb_max_clk_get);
+inline u32 hcodec_max_clk_get(void)
+{
+	return platform_dos_dev->max_hcodec_clock;
+}
+EXPORT_SYMBOL(hcodec_max_clk_get);
 
 inline bool is_hevc_clk_combined(void)
 {
@@ -924,11 +1043,35 @@ inline bool is_support_format(int format)
 }
 EXPORT_SYMBOL(is_support_format);
 
+inline int get_h265_idc_level(void)
+{
+	return platform_dos_dev->support_h265_level_idc;
+}
+EXPORT_SYMBOL(get_h265_idc_level);
+
 inline int get_hevc_stream_extra_shift_bytes(void)
 {
 	return platform_dos_dev->hevc_stream_extra_shift;
 }
 EXPORT_SYMBOL(get_hevc_stream_extra_shift_bytes);
+
+inline bool is_mjpeg_endian_rematch(void)
+{
+	return platform_dos_dev->is_mjpeg_endian_rematch;
+}
+EXPORT_SYMBOL(is_mjpeg_endian_rematch);
+
+inline bool is_vcpu_clk_set(void)
+{
+	return platform_dos_dev->is_vcpu_clk_set;
+}
+EXPORT_SYMBOL(is_vcpu_clk_set);
+
+inline bool is_vp9_adapt_prob_hw_mode(void)
+{
+	return platform_dos_dev->is_vp9_adapt_prob_hw_mode;
+}
+EXPORT_SYMBOL(is_vp9_adapt_prob_hw_mode);
 
 void pr_dos_infos(void)
 {
@@ -957,6 +1100,9 @@ void pr_dos_infos(void)
 	pr_info("support dos axi ctrl: %d\n", is_support_axi_ctrl());
 	pr_info("support format      : 0x%x\n", platform_dos_dev->fmt_support_flags);
 	pr_info("hevc_stream_extra_shift_bytes: %d\n", get_hevc_stream_extra_shift_bytes());
+	pr_info("mjpeg endian rematch: %d\n", is_mjpeg_endian_rematch());
+	pr_info("vcpu clk set        : %d\n", is_vcpu_clk_set());
+	pr_info("vp9 adatp prob hw mode : %d\n", is_vp9_adapt_prob_hw_mode());
 }
 EXPORT_SYMBOL(pr_dos_infos);
 

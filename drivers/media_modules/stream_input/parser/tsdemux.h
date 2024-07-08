@@ -86,11 +86,11 @@ struct ptsserver_table_s {
 	u32 buf_size;
 }/*ptsserver_table_t */;
 
-struct ptsserver_checkin_pts_s {
+typedef struct {
 	u32 ptr;
-	u64 pts_val;
-	struct work_struct pts_wkr_in;
-};
+	u64 packetsPts;
+	int packetsSize;
+} packets_info;
 
 extern s32 tsdemux_init(u32 vid, u32 aid, u32 sid, u32 pcrid, bool is_hevc,
 	struct vdec_s *vdec);

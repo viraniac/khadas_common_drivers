@@ -351,7 +351,7 @@ static int vdec_h264_init(struct aml_vcodec_ctx *ctx, unsigned long *h_vdec)
 		goto err;
 	}
 
-	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_BUFMGR,
+	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT,
 		"H264 Instance >> %lx", (ulong) inst);
 
 	return 0;
@@ -663,7 +663,7 @@ out:
 }
 
 static int vdec_h264_probe(unsigned long h_vdec,
-	struct aml_vcodec_mem *bs, void *out)
+	struct aml_vcodec_mem *bs)
 {
 	struct vdec_h264_inst *inst = (struct vdec_h264_inst *)h_vdec;
 	struct aml_vdec_adapt *adapt_vdec = &inst->vdec;
@@ -747,7 +747,7 @@ static int vdec_write_nalu(struct vdec_h264_inst *inst,
 		goto err;
 
 	nal_type = AVC_NAL_TYPE(buf[nalu_pos]);
-	//v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO, "NALU type: %d, size: %u\n", nal_type, size);
+	//v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT, "NALU type: %d, size: %u\n", nal_type, size);
 
 	if (nal_type == NAL_H264_SPS && !is_combine) {
 		if (inst->vsi->head_offset + size > HEADER_BUFFER_SIZE) {
@@ -839,7 +839,7 @@ static bool monitor_res_change(struct vdec_h264_inst *inst, u8 *buf, u32 size)
 		inst->vsi->pic.coded_height) ||
 		(inst->vsi->pic.profile_idc !=
 		inst->vsi->cur_pic.profile_idc))) {
-		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO, "res change\n");
+		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT, "res change\n");
 		inst->vsi->cur_pic = inst->vsi->pic;
 		return true;
 	}
@@ -1030,7 +1030,8 @@ static void set_cfg_info(struct vdec_h264_inst *inst,
 		new_cfg->double_write_mode);
 
 	if (old_cfg->double_write_mode != dw_new) {
-		pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw_new, 64);
+		pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw_new, 64,
+			(is_hevc_align32(0) && dw_new != DM_YUV_ONLY) ? 32 : 64);
 		pic->c_len_sz		= pic->y_len_sz >> 1;
 	}
 
@@ -1059,7 +1060,8 @@ static void set_param_ps_info(struct vdec_h264_inst *inst,
 	pic->coded_width 	= ps->coded_width;
 	pic->coded_height 	= ps->coded_height;
 
-	pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw, 64);
+	pic->y_len_sz		= vdec_get_plane_size(pic->coded_width, pic->coded_height, dw, 64,
+		(is_hevc_align32(0) && dw != DM_YUV_ONLY) ? 32 : 64);
 	pic->c_len_sz		= pic->y_len_sz >> 1;
 	pic->profile_idc	= ps->profile;
 	pic->field		= ps->field;
@@ -1096,6 +1098,7 @@ static void set_param_hdr_info(struct vdec_h264_inst *inst,
 			V4L2_CONFIG_PARM_DECODE_HDRINFO;
 		aml_vdec_dispatch_event(inst->ctx,
 			V4L2_EVENT_SRC_CH_HDRINFO);
+		inst->ctx->dec_intf.decinfo_event_report(inst->ctx, AML_DECINFO_EVENT_HDR10, hdr);
 		v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_BUFMGR,
 			"H264 set HDR infos\n");
 	}
@@ -1107,11 +1110,12 @@ static void set_pic_info(struct vdec_h264_inst *inst,
 	inst->vsi->pic = *pic;
 }
 
-static void set_param_post_event(struct vdec_h264_inst *inst, u32 *event)
+static void set_param_post_event(struct vdec_h264_inst *inst, u32 *event, struct set_param_info *param)
 {
 	aml_vdec_dispatch_event(inst->ctx, *event);
-	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PRINFO,
-		"H264 post event: %d\n", *event);
+	v4l_dbg(inst->ctx, V4L_DEBUG_CODEC_PROT,
+		"H264 post event: %d, fun: %s, %d\n",
+		param->event, param->function, param->line);
 }
 static void set_param_comp_buf_info(struct vdec_h264_inst *inst,
 		struct vdec_comp_buf_info *info)
@@ -1120,7 +1124,7 @@ static void set_param_comp_buf_info(struct vdec_h264_inst *inst,
 }
 
 static int vdec_h264_set_param(unsigned long h_vdec,
-	enum vdec_set_param_type type, void *in)
+	enum vdec_set_param_type type, void *in, struct set_param_info *param)
 {
 	int ret = 0;
 	struct vdec_h264_inst *inst = (struct vdec_h264_inst *)h_vdec;
@@ -1145,7 +1149,7 @@ static int vdec_h264_set_param(unsigned long h_vdec,
 		break;
 
 	case SET_PARAM_POST_EVENT:
-		set_param_post_event(inst, in);
+		set_param_post_event(inst, in, param);
 		break;
 
 	case SET_PARAM_PIC_INFO:
