@@ -43,6 +43,13 @@
 			&gpio GPIOY_9 GPIO_ACTIVE_HIGH>;
 		lcd_cpu_gpio_names = "GPIOY_2","GPIOY_9";
 
+		config_check_glb = <1>;
+		display_timing_req_min = <1  /*alert_level: 0:disable, 1:warning, 2:fatal error*/
+				45   /*hsw+hbp*/
+				0    /*hfp, 0 for no need*/
+				20   /*vsw+vbp*/
+				15>; /*vfp*/
+
 		lvds_0{
 			model_name = "768p-vfreq";
 			interface = "lvds"; /*lcd_interface(lvds, vbyone)*/
@@ -1463,6 +1470,13 @@
 			&gpio GPIOY_6 GPIO_ACTIVE_HIGH>;
 		lcd_cpu_gpio_names = "GPIOY_14","GPIOY_6";
 
+		config_check_glb = <1>;
+		display_timing_req_min = <1  /*alert_level: 0:disable, 1:warning, 2:fatal error*/
+				45   /*hsw+hbp*/
+				0    /*hfp, 0 for no need*/
+				20   /*vsw+vbp*/
+				15>; /*vfp*/
+
 		lvds_0{
 			model_name = "768p-vfreq";
 			interface = "lvds"; /*lcd_interface(lvds, vbyone)*/
@@ -1933,6 +1947,13 @@
 		/* power delay:(unit in ms) */
 		lcd_cpu-gpios = <&gpio GPIOY_14 GPIO_ACTIVE_HIGH>;
 		lcd_cpu_gpio_names = "GPIOY_14";
+
+		config_check_glb = <1>;
+		display_timing_req_min = <1  /*alert_level: 0:disable, 1:warning, 2:fatal error*/
+				45   /*hsw+hbp*/
+				0    /*hfp, 0 for no need*/
+				20   /*vsw+vbp*/
+				15>; /*vfp*/
 
 		lvds_0{
 			model_name = "1080p-vfreq";

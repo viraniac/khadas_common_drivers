@@ -42,6 +42,13 @@
 
 		lcd_expander_gpio_names = "LCD_RESET","LCD_EN"; /* for u-boot */
 
+		config_check_glb = <1>;
+		display_timing_req_min = <1  /*alert_level: 0:disable, 1:warning, 2:fatal error*/
+				45   /*hsw+hbp*/
+				0    /*hfp, 0 for no need*/
+				20   /*vsw+vbp*/
+				15>; /*vfp*/
+
 		mipi_0 {
 			model_name = "TS050";
 			interface = "mipi";
