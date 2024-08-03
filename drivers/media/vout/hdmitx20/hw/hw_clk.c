@@ -1009,9 +1009,12 @@ static void hdmitx_set_clk_(struct hdmitx_dev *hdev,
 		}
 		if (j == sizeof(setting_enc_clk_val_24)
 			/ sizeof(struct hw_enc_clk_val_group)) {
-			HDMITX_INFO("%d:Not find VIC = %d for hpll setting\n",
-				__LINE__, vic);
-			return;
+			/* if vic is VESA mode, then here will automatically calculate the clks */
+			if (vic < HDMITX_VESA_OFFSET) {
+				HDMITX_INFO("%d:Not find VIC = %d for hpll setting\n",
+					__LINE__, vic);
+				return;
+			}
 		}
 	} else if (cd == COLORDEPTH_30B) {
 		if (is_hdmi4k_support_420(vic) && cs != HDMI_COLORSPACE_YUV420) {
