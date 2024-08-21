@@ -789,6 +789,15 @@
 		pinctrl-0 = </*&tdmb_mclk &tdmout_b &tdmin_b*/>;
 		src-clk-freq = <1179648000>;
 		i2s2hdmi = <1>;
+		/*
+		 * 0: tdmout_a;
+		 * 1: tdmout_b;
+		 * 2: tdmout_c;
+		 * 3: spdifout;
+		 * 4: spdifout_b;
+		 */
+		samesource_sel = <3>;
+
 		status = "okay";
 	};
 
