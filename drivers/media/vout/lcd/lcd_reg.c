@@ -647,7 +647,8 @@ unsigned int dsi_host_read(struct aml_lcd_drv_s *pdrv, unsigned int reg)
 	return temp;
 };
 
-void dsi_host_write(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned int val)
+void dsi_host_write(struct aml_lcd_drv_s *pdrv,
+		    unsigned int reg, unsigned int val)
 {
 	void __iomem *p;
 	unsigned long flags = 0;
@@ -696,7 +697,8 @@ unsigned int dsi_host_getb(struct aml_lcd_drv_s *pdrv, unsigned int reg,
 	return temp;
 }
 
-void dsi_host_set_mask(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned int mask)
+void dsi_host_set_mask(struct aml_lcd_drv_s *pdrv,
+		       unsigned int reg, unsigned int mask)
 {
 	void __iomem *p;
 	unsigned int temp = 0;
@@ -712,7 +714,8 @@ void dsi_host_set_mask(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned in
 	spin_unlock_irqrestore(&lcd_reg_spinlock, flags);
 }
 
-void dsi_host_clr_mask(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned int mask)
+void dsi_host_clr_mask(struct aml_lcd_drv_s *pdrv,
+		       unsigned int reg, unsigned int mask)
 {
 	void __iomem *p;
 	unsigned int temp = 0;
@@ -743,7 +746,8 @@ unsigned int dsi_phy_read(struct aml_lcd_drv_s *pdrv, unsigned int reg)
 	return temp;
 };
 
-void dsi_phy_write(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned int val)
+void dsi_phy_write(struct aml_lcd_drv_s *pdrv,
+		   unsigned int reg, unsigned int val)
 {
 	void __iomem *p;
 	unsigned long flags = 0;
@@ -792,7 +796,8 @@ unsigned int dsi_phy_getb(struct aml_lcd_drv_s *pdrv, unsigned int reg,
 	return temp;
 }
 
-void dsi_phy_set_mask(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned int mask)
+void dsi_phy_set_mask(struct aml_lcd_drv_s *pdrv,
+		      unsigned int reg, unsigned int mask)
 {
 	void __iomem *p;
 	unsigned int temp = 0;
@@ -808,7 +813,8 @@ void dsi_phy_set_mask(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned int
 	spin_unlock_irqrestore(&lcd_reg_spinlock, flags);
 }
 
-void dsi_phy_clr_mask(struct aml_lcd_drv_s *pdrv, unsigned int reg, unsigned int mask)
+void dsi_phy_clr_mask(struct aml_lcd_drv_s *pdrv,
+		      unsigned int reg, unsigned int mask)
 {
 	void __iomem *p;
 	unsigned int temp = 0;

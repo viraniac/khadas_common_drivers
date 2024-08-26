@@ -39,7 +39,7 @@ static void dptx_edid_print(struct dptx_EDID_s *edp_edid)
 		switch (edp_edid->block_identity[i]) {
 		case BLOCK_ID_SN:
 			pr_info("--------- block %d ---------\n"
-				"Monitor SN:      %s\n", i, edp_edid->serial_num);
+				"Monitor SN:           %s\n", i, edp_edid->serial_num);
 			break;
 		case BLOCK_ID_ASCII_STR:
 			pr_info("--------- block %d ---------\n"
@@ -48,10 +48,10 @@ static void dptx_edid_print(struct dptx_EDID_s *edp_edid)
 		case BLOCK_ID_RANGE_TIMING:
 			pr_info("--------- block %d ---------\n"
 				"Monitor Range Timing:\n"
-				"  V freq:        %d - %d Hz\n"
-				"  H freq:        %d - %d kHz\n"
-				"  Max Pixel Clk: %d MHz\n", i,
-				edp_edid->range_limit.min_vfreq, edp_edid->range_limit.max_vfreq,
+				"    V freq:        %d - %d Hz\n"
+				"    H freq:        %d - %d kHz\n"
+				"    Max Pixel Clk: %d MHz\n", i,
+				edp_edid->range_limit.min_vfreq, edp_edid->range_limit.max_v_freq,
 				edp_edid->range_limit.min_hfreq, edp_edid->range_limit.max_hfreq,
 				edp_edid->range_limit.max_pclk / 1000000);
 			break;
@@ -62,21 +62,37 @@ static void dptx_edid_print(struct dptx_EDID_s *edp_edid)
 		case BLOCK_ID_DETAIL_TIMING:
 			pr_info("--------- block %d ---------\n"
 				"Detail Timing:\n"
-				"  Pixel Clock: %u.%u MHz\n"
-				"  H Active:%4u Blank:%4u FP:%3u PW:%2u %s Size:%4umm Border:%u\n"
-				"  V Active:%4u Blank:%4u FP:%3u PW:%2u %s Size:%4umm Border:%u\n",
-				i, edp_edid->detail_timing[i].pclk / 1000000,
+				"    Pixel Clock:   %ld.%ld MHz\n"
+				"    H Active:      %d\n"
+				"    H Blank:       %d\n"
+				"    V Active:      %d\n"
+				"    V Blank:       %d\n"
+				"    H FP:          %d\n"
+				"    H PW:          %d\n"
+				"    V FP:          %d\n"
+				"    V PW:          %d\n"
+				"    H Size:        %dmm\n"
+				"    V Size:        %dmm\n"
+				"    H Border:      %d\n"
+				"    V Border:      %d\n"
+				"    Hsync Pol:     %d\n"
+				"    Vsync Pol:     %d\n", i,
+				edp_edid->detail_timing[i].pclk / 1000000,
 				(edp_edid->detail_timing[i].pclk % 1000000) / 1000,
-				edp_edid->detail_timing[i].h_a, edp_edid->detail_timing[i].h_b,
-				edp_edid->detail_timing[i].h_fp, edp_edid->detail_timing[i].h_pw,
-				(edp_edid->detail_timing[i].timing_ctrl >> 1) & 0x1 ? "P" : "N",
+				edp_edid->detail_timing[i].h_a,
+				edp_edid->detail_timing[i].h_b,
+				edp_edid->detail_timing[i].v_a,
+				edp_edid->detail_timing[i].v_b,
+				edp_edid->detail_timing[i].h_fp,
+				edp_edid->detail_timing[i].h_pw,
+				edp_edid->detail_timing[i].v_fp,
+				edp_edid->detail_timing[i].v_pw,
 				edp_edid->detail_timing[i].h_size,
-				edp_edid->detail_timing[i].h_border,
-				edp_edid->detail_timing[i].v_a, edp_edid->detail_timing[i].v_b,
-				edp_edid->detail_timing[i].v_fp, edp_edid->detail_timing[i].v_pw,
-				(edp_edid->detail_timing[i].timing_ctrl >> 2) & 0x1 ? "P" : "N",
 				edp_edid->detail_timing[i].v_size,
-				edp_edid->detail_timing[i].v_border);
+				edp_edid->detail_timing[i].h_border,
+				edp_edid->detail_timing[i].v_border,
+				(edp_edid->detail_timing[i].timing_ctrl >> 1) & 0x1,
+				(edp_edid->detail_timing[i].timing_ctrl >> 2) & 0x1);
 			break;
 		default:
 			pr_info("--------- block %d (empty) ---------\n", i);
@@ -177,7 +193,7 @@ static void dptx_edid_parse(unsigned char *edid_buf, struct dptx_EDID_s *edp_edi
 			case BLOCK_ID_RANGE_TIMING: //monitor range limits
 				edp_edid->block_identity[i] = BLOCK_ID_RANGE_TIMING;
 				range->min_vfreq = edid_buf[j + 5];
-				range->max_vfreq = edid_buf[j + 6];
+				range->max_v_freq = edid_buf[j + 6];
 				range->min_hfreq = edid_buf[j + 7];
 				range->max_hfreq = edid_buf[j + 8];
 				range->max_pclk = edid_buf[j + 9] * 10 * 1000000; // Hz

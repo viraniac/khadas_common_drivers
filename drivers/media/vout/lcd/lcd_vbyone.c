@@ -113,7 +113,7 @@ static void lcd_vbyone_force_lock(struct aml_lcd_drv_s *pdrv)
 	}
 
 	lcd_vcbus_setb(reg_insgn_ctrl, 7, 0, 4);
-	lcd_delay_ms(100);
+	msleep(100);
 	lcd_vcbus_setb(reg_insgn_ctrl, 5, 0, 4);
 }
 
@@ -444,8 +444,8 @@ static int lcd_vbyone_lanes_set(struct aml_lcd_drv_s *pdrv, int lane_num,
 	return 0;
 }
 
-static int lcd_vbyone_lanes_set_t3x(struct aml_lcd_drv_s *pdrv, unsigned int offset, int lane_num,
-			int byte_mode, int region_num, int slice, int ppc, int hsize, int vsize)
+static int lcd_vbyone_lanes_set_t3x(unsigned int offset, int lane_num, int byte_mode,
+				int region_num, int slice, int ppc, int hsize, int vsize)
 {
 	int sublane_num, orgn_sub, orgns_num, slice_lane_num;
 	unsigned int p2s_mode, pre_hact;
@@ -499,28 +499,22 @@ static int lcd_vbyone_lanes_set_t3x(struct aml_lcd_drv_s *pdrv, unsigned int off
 
 	lcd_vcbus_setb(VBO_CTRL_T3X + offset, 2, 16, 4);
 	lcd_vcbus_setb(VBO_CTRL_T3X + offset, 1, 0, 1);//enable
-
-	if (pdrv->index)
-		return 0;
-
-	if (lane_num <= 8 && slice == 2) {
-		lcd_vcbus_write(P2P_CH_SWAP0_T7, 0xba983210);
-		lcd_vcbus_write(P2P_CH_SWAP1_T7, 0xfedc7654);
-	} else {
-		lcd_vcbus_write(P2P_CH_SWAP0_T7, 0x76543210);
-		lcd_vcbus_write(P2P_CH_SWAP1_T7, 0xfedcba98);
+	if (lane_num == 8 && slice == 2) {
+		lcd_vcbus_write(P2P_CH_SWAP0, 0xba983210);
+		lcd_vcbus_write(P2P_CH_SWAP1, 0xfedc7654);
 	}
+
 	return 0;
 }
 
-static void lcd_vbyone_enable_dft(struct aml_lcd_drv_s *pdrv)
+void lcd_vbyone_enable_dft(struct aml_lcd_drv_s *pdrv)
 {
 	int lane_count, byte_mode, region_num, hsize, vsize;
 	/* int color_fmt; */
 	int vin_color, vin_bpp;
 
-	hsize = pdrv->config.timing.act_timing.h_active;
-	vsize = pdrv->config.timing.act_timing.v_active;
+	hsize = pdrv->config.basic.h_active;
+	vsize = pdrv->config.basic.v_active;
 	lane_count = pdrv->config.control.vbyone_cfg.lane_count; /* 8 */
 	region_num = pdrv->config.control.vbyone_cfg.region_num; /* 2 */
 	byte_mode = pdrv->config.control.vbyone_cfg.byte_mode; /* 4 */
@@ -578,7 +572,7 @@ static void lcd_vbyone_enable_dft(struct aml_lcd_drv_s *pdrv)
 		lcd_vbyone_cdr_training_hold(pdrv, 1);
 }
 
-static void lcd_vbyone_disable_dft(struct aml_lcd_drv_s *pdrv)
+void lcd_vbyone_disable_dft(struct aml_lcd_drv_s *pdrv)
 {
 	lcd_vcbus_setb(VBO_CTRL_L, 0, 0, 1);
 	/* clear insig setting */
@@ -586,7 +580,7 @@ static void lcd_vbyone_disable_dft(struct aml_lcd_drv_s *pdrv)
 	lcd_vcbus_setb(VBO_INSGN_CTRL, 0, 0, 1);
 }
 
-static void lcd_vbyone_enable_t7(struct aml_lcd_drv_s *pdrv)
+void lcd_vbyone_enable_t7(struct aml_lcd_drv_s *pdrv)
 {
 	int lane_count, byte_mode, region_num, hsize, vsize;
 	/* int color_fmt; */
@@ -595,8 +589,8 @@ static void lcd_vbyone_enable_t7(struct aml_lcd_drv_s *pdrv)
 
 	offset = pdrv->data->offset_venc_if[pdrv->index];
 
-	hsize = pdrv->config.timing.act_timing.h_active;
-	vsize = pdrv->config.timing.act_timing.v_active;
+	hsize = pdrv->config.basic.h_active;
+	vsize = pdrv->config.basic.v_active;
 	lane_count = pdrv->config.control.vbyone_cfg.lane_count; /* 8 */
 	region_num = pdrv->config.control.vbyone_cfg.region_num; /* 2 */
 	byte_mode = pdrv->config.control.vbyone_cfg.byte_mode; /* 4 */
@@ -655,7 +649,7 @@ static void lcd_vbyone_enable_t7(struct aml_lcd_drv_s *pdrv)
 		lcd_vbyone_cdr_training_hold(pdrv, 1);
 }
 
-static void lcd_vbyone_disable_t7(struct aml_lcd_drv_s *pdrv)
+void lcd_vbyone_disable_t7(struct aml_lcd_drv_s *pdrv)
 {
 	unsigned int offset;
 
@@ -667,7 +661,7 @@ static void lcd_vbyone_disable_t7(struct aml_lcd_drv_s *pdrv)
 	lcd_vcbus_setb(VBO_INSGN_CTRL_T7 + offset, 0, 0, 1);
 }
 
-static void lcd_vbyone_enable_t3x(struct aml_lcd_drv_s *pdrv)
+void lcd_vbyone_enable_t3x(struct aml_lcd_drv_s *pdrv)
 {
 	int lane_count, byte_mode, region_num, slice, hsize, vsize;
 	/* int color_fmt; */
@@ -677,8 +671,8 @@ static void lcd_vbyone_enable_t3x(struct aml_lcd_drv_s *pdrv)
 
 	offset = pdrv->data->offset_venc_if[pdrv->index];
 
-	hsize = pdrv->config.timing.act_timing.h_active;
-	vsize = pdrv->config.timing.act_timing.v_active;
+	hsize = pdrv->config.basic.h_active;
+	vsize = pdrv->config.basic.v_active;
 	lane_count = pdrv->config.control.vbyone_cfg.lane_count; /* 8 */
 	region_num = pdrv->config.control.vbyone_cfg.region_num; /* 2 */
 	byte_mode = pdrv->config.control.vbyone_cfg.byte_mode; /* 4 */
@@ -704,7 +698,7 @@ static void lcd_vbyone_enable_t3x(struct aml_lcd_drv_s *pdrv)
 
 	ppc = pdrv->config.timing.ppc;
 	slice = ppc;
-	lcd_vbyone_lanes_set_t3x(pdrv, offset, lane_count, byte_mode, region_num,
+	lcd_vbyone_lanes_set_t3x(offset, lane_count, byte_mode, region_num,
 		slice, ppc, hsize, vsize);
 
 	/*set hsync/vsync polarity to let the polarity is low active*/
@@ -735,7 +729,7 @@ static void lcd_vbyone_enable_t3x(struct aml_lcd_drv_s *pdrv)
 		lcd_vbyone_cdr_training_hold(pdrv, 1);
 }
 
-static void lcd_vbyone_disable_t3x(struct aml_lcd_drv_s *pdrv)
+void lcd_vbyone_disable_t3x(struct aml_lcd_drv_s *pdrv)
 {
 	unsigned int offset;
 
@@ -1574,7 +1568,7 @@ void lcd_vbyone_debug_cdr(struct aml_lcd_drv_s *pdrv)
 
 	lcd_vbyone_force_cdr(pdrv);
 
-	lcd_delay_ms(100);
+	msleep(100);
 	state = lcd_vbyone_get_fsm_state(pdrv);
 	LCDPR("vbyone cdr: fsm state: 0x%02x\n", state);
 }
@@ -1591,7 +1585,7 @@ void lcd_vbyone_debug_lock(struct aml_lcd_drv_s *pdrv)
 
 	lcd_vbyone_force_lock(pdrv);
 
-	lcd_delay_ms(20);
+	msleep(20);
 	state = lcd_vbyone_get_fsm_state(pdrv);
 	LCDPR("vbyone cdr: fsm state: 0x%02x\n", state);
 }
@@ -1614,43 +1608,7 @@ void lcd_vbyone_debug_reset(struct aml_lcd_drv_s *pdrv)
 	vx1_conf->intr_en = intr_en;
 	vx1_conf->vsync_intr_en = vintr_en;
 	lcd_vbyone_interrupt_enable(pdrv, vx1_conf->intr_state);
-	lcd_delay_ms(200);
+	msleep(200);
 	state = lcd_vbyone_get_fsm_state(pdrv);
 	LCDPR("vbyone reset: fsm state: 0x%02x\n", state);
-}
-
-void lcd_vbyone_enable(struct aml_lcd_drv_s *pdrv)
-{
-	switch (pdrv->data->chip_type) {
-	case LCD_CHIP_T7:
-	case LCD_CHIP_T3:
-	case LCD_CHIP_T5M:
-	case LCD_CHIP_T5W:
-		lcd_vbyone_enable_t7(pdrv);
-		break;
-	case LCD_CHIP_T3X:
-		lcd_vbyone_enable_t3x(pdrv);
-		break;
-	default:
-		lcd_vbyone_enable_dft(pdrv);
-		break;
-	}
-}
-
-void lcd_vbyone_disable(struct aml_lcd_drv_s *pdrv)
-{
-	switch (pdrv->data->chip_type) {
-	case LCD_CHIP_T7:
-	case LCD_CHIP_T3:
-	case LCD_CHIP_T5M:
-	case LCD_CHIP_T5W:
-		lcd_vbyone_disable_t7(pdrv);
-		break;
-	case LCD_CHIP_T3X:
-		lcd_vbyone_disable_t3x(pdrv);
-		break;
-	default:
-		lcd_vbyone_disable_dft(pdrv);
-		break;
-	}
 }

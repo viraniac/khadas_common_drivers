@@ -497,10 +497,11 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 					fw->fw_print_frequent);
 				goto ldim_attr_store_end;
 			}
-			if (kstrtouint(parm[1], 0,
+			if (kstrtouint(parm[1], 10,
 				       &fw->fw_print_frequent) < 0) {
 				goto ldim_attr_store_err;
 			}
+			cus_fw->fw_print_frequent = fw->fw_print_frequent;
 		}
 		pr_info("fw_print_frequent = %d\n", fw->fw_print_frequent);
 	} else if (!strcmp(parm[0], "fw_print")) {
@@ -510,45 +511,16 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 					fw->fw_print_lv);
 				goto ldim_attr_store_end;
 			}
-			if (kstrtouint(parm[1], 0, &fw->fw_print_lv) < 0)
+			if (kstrtouint(parm[1], 10, &fw->fw_print_lv) < 0)
 				goto ldim_attr_store_err;
+			cus_fw->fw_print_lv = fw->fw_print_lv;
 		}
 		pr_info("fw_print_lv = %d\n", fw->fw_print_lv);
-	} else if (!strcmp(parm[0], "cus_fw_print_frequent")) {
-		if (!cus_fw)
-			goto ldim_attr_store_err;
-		if (parm[1]) {
-			if (!strcmp(parm[1], "r")) {
-				pr_info("for_tool:%d\n",
-					cus_fw->fw_print_frequent);
-				goto ldim_attr_store_end;
-			}
-			if (kstrtouint(parm[1], 0,
-				       &cus_fw->fw_print_frequent) < 0) {
-				goto ldim_attr_store_err;
-			}
-		}
-		pr_info("cus_fw_print_frequent = %d\n", cus_fw->fw_print_frequent);
-	} else if (!strcmp(parm[0], "cus_fw_print")) {
-		if (!cus_fw)
-			goto ldim_attr_store_err;
-		if (parm[1]) {
-			if (!strcmp(parm[1], "r")) {
-				pr_info("for_tool:%d\n",
-					cus_fw->fw_print_lv);
-				goto ldim_attr_store_end;
-			}
-			if (kstrtouint(parm[1], 0, &cus_fw->fw_print_lv) < 0)
-				goto ldim_attr_store_err;
-		}
-		pr_info("cus_fw_print_lv = %d\n", cus_fw->fw_print_lv);
 	} else if (!strcmp(parm[0], "cus_fw_param")) {
-		if (!cus_fw)
-			goto ldim_attr_store_err;
 		if (parm[2]) {
-			if (kstrtouint(parm[1], 0, &i) < 0)
+			if (kstrtouint(parm[1], 10, &i) < 0)
 				goto ldim_attr_store_err;
-			if (kstrtouint(parm[2], 0, &j) < 0)
+			if (kstrtouint(parm[2], 10, &j) < 0)
 				goto ldim_attr_store_err;
 
 			if (cus_fw->fw_alg_frm)
@@ -600,31 +572,32 @@ static ssize_t ldim_attr_store(struct class *cla, struct class_attribute *attr,
 		aml_ldim_rmem_info();
 	} else if (!strcmp(parm[0], "print")) {
 		if (parm[1]) {
-			if (kstrtoul(parm[1], 0, &val1) < 0)
+			if (kstrtoul(parm[1], 10, &val1) < 0)
 				goto ldim_attr_store_err;
 			ldim_debug_print = (unsigned char)val1;
 		}
 		pr_info("ldim_debug_print = %d\n", ldim_debug_print);
+	} else if (!strcmp(parm[0], "switch_ld_cnt")) {
+		if (parm[1]) {
+			if (kstrtoul(parm[1], 10, &val1) < 0)
+				goto ldim_attr_store_err;
+			ldim_drv->switch_ld_cnt = (unsigned char)val1;
+		}
+		pr_info("switch_ld_cnt = %d\n", ldim_drv->switch_ld_cnt);
 	} else if (!strcmp(parm[0], "level_idx")) {
 		if (parm[1]) {
 			if (kstrtoul(parm[1], 10, &val1) < 0)
 				goto ldim_attr_store_err;
-
-			if ((ldim_drv->state & LDIM_STATE_PQ_INIT) == 0) {
-				LDIMPR("please set pq init first!!, do nothing!\n");
-				goto ldim_attr_store_err;
-			}
-
 			ldim_drv->level_idx = (unsigned char)val1;
-
-			fw->fw_ctrl &= ~0xf;
-			fw->fw_ctrl |= ldim_drv->level_idx;
 
 			fw_pq = ldim_pq.pqdata[ldim_drv->level_idx];
 			if (ldim_drv->fw->fw_pq_set)
 				ldim_drv->fw->fw_pq_set(&fw_pq);
 
-			ldim_drv->brightness_bypass = 0;
+			if (ldim_drv->level_idx)
+				ldim_drv->func_en = 1;
+			else
+				ldim_drv->func_en = 0;
 		}
 		pr_info("level_idx = %d\n", ldim_drv->level_idx);
 	} else if (!strcmp(parm[0], "spiout_mode")) {
@@ -927,7 +900,7 @@ static ssize_t ldim_debug_store(struct class *class, struct class_attribute *att
 				for (j = 0; j < seg_size; j++)
 					ldim_drv->test_matrix[j] = 0;
 				ldim_drv->test_matrix[i] = 4095;
-				lcd_delay_ms(500);
+				msleep(500);
 			}
 			ldim_drv->test_bl_en = 0;
 			goto ldim_debug_store_end;
@@ -954,32 +927,14 @@ static ssize_t ldim_debug_store(struct class *class, struct class_attribute *att
 				goto ldim_debug_store_err;
 			ldim_drv->dev_smr_bypass = temp;
 		}
-		if (!strcmp(parm[1], "brightness")) {
-			if (kstrtouint(parm[2], 10, &temp) < 0)
-				goto ldim_debug_store_err;
-			ldim_drv->brightness_bypass = temp;
-		}
-	} else if (!strcmp(parm[0], "debug_ctrl")) {
-		if (parm[1]) {
-			if (kstrtouint(parm[1], 0, &temp) < 0)
-				goto ldim_debug_store_err;
-			ldim_drv->debug_ctrl = temp;
-		}
-		pr_info("debug_ctrl = %d\n", ldim_drv->debug_ctrl);
 	} else if (!strcmp(parm[0], "print")) {
 		if (parm[1]) {
-			if (kstrtouint(parm[1], 0, &temp) < 0)
+			if (kstrtouint(parm[1], 10, &temp) < 0)
 				goto ldim_debug_store_err;
 			ldim_debug_print = (unsigned char)temp;
 		}
 		pr_info("ldim_debug_print = %d\n", ldim_debug_print);
 	} else if (!strcmp(parm[0], "time")) {
-		if (!strcmp(parm[1], "clr")) {
-			for (i = 0; i < 10; i++) {
-				ldim_drv->arithmetic_time[0] = 0;
-				ldim_drv->xfer_time[0] = 0;
-			}
-		}
 		pr_info("arithmetic_time:\n");
 		ldim_time_print(ldim_drv->arithmetic_time);
 		pr_info("xfer_time:\n");
@@ -1008,52 +963,6 @@ ldim_debug_store_err:
 	return -EINVAL;
 }
 
-static ssize_t level_curve_show(struct class *class, struct class_attribute *attr, char *buf)
-{
-	struct aml_ldim_driver_s *ldim_drv = aml_ldim_get_driver();
-	int i, len;
-
-	if (!ldim_drv)
-		return -ENODEV;
-
-	len = sprintf(buf, "level_curve coordinate\n");
-	for (i = 0; i < 5; i++) {
-		len += sprintf(buf + len, "coordinate[%d] = (%d, %d)\n", i,
-				ldim_drv->level_curve[i][0], ldim_drv->level_curve[i][1]);
-	}
-
-	return len;
-}
-
-static ssize_t level_curve_store(struct class *class, struct class_attribute *attr,
-				  const char *buf, size_t count)
-{
-	struct aml_ldim_driver_s *ldim_drv = aml_ldim_get_driver();
-	unsigned int ret, i;
-	unsigned int coordinates[5][2];
-
-	if (!ldim_drv)
-		return -ENODEV;
-
-	ret = sscanf(buf, "coordinate %d %d, %d %d, %d %d, %d %d, %d %d",
-					&coordinates[0][0], &coordinates[0][1],
-					&coordinates[1][0], &coordinates[1][1],
-					&coordinates[2][0], &coordinates[2][1],
-					&coordinates[3][0], &coordinates[3][1],
-					&coordinates[4][0], &coordinates[4][1]);
-	if (ret != 10) {
-		LDIMERR("invalid level_curve\n");
-		return -EINVAL;
-	}
-
-	for (i = 0; i < 5; i++) {
-		ldim_drv->level_curve[i][0] = coordinates[i][0];
-		ldim_drv->level_curve[i][1] = coordinates[i][1];
-	}
-
-	return count;
-}
-
 static struct class_attribute aml_ldim_class_attrs[] = {
 	__ATTR(attr, 0644, ldim_attr_show, ldim_attr_store),
 	__ATTR(func_en, 0644, ldim_func_en_show, ldim_func_en_store),
@@ -1063,8 +972,7 @@ static struct class_attribute aml_ldim_class_attrs[] = {
 	__ATTR(reg, 0644, ldim_reg_show, ldim_reg_store),
 	__ATTR(dbg_reg, 0644, ldim_dbg_reg_show, ldim_dbg_reg_store),
 	__ATTR(demo, 0644, ldim_demo_show, ldim_demo_store),
-	__ATTR(debug, 0644, ldim_debug_show, ldim_debug_store),
-	__ATTR(level_curve, 0644, level_curve_show, level_curve_store),
+	__ATTR(debug, 0644, ldim_debug_show, ldim_debug_store)
 };
 
 int aml_ldim_debug_probe(struct class *ldim_class)

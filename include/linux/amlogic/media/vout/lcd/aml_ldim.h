@@ -19,7 +19,6 @@
 /*#define LDIM_DEBUG_INFO*/
 #define LDIMPR(fmt, args...)     pr_info("ldim: " fmt "", ## args)
 #define LDIMERR(fmt, args...)    pr_err("ldim: error: " fmt "", ## args)
-#define LDIMWARN(fmt, args...)    pr_warn("ldim: warning: " fmt "", ## args)
 
 #define LD_DATA_DEPTH   12
 #define LD_DATA_MIN     10
@@ -54,14 +53,7 @@ struct ldim_dev_driver_s {
 	unsigned char key_valid;
 	unsigned char type;
 	unsigned char dma_support;
-	unsigned char spi_sync;
-	unsigned int spi_line_n;/*vpp line n irq*/
-	unsigned int spi_xlen;/*actually xfer len*/
-	dma_addr_t spi_tx_dma;
-	dma_addr_t spi_rx_dma;
-	unsigned char *spi_tx_buf;
-	unsigned char *spi_rx_buf;
-	unsigned int pwm_phase;
+	unsigned char spi_sync;/*1:spi_sync, 0:dirspi_async*/
 	int cs_hold_delay;
 	int cs_clk_delay;
 	int en_gpio;
@@ -121,6 +113,7 @@ struct ldim_dev_driver_s {
 
 struct ldim_drv_data_s {
 	unsigned char ldc_chip_type;
+	unsigned char spi_sync;
 	unsigned int rsv_mem_size;
 	unsigned short h_zone_max;
 	unsigned short v_zone_max;
@@ -140,14 +133,13 @@ struct ldim_drv_data_s {
 #define LDIM_STATE_REMAP_EN             BIT(2)
 #define LDIM_STATE_REMAP_FORCE_UPDATE   BIT(3)
 #define LDIM_STATE_LD_EN                BIT(4)
-#define LDIM_STATE_SPI_SMR_EN           BIT(5)
-#define LDIM_STATE_PQ_INIT              BIT(6)
 
 struct aml_ldim_driver_s {
 	unsigned char valid_flag;
 	unsigned char static_pic_flag;
 	unsigned char vsync_change_flag;
 	unsigned char duty_update_flag;
+	unsigned char switch_ld_cnt;
 	unsigned char in_vsync_flag;
 	unsigned char spiout_mode;
 
@@ -164,7 +156,6 @@ struct aml_ldim_driver_s {
 	unsigned char load_db_en;
 	unsigned char level_update;
 	unsigned char resolution_update;
-	unsigned int debug_ctrl;/*for debug used*/
 
 	unsigned int state;
 	unsigned int data_min;
@@ -176,7 +167,6 @@ struct aml_ldim_driver_s {
 	unsigned int pwm_vs_irq_cnt;
 	unsigned long long arithmetic_time[10];
 	unsigned long long xfer_time[10];
-	unsigned int level_curve[5][2];
 
 	struct ldim_drv_data_s *data;
 	struct ldim_config_s *conf;

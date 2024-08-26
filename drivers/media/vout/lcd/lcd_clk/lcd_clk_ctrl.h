@@ -71,6 +71,13 @@
 #define LCD_PLL_LOCK_T7              31
 
 /* **********************************
+ * C3
+ * **********************************
+ */
+#define CRT_VID_DIV_MAX_C3           128
+#define PHY_CLK_DIV_MAX_C3           128
+
+/* **********************************
  * Spread Spectrum
  * **********************************
  */
@@ -88,6 +95,9 @@
 #define MAX_ERROR                   (2 * 1000000)
 
 /* ******** register bit ******** */
+/* divider */
+#define CRT_VID_DIV_MAX             255
+
 #define DIV_PRE_SEL_MAX             6
 #define EDP_DIV0_SEL_MAX            15
 #define EDP_DIV1_SEL_MAX            8
@@ -100,7 +110,7 @@ extern char *lcd_clk_div_sel_table[];
 extern const unsigned int od_table[6];
 extern const unsigned int od_fb_table[2];
 extern const unsigned int tcon_div_table[5];
-extern unsigned int lcd_clk_div_table[][5];
+extern unsigned int lcd_clk_div_table[][3];
 
 /* g9tv, g9bb, gxbb divider */
 #define CLK_DIV_I2O     0
@@ -122,7 +132,6 @@ enum div_sel_e {
 	CLK_DIV_SEL_15,   /* 13 */
 	CLK_DIV_SEL_2p5,  /* 14 */
 	CLK_DIV_SEL_4p67, /* 15 */
-	CLK_DIV_SEL_2p33, /* 16 */
 	CLK_DIV_SEL_MAX,
 };
 

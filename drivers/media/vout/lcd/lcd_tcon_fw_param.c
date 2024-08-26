@@ -212,15 +212,17 @@ int lcd_tcon_fw_buf_table_generate(struct lcd_tcon_fw_s *tcon_fw)
 
 void lcd_tcon_fw_base_timing_update(struct aml_lcd_drv_s *pdrv)
 {
+	unsigned int temp;
+
 	if (!pdrv || !lcd_tcon_fw.base_timing)
 		return;
 
-	lcd_tcon_fw.base_timing->hsize = pdrv->config.timing.act_timing.h_active;
-	lcd_tcon_fw.base_timing->vsize = pdrv->config.timing.act_timing.v_active;
-	lcd_tcon_fw.base_timing->htotal = pdrv->config.timing.act_timing.h_period;
-	lcd_tcon_fw.base_timing->vtotal = pdrv->config.timing.act_timing.v_period;
-	lcd_tcon_fw.base_timing->frame_rate = pdrv->config.timing.act_timing.frame_rate;
-	lcd_tcon_fw.base_timing->pclk = pdrv->config.timing.act_timing.pixel_clk;
+	lcd_tcon_fw.base_timing->hsize = pdrv->config.basic.h_active;
+	lcd_tcon_fw.base_timing->vsize = pdrv->config.basic.v_active;
+	lcd_tcon_fw.base_timing->htotal = pdrv->config.basic.h_period;
+	lcd_tcon_fw.base_timing->vtotal = pdrv->config.basic.v_period;
+	lcd_tcon_fw.base_timing->frame_rate = pdrv->config.timing.frame_rate;
+	lcd_tcon_fw.base_timing->pclk = pdrv->config.timing.lcd_clk;
 	lcd_tcon_fw.base_timing->bit_rate = pdrv->config.timing.bit_rate;
 
 	lcd_tcon_fw.base_timing->de_hstart = pdrv->config.timing.hstart;
@@ -230,13 +232,17 @@ void lcd_tcon_fw_base_timing_update(struct aml_lcd_drv_s *pdrv)
 	lcd_tcon_fw.base_timing->pre_de_h = 8;
 	lcd_tcon_fw.base_timing->pre_de_v = 8;
 
-	lcd_tcon_fw.base_timing->hsw = pdrv->config.timing.act_timing.hsync_width;
-	lcd_tcon_fw.base_timing->hbp = pdrv->config.timing.act_timing.hsync_bp;
-	lcd_tcon_fw.base_timing->hfp = pdrv->config.timing.act_timing.hsync_fp;
+	temp = pdrv->config.timing.base_h_period - pdrv->config.basic.h_active -
+		pdrv->config.timing.hsync_width - pdrv->config.timing.hsync_bp;
+	lcd_tcon_fw.base_timing->hsw = pdrv->config.timing.hsync_width;
+	lcd_tcon_fw.base_timing->hbp = pdrv->config.timing.hsync_bp;
+	lcd_tcon_fw.base_timing->hfp = temp;
 
-	lcd_tcon_fw.base_timing->vsw = pdrv->config.timing.act_timing.vsync_width;
-	lcd_tcon_fw.base_timing->vbp = pdrv->config.timing.act_timing.vsync_bp;
-	lcd_tcon_fw.base_timing->vfp = pdrv->config.timing.act_timing.vsync_fp;
+	temp = pdrv->config.timing.base_v_period - pdrv->config.basic.v_active -
+		pdrv->config.timing.vsync_width - pdrv->config.timing.vsync_bp;
+	lcd_tcon_fw.base_timing->vsw = pdrv->config.timing.vsync_width;
+	lcd_tcon_fw.base_timing->vbp = pdrv->config.timing.vsync_bp;
+	lcd_tcon_fw.base_timing->vfp = temp;
 
 	lcd_tcon_fw.base_timing->update_flag = 1;
 }
@@ -272,9 +278,6 @@ void lcd_tcon_fw_prepare(struct aml_lcd_drv_s *pdrv, struct lcd_tcon_config_s *t
 	case LCD_CHIP_T5W:
 		lcd_tcon_fw.config->chip_type = TCON_CHIP_T5W;
 		break;
-	case LCD_CHIP_T5M:
-		lcd_tcon_fw.config->chip_type = TCON_CHIP_T5M;
-		break;
 	case LCD_CHIP_T3X:
 		lcd_tcon_fw.config->chip_type = TCON_CHIP_T3X;
 		break;
@@ -307,17 +310,17 @@ void lcd_tcon_fw_prepare(struct aml_lcd_drv_s *pdrv, struct lcd_tcon_config_s *t
 
 	if (pdrv->status & LCD_STATUS_IF_ON)
 		lcd_tcon_fw.tcon_state |= TCON_FW_STATE_TCON_EN;
-	if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_VAC)
+	if (mm_table->valid_flag & LCD_TCON_DATA_VALID_VAC)
 		lcd_tcon_fw.tcon_state |= TCON_FW_STATE_VAC_VALID;
-	if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_DEMURA)
+	if (mm_table->valid_flag & LCD_TCON_DATA_VALID_DEMURA)
 		lcd_tcon_fw.tcon_state |= TCON_FW_STATE_DEMURA_VALID;
-	if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_ACC)
+	if (mm_table->valid_flag & LCD_TCON_DATA_VALID_ACC)
 		lcd_tcon_fw.tcon_state |= TCON_FW_STATE_ACC_VALID;
-	if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_DITHER)
+	if (mm_table->valid_flag & LCD_TCON_DATA_VALID_DITHER)
 		lcd_tcon_fw.tcon_state |= TCON_FW_STATE_DITHER_VALID;
-	if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_OD)
+	if (mm_table->valid_flag & LCD_TCON_DATA_VALID_OD)
 		lcd_tcon_fw.tcon_state |= TCON_FW_STATE_OD_VALID;
-	if (mm_table->lut_valid_flag & LCD_TCON_DATA_VALID_LOD)
+	if (mm_table->valid_flag & LCD_TCON_DATA_VALID_LOD)
 		lcd_tcon_fw.tcon_state |= TCON_FW_STATE_LOD_VALID;
 
 	lcd_tcon_fw_base_timing_update(pdrv);

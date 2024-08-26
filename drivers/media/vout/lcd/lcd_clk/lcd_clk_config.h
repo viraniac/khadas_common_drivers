@@ -42,6 +42,7 @@ struct lcd_clk_ctrl_s {
 
 struct lcd_clktree_s {
 	unsigned char clk_gate_state;
+	unsigned char clk_gate_optional_state;
 
 	struct clk *encl_top_gate;
 	struct clk *encl_int_gate;
@@ -57,7 +58,7 @@ struct lcd_clktree_s {
 };
 
 struct lcd_clk_config_s;
-// reference to: https://confluence.amlogic.com/display/SW/LCD+CLK+porting+note
+
 struct lcd_clk_data_s {
 	/* clk path node parameters */
 	unsigned int pll_od_fb;
@@ -83,10 +84,6 @@ struct lcd_clk_data_s {
 	//0:pll_clk_phase, 1:pll_clk2, 2:vid_pll_clk
 	unsigned int phy_clk_location;
 
-	unsigned int div_sel_max;
-	unsigned short xd_max;
-	unsigned short phy_div_max;
-
 	unsigned int ss_support;
 	unsigned int ss_level_max;
 	unsigned int ss_freq_max;
@@ -99,9 +96,6 @@ struct lcd_clk_data_s {
 	int enc_clk_msr_id;
 	int fifo_clk_msr_id;
 	int tcon_clk_msr_id;
-
-	void (*clktree_set)(struct aml_lcd_drv_s *pdrv);
-	unsigned char clktree_index[6];
 
 	//for some parameter changed to different lcd interface
 	void (*clk_parameter_init)(struct aml_lcd_drv_s *pdrv);
@@ -117,6 +111,11 @@ struct lcd_clk_data_s {
 	void (*clk_set)(struct aml_lcd_drv_s *pdrv);
 	void (*vclk_crt_set)(struct aml_lcd_drv_s *pdrv);
 	void (*clk_disable)(struct aml_lcd_drv_s *pdrv);
+	void (*clk_gate_switch)(struct aml_lcd_drv_s *pdrv, int status);
+	void (*clk_gate_optional_switch)(struct aml_lcd_drv_s *pdrv, int status);
+	void (*clktree_set)(struct aml_lcd_drv_s *pdrv);
+	void (*clktree_probe)(struct aml_lcd_drv_s *pdrv);
+	void (*clktree_remove)(struct aml_lcd_drv_s *pdrv);
 	void (*clk_config_init_print)(struct aml_lcd_drv_s *pdrv);
 	int (*clk_config_print)(struct aml_lcd_drv_s *pdrv, char *buf, int offset);
 	void (*prbs_test)(struct aml_lcd_drv_s *pdrv, unsigned int ms, unsigned int mode_flag);
@@ -157,6 +156,8 @@ struct lcd_clk_config_s { /* unit: Hz */
 	unsigned int div_sel;
 	unsigned int xd;
 	unsigned int phy_div;
+	unsigned int div_sel_max;
+	unsigned int xd_max;
 	unsigned int err_fmin;
 	unsigned int done;
 

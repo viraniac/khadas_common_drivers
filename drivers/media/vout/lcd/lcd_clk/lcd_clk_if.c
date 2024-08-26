@@ -128,8 +128,6 @@ void lcd_clk_generate_parameter(struct aml_lcd_drv_s *pdrv)
 	}
 	if (cconf->data->clk_generate_parameter)
 		cconf->data->clk_generate_parameter(pdrv);
-	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
-		LCDPR("[%d]: %s\n", pdrv->index, __func__);
 }
 
 int lcd_get_ss_num(struct aml_lcd_drv_s *pdrv,
@@ -319,11 +317,6 @@ void lcd_vlock_m_update(int index, unsigned int vlock_m)
 	if (!cconf || !cconf->data)
 		return;
 
-	if (pdrv->config.timing.clk_mode == LCD_CLK_MODE_INDEPENDENCE) {
-		LCDERR("%s: clk_mode independence, can't adjust single pll m\n", __func__);
-		return;
-	}
-
 	vlock_m &= 0xff;
 	if (lcd_debug_print_flag & LCD_DBG_PR_ADV2)
 		LCDPR("[%d]: %s, vlcok_m: 0x%x\n", index, __func__, vlock_m);
@@ -363,22 +356,30 @@ void lcd_vlock_frac_update(int index, unsigned int vlock_frac)
 /* for frame rate change */
 void lcd_update_clk_frac(struct aml_lcd_drv_s *pdrv)
 {
-	struct lcd_clk_config_s *cconf;
+	struct lcd_clk_config_s *cconf, *phyconf, *pixconf;
 
 	cconf = get_lcd_clk_config(pdrv);
 	if (!cconf || !cconf->data)
-		return;
+		return; // goto lcd_clk_update_end;
 
 	mutex_lock(&lcd_clk_mutex);
-	if (cconf->data->pll_frac_set)
-		cconf->data->pll_frac_set(pdrv, cconf->pll_frac);
-	pdrv->config.timing.clk_change = 0; /* clear clk_change flag */
-	mutex_unlock(&lcd_clk_mutex);
 
-	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("[%d]: %s: clk_change=0x%x\n",
-			pdrv->index, __func__, pdrv->config.timing.clk_change);
+	if (pdrv->config.timing.clk_mode == LCD_CLK_MODE_INDEPENDENCE) {
+		phyconf = &cconf[0];
+		pixconf = &cconf[1];
+		if (phyconf->data->pll_frac_set)
+			phyconf->data->pll_frac_set(pdrv, phyconf->pll_frac);
+		if (pixconf->data->pll_frac_set)
+			pixconf->data->pll_frac_set(pdrv, pixconf->pll_frac);
+		LCDPR("[%d]: %s: phy pll_frac=0x%x, pix pll_frac=0x%x\n",
+			pdrv->index, __func__, phyconf->pll_frac, pixconf->pll_frac);
+	} else {
+		if (cconf->data->pll_frac_set)
+			cconf->data->pll_frac_set(pdrv, cconf->pll_frac);
+		LCDPR("[%d]: %s: pll_frac=0x%x\n", pdrv->index, __func__, cconf->pll_frac);
 	}
+
+	mutex_unlock(&lcd_clk_mutex);
 }
 
 /* for timing init */
@@ -415,13 +416,10 @@ lcd_set_clk_retry:
 
 	if (cconf->data->clktree_set)
 		cconf->data->clktree_set(pdrv);
-	pdrv->config.timing.clk_change = 0; /* clear clk_change flag */
 	mutex_unlock(&lcd_clk_mutex);
 
-	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("[%d]: %s: clk_change=0x%x\n",
-			pdrv->index, __func__, pdrv->config.timing.clk_change);
-	}
+	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL)
+		LCDPR("[%d]: %s\n", pdrv->index, __func__);
 }
 
 void lcd_disable_clk(struct aml_lcd_drv_s *pdrv)
@@ -440,18 +438,32 @@ void lcd_disable_clk(struct aml_lcd_drv_s *pdrv)
 	LCDPR("[%d]: %s\n", pdrv->index, __func__);
 }
 
-void lcd_clk_change(struct aml_lcd_drv_s *pdrv)
+static void lcd_clk_gate_optional_switch(struct aml_lcd_drv_s *pdrv, int status)
 {
-	if (lcd_debug_print_flag & LCD_DBG_PR_NORMAL) {
-		LCDPR("[%d]: %s: clk_change:0x%x\n",
-			pdrv->index, __func__, pdrv->config.timing.clk_change);
-	}
+	struct lcd_clk_config_s *cconf;
 
-	if ((pdrv->config.timing.clk_change & LCD_CLK_PLL_CHANGE) ||
-	    (pdrv->config.timing.clk_change & LCD_CLK_PLL_RESET))
-		lcd_set_clk(pdrv);
-	else if (pdrv->config.timing.clk_change & LCD_CLK_FRAC_UPDATE)
-		lcd_update_clk_frac(pdrv);
+	cconf = get_lcd_clk_config(pdrv);
+	if (!cconf || !cconf->data)
+		return;
+
+	if (!cconf->data->clk_gate_optional_switch)
+		return;
+
+	if (status) {
+		if (cconf->clktree.clk_gate_optional_state) {
+			LCDPR("[%d]: clk_gate_optional is already on\n",
+			      pdrv->index);
+		} else {
+			cconf->data->clk_gate_optional_switch(pdrv, 1);
+		}
+	} else {
+		if (cconf->clktree.clk_gate_optional_state == 0) {
+			LCDPR("[%d]: clk_gate_optional is already off\n",
+			      pdrv->index);
+		} else {
+			cconf->data->clk_gate_optional_switch(pdrv, 0);
+		}
+	}
 }
 
 void lcd_clk_gate_switch(struct aml_lcd_drv_s *pdrv, int status)
@@ -462,23 +474,31 @@ void lcd_clk_gate_switch(struct aml_lcd_drv_s *pdrv, int status)
 	if (!cconf || !cconf->data)
 		return;
 
-	if (cconf->clktree.clk_gate_state == status) {
-		LCDPR("[%d]: clk gate is already %s\n", pdrv->index, status ? "on" : "off");
-		return;
-	}
-
 	if (status) {
+		if (cconf->clktree.clk_gate_state) {
+			LCDPR("[%d]: clk_gate is already on\n", pdrv->index);
+		} else {
 #ifdef CONFIG_AMLOGIC_VPU
-		vpu_dev_clk_gate_on(pdrv->lcd_vpu_dev);
+			vpu_dev_clk_gate_on(pdrv->lcd_vpu_dev);
 #endif
-		lcd_clktree_gate_switch(pdrv, 1);
+			if (cconf->data->clk_gate_switch)
+				cconf->data->clk_gate_switch(pdrv, 1);
+			cconf->clktree.clk_gate_state = 1;
+		}
+		lcd_clk_gate_optional_switch(pdrv, 1);
 	} else {
-		lcd_clktree_gate_switch(pdrv, 0);
+		lcd_clk_gate_optional_switch(pdrv, 0);
+		if (cconf->clktree.clk_gate_state == 0) {
+			LCDPR("[%d]: clk_gate is already off\n",  pdrv->index);
+		} else {
+			if (cconf->data->clk_gate_switch)
+				cconf->data->clk_gate_switch(pdrv, 0);
 #ifdef CONFIG_AMLOGIC_VPU
-		vpu_dev_clk_gate_off(pdrv->lcd_vpu_dev);
+			vpu_dev_clk_gate_off(pdrv->lcd_vpu_dev);
 #endif
+			cconf->clktree.clk_gate_state = 0;
+		}
 	}
-	cconf->clktree.clk_gate_state = status;
 }
 
 int lcd_clk_clkmsr_print(struct aml_lcd_drv_s *pdrv, char *buf, int offset)
@@ -618,12 +638,11 @@ static int lcd_clk_config_chip_init(struct aml_lcd_drv_s *pdrv, struct lcd_clk_c
 	unsigned int i;
 
 	for (i = 0; i < pdrv->clk_conf_num; i++) {
-		cconf[i].pll_id = pdrv->index + i;
+		cconf[i].pll_id = i;
 		cconf[i].fin = FIN_FREQ;
 	}
 
 	switch (pdrv->data->chip_type) {
-#ifndef CONFIG_AMLOGIC_C3_REMOVE
 	case LCD_CHIP_AXG:
 		lcd_clk_config_chip_init_axg(pdrv, cconf);
 		break;
@@ -658,18 +677,15 @@ static int lcd_clk_config_chip_init(struct aml_lcd_drv_s *pdrv, struct lcd_clk_c
 	case LCD_CHIP_T5W:
 		lcd_clk_config_chip_init_t5w(pdrv, cconf);
 		break;
-#endif
 	case LCD_CHIP_C3:
 		lcd_clk_config_chip_init_c3(pdrv, cconf);
 		break;
-#ifndef CONFIG_AMLOGIC_C3_REMOVE
 	case LCD_CHIP_T3X:
 		lcd_clk_config_chip_init_t3x(pdrv, cconf);
 		break;
 	case LCD_CHIP_TXHD2:
 		lcd_clk_config_chip_init_txhd2(pdrv, cconf);
 		break;
-#endif
 	default:
 		LCDPR("[%d]: %s: invalid chip type\n", pdrv->index, __func__);
 		return -1;
@@ -709,7 +725,8 @@ void lcd_clk_config_probe(struct aml_lcd_drv_s *pdrv)
 	if (ret)
 		return;
 
-	lcd_clktree_bind(pdrv, 1);
+	if (cconf->data->clktree_probe)
+		cconf->data->clktree_probe(pdrv);
 }
 
 void lcd_clk_config_remove(struct aml_lcd_drv_s *pdrv)
@@ -720,7 +737,8 @@ void lcd_clk_config_remove(struct aml_lcd_drv_s *pdrv)
 		return;
 
 	cconf = (struct lcd_clk_config_s *)pdrv->clk_conf;
-	lcd_clktree_bind(pdrv, 0);
+	if (cconf->data && cconf->data->clktree_remove)
+		cconf->data->clktree_remove(pdrv);
 
 	kfree(cconf);
 	pdrv->clk_conf = NULL;
