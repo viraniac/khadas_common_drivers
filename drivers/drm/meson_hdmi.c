@@ -1771,6 +1771,7 @@ static int meson_hdmitx_encoder_atomic_check(struct drm_encoder *encoder,
 		to_am_hdmitx_connector_state(conn_state);
 	struct hdmitx_color_attr *attr = &hdmitx_state->color_attr_para;
 	struct drm_display_mode *adj_mode = &crtc_state->adjusted_mode;
+	struct drm_display_info *display_info = &conn_state->connector->display_info;
 	char *modename = adj_mode->name;
 	struct hdmitx_common *common = am_hdmi_info.hdmitx_dev->hdmitx_common;
 	struct am_meson_crtc *amcrtc = to_am_meson_crtc(crtc_state->crtc);
@@ -1782,6 +1783,20 @@ static int meson_hdmitx_encoder_atomic_check(struct drm_encoder *encoder,
 	/* do not atomic check if hpd is low*/
 	if (strstr(modename, "dummy") || !hdmitx_get_hpd_state(common))
 		return 0;
+
+	/* changing display resolution in xfce sends blank modename for some reason. Lets figure it out from other parameters */
+	if (strlen(modename) == 0) {
+		if ((adj_mode->hdisplay == 1920 && adj_mode->vdisplay == 1080) || (adj_mode->hdisplay == 720) || (adj_mode->hdisplay == 3840))
+			sprintf(modename, "%d%s%dhz%s", adj_mode->vdisplay,
+					adj_mode->flags & DRM_MODE_FLAG_INTERLACE ? "i" : "p",
+					drm_mode_vrefresh(adj_mode),
+					drm_mode_is_420(display_info, adj_mode) && adj_mode->hdisplay == 3840 ? "420" : "");
+		else
+			sprintf(modename, "%dx%d%s%dhz%s", adj_mode->hdisplay, adj_mode->vdisplay,
+					adj_mode->flags & DRM_MODE_FLAG_INTERLACE ? "i" : "p",
+					drm_mode_vrefresh(adj_mode),
+					drm_mode_is_420(display_info, adj_mode) && adj_mode->hdisplay == 3840 ? "420" : "");
+	}
 
 	if (am_hdmi_info.android_path && crtc_state->vrr_enabled &&
 		!(adj_mode->flags & DRM_MODE_FLAG_INTERLACE)) {
