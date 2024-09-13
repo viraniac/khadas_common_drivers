@@ -759,6 +759,7 @@ static int am_meson_fbdev_parse_config(struct drm_device *dev)
 	struct meson_vpu_pipeline *pipeline = private->pipeline;
 	u32 sizes[5], overlay_sizes[5];
 	int ret = 0, tmp, i;
+	const void *prop = NULL;
 
 	if (private->primary_plane && private->primary_plane->state && private->primary_plane->state->crtc && private->primary_plane->state->crtc->state) {
 		mode = private->primary_plane->state->crtc->state->mode;
@@ -768,6 +769,21 @@ static int am_meson_fbdev_parse_config(struct drm_device *dev)
 		sizes[2] = mode.hdisplay;
 		sizes[3] = mode.vdisplay * 2;
 		sizes[4] = 32;
+
+		// Default enable HDMI 4k fb
+		prop = of_get_property(dev->dev->of_node, "4k2k_fb", NULL);
+		if (prop) {
+			if ((0 == of_read_ulong(prop, 1)) && strstr(mode.name, "hz")) {
+				// Limit HDMI fb to 1080P
+				if (mode.hdisplay >= 1920 && mode.vdisplay >= 1080) {
+					sizes[0] = 1920;
+					sizes[1] = 1080;
+					sizes[2] = 1920;
+					sizes[3] = 2160;
+					sizes[4] = 32;
+				}
+			}
+		}
 	} else {
 		ret = of_property_read_u32_array(dev->dev->of_node,
 					   "fbdev_sizes", sizes, 5);
