@@ -1495,9 +1495,6 @@
 };
 
 &gpu {
-	compatible = "amlogic,meson-g12a-mali", "arm,mali-bifrost";
-	interrupt-names = "gpu", "mmu", "job";
-
 	tbl =  <&dvfs285_cfg
 		&dvfs400_cfg
 		&dvfs500_cfg
