@@ -82,7 +82,7 @@ enum ADLAK_SUBMIT_STATE {
 #define PS_CMD_DEPENDENCY_PWE_ID_SHIFT 4
 #define PS_CMD_DEPENDENCY_RS_ID_SHIFT 8
 
-// exectue command
+// execute command
 #define PS_CMD_EXECUTE_OUTPUT_PWX_MASK 0x00100000
 #define PS_CMD_EXECUTE_OUTPUT_PWE_MASK 0x00200000
 #define PS_CMD_EXECUTE_OUTPUT_RS_MASK 0x00400000
@@ -172,6 +172,13 @@ struct adlak_submit_addr_fixup {
     uint64_t addr;
 };
 
+struct adla_submit_cmd_config {
+    uint32_t common_offset;
+    uint32_t common_size;
+    uint32_t modify_offset;
+    uint32_t modify_size;
+};
+
 struct adlak_submit_task {
     uint32_t active_modules;
     uint32_t output_modules;
@@ -190,6 +197,8 @@ struct adlak_submit_task {
     int32_t  memory_access_types[12]; /*not used in kmd*/
     uint32_t fence_modules;
     int32_t  dependency_mode;
+
+    struct adla_submit_cmd_config config_v2;
 };
 
 struct adlak_cmq_buf_info {
@@ -197,34 +206,62 @@ struct adlak_cmq_buf_info {
     uint32_t                 size;
 };
 
-struct adlak_task {
-    struct list_head                head;
-    int32_t                         net_id;
-    int32_t                         invoke_idx;
-    int                             state;
-    uint32_t                        flag;  // task_canceled
-    struct adlak_cmq_buf_info       cmq_buf_info;
-    struct adlak_submit_task *      submit_tasks;
-    struct adlak_submit_dep_fixup * submit_dep_fixups;
-    struct adlak_submit_reg_fixup * submit_reg_fixups;
-    struct adlak_submit_addr_fixup *submit_addr_fixups;
-    uint8_t *                       config;
-    int32_t                         submit_tasks_num;
-    int32_t                         dep_fixups_num;
-    int32_t                         reg_fixups_num;
-    int32_t                         addr_fixups_num;
-    int32_t                         config_size;
-    struct adlak_hw_stat            hw_stat;
-    int32_t                         invoke_start_idx;
-    int32_t                         invoke_end_idx;
-    void *                          padlak;
-    struct adlak_context *          context;
-    uint32_t                        time_stamp;
-    uint32_t                        hw_timeout_ms;
-    uint32_t                        cmd_offset_start;
-    uint32_t                        cmd_offset_end;
-    uint32_t                        hw_layer_last;  // indicate the last layer of hadware
+struct adlak_cmd_buf_attr_inner {
+    int32_t                  support;
+    uint32_t                 reserve_count_modify_head;
+    uint32_t                 reserve_count_modify_tail;
+    uint32_t                 reserve_count_common_head;
+    uint32_t                 reserve_count_common_tail;
+    struct adlak_mem_handle *mm_info;
+};
 
+struct adlak_model_attr {
+    struct adlak_context *         context;
+    struct adlak_submit_task *     submit_tasks;
+    struct adlak_submit_dep_fixup *submit_dep_fixups;
+    struct adlak_submit_reg_fixup *submit_reg_fixups;
+    int32_t                        submit_tasks_num;
+    int32_t                        dep_fixups_num;
+    int32_t                        reg_fixups_num;
+    uint8_t *                      config;
+    int32_t                        config_total_size;
+    // invoke fixup
+    int32_t                         addr_fixups_num;
+    struct adlak_submit_addr_fixup *submit_addr_fixups;
+    uint32_t                        hw_timeout_ms;
+
+    int32_t               hw_layer_first;  // indicate the first layer of hardware
+    int32_t               hw_layer_last;   // indicate the last layer of hardware
+    struct adlak_pm_cfg   pm_cfg;
+    struct adlak_pm_state pm_stat;
+    int32_t               invoke_count;
+
+    struct adlak_task
+        *invoke_attr_rsv;  // In order to avoid continuous application and release of task memory
+
+    void *                   cmq_priv;
+    int32_t                  cmq_buffer_type;
+    uint32_t                 cmq_size_expected;  // the buffer size required to store the command
+    uint32_t                 size_max_in_layer;
+    struct adlak_cmq_buffer *cmq_buffer;
+    int32_t hw_parser_v2_support;  // If non-zero, indicates that the hardware supports parser_v2
+    struct adlak_cmd_buf_attr_inner cmd_buf_attr;
+};
+
+struct adlak_task {
+    struct list_head      head;
+    int32_t               invoke_idx;
+    struct adlak_context *context;
+    int32_t               invoke_start_idx;
+    int32_t               invoke_end_idx;
+    //
+    uint32_t             cmd_offset_start;
+    uint32_t             cmd_offset_end;
+    struct adlak_hw_stat hw_stat;
+    uint32_t             time_stamp;
+    int                  state;
+    uint32_t             flag;  // task_canceled
+    // finish info
     struct adlak_profile profilling;
 };
 
@@ -235,7 +272,7 @@ int  adlak_net_register_request(struct adlak_context *     context,
 void adlak_irq_bottom_handler(void *arg);
 void adlak_queue_schedule(struct adlak_device *padlak);
 
-void adlak_task_destroy(struct adlak_task *ptask);
+void adlak_model_destroy(struct adlak_model_attr *pmodel_attr);
 void adlak_invoke_destroy(struct adlak_task *ptask);
 int  adlak_net_unregister_request(struct adlak_context *         context,
                                   struct adlak_network_del_desc *submit_del);
@@ -259,8 +296,16 @@ int adlak_queue_schedule_update(struct adlak_device *padlak, struct adlak_task *
                                 int32_t match_net_id);
 
 int adlak_submit_patch_and_exec(struct adlak_task *ptask);
+int adlak_submit_patch_and_exec_v2(struct adlak_task *ptask);
 
 int adlak_wait_until_finished(struct adlak_context *context, struct adlak_get_stat_desc *stat_desc);
+
+void adlak_destroy_command_queue_private(struct adlak_model_attr *pmodel_attr);
+
+void adlak_prepare_command_queue_private(struct adlak_model_attr *  pmodel_attr,
+                                         struct adlak_network_desc *psubmit_desc);
+
+int adlak_parser_preempt(struct adlak_device *padlak, struct adlak_task *ptask);
 
 #if CONFIG_ADLAK_EMU_EN
 uint32_t adlak_emu_update_rpt(void);

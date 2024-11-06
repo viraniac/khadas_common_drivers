@@ -61,7 +61,7 @@ MODULE_DEVICE_TABLE(of, adlak_child_pdev_match);
 /*****************************************************************************/
 /**
  *
- * @brief         :remove operation registered to platfom_driver struct
+ * @brief         :remove operation registered to platform_driver struct
  *        This function will be called while the module is unloading.
  * @pdev[in]     :platform device struct pointer
  * @return        :0 if successful; others if failed.
@@ -198,7 +198,7 @@ static int adlak_platform_remove(struct platform_device *pdev) {
 }
 
 /**
- * @brief probe operation registered to platfom_driver struct
+ * @brief probe operation registered to platform_driver struct
  *        This function will be called while the module is loading.
  *
  * @param pdev: platform device struct pointer
@@ -225,8 +225,9 @@ static int adlak_platform_probe(struct platform_device *pdev) {
     if (dma_set_mask_and_coherent(padlak->dev, DMA_BIT_MASK(34))) {
         AML_LOG_WARN("set device dma mask failed,No suitable DMA available!");
     }
-    padlak->net_id = 0;
-    ret            = adlak_platform_get_resource(padlak);
+    padlak->net_count = 0;
+    padlak->save_time_en = 0;
+    ret               = adlak_platform_get_resource(padlak);
     if (ret) {
         goto err_get_res;
     }
@@ -273,10 +274,21 @@ err_alloc_data:
     return ret;
 }
 
+#ifdef CONFIG_PM
 static int adlak_platform_sys_suspend(struct platform_device *pdev, pm_message_t state) {
     struct adlak_device *padlak = platform_get_drvdata(pdev);
-    AML_LOG_DEBUG("%s", __func__);
-    adlak_platform_suspend(padlak);
+    int                  pm_suspend;
+
+    adlak_os_printf("%s\n", __func__);
+    adlak_os_mutex_lock(&padlak->dev_mutex);
+    padlak->pm_suspend = true;
+    adlak_os_mutex_unlock(&padlak->dev_mutex);
+    do {
+        adlak_os_msleep(1);
+        adlak_os_mutex_lock(&padlak->dev_mutex);
+        pm_suspend = padlak->pm_suspend;
+        adlak_os_mutex_unlock(&padlak->dev_mutex);
+    } while (true == pm_suspend);
     /* success */
     AML_LOG_INFO("ADLA KMD suspend done");
     return 0;
@@ -284,10 +296,8 @@ static int adlak_platform_sys_suspend(struct platform_device *pdev, pm_message_t
 
 static int adlak_platform_sys_resume(struct platform_device *pdev) {
     struct adlak_device *padlak = platform_get_drvdata(pdev);
-    AML_LOG_DEBUG("%s", __func__);
-    adlak_platform_resume(padlak);
-    /* success */
-    AML_LOG_INFO("ADLA KMD resume done");
+    adlak_os_printf("%s\n", __func__);
+    adlak_os_sema_give(padlak->sem_pm_wakeup);
     return 0;
 }
 
@@ -299,15 +309,18 @@ static int adlak_platform_sys_pm_suspend(struct device *dev) {
 static int adlak_platform_sys_pm_resume(struct device *dev) {
     return adlak_platform_sys_resume(to_platform_device(dev));
 }
+#endif
 
 static const struct dev_pm_ops viv_dev_pm_ops = {
     SET_SYSTEM_SLEEP_PM_OPS(adlak_platform_sys_pm_suspend, adlak_platform_sys_pm_resume)};
 
 static struct platform_driver adlak_platform_driver = {
-    .probe   = adlak_platform_probe,
-    .remove  = adlak_platform_remove,
+    .probe  = adlak_platform_probe,
+    .remove = adlak_platform_remove,
+#ifdef CONFIG_PM
     .suspend = adlak_platform_sys_suspend,
     .resume  = adlak_platform_sys_resume,
+#endif
     .driver =
         {
             .name  = DEVICE_NAME,
@@ -400,7 +413,7 @@ static int __init adlak_module_init(void) {
         AML_LOG_ERR("platform driver register failed.");
         return ERR(ENODEV);
     }
-    AML_LOG_DEBUG("platform_driver_register successed.");
+    AML_LOG_DEBUG("platform_driver_register succeeded.");
     return 0;
 }
 

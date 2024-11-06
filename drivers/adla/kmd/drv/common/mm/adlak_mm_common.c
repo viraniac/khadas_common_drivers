@@ -44,11 +44,9 @@ static int adlak_malloc_from_mem_pool(struct adlak_mem *mm, struct adlak_mem_han
 
 static void adlak_free_to_mem_pool(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
-static void adlak_free_uncacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+static void adlak_mm_free_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
-static int  adlak_malloc_uncacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-static void adlak_free_cacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-static int  adlak_malloc_cacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+static int adlak_mm_alloc_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
 #if CONFIG_ADLAK_MEM_POOL_EN
 static int adlak_mem_pools_mgr_init(struct adlak_mem *mm);
@@ -103,27 +101,27 @@ void adlak_bitmap_pool_deinit(struct adlak_mm_pool_priv *pool) {
 
 void adlak_bitmap_dump(struct adlak_mm_pool_priv *pool) {
 #if ADLAK_DEBUG
-    size_t bitmap_size = pool->bits / BITS_PER_BYTE;
-    char * addr        = pool->bitmap;
-    size_t i;
+    int   bitmap_size = pool->bits / BITS_PER_BYTE;
+    char *addr        = pool->bitmap;
+    int   i;
 
     AML_LOG_WARN("%s", __func__);
     if (bitmap_size > (1024 * 1024 * 1024 / 4096 / BITS_PER_BYTE)) {
         bitmap_size = (1024 * 1024 * 1024 / 4096 / BITS_PER_BYTE);
     }
-    for (i = 0; i < bitmap_size;) {
+    for (i = bitmap_size - 1; i > 0;) {
         AML_LOG_WARN(
             "%02X %02X %02X %02X %02X %02X %02X %02X "
             "%02X %02X %02X %02X %02X %02X %02X %02X "
             "%02X %02X %02X %02X %02X %02X %02X %02X "
             "%02X %02X %02X %02X %02X %02X %02X %02X ",
-            addr[i + 0], addr[i + 1], addr[i + 2], addr[i + 3], addr[i + 4], addr[i + 5],
-            addr[i + 6], addr[i + 7], addr[i + 8], addr[i + 9], addr[i + 10], addr[i + 11],
-            addr[i + 12], addr[i + 13], addr[i + 14], addr[i + 15], addr[i + 16], addr[i + 17],
-            addr[i + 18], addr[i + 19], addr[i + 20], addr[i + 21], addr[i + 22], addr[i + 23],
-            addr[i + 24], addr[i + 25], addr[i + 26], addr[i + 27], addr[i + 28], addr[i + 29],
-            addr[i + 30], addr[i + 31]);
-        i += 32;
+            addr[i - 0], addr[i - 1], addr[i - 2], addr[i - 3], addr[i - 4], addr[i - 5],
+            addr[i - 6], addr[i - 7], addr[i - 8], addr[i - 9], addr[i - 10], addr[i - 11],
+            addr[i - 12], addr[i - 13], addr[i - 14], addr[i - 15], addr[i - 16], addr[i - 17],
+            addr[i - 18], addr[i - 19], addr[i - 20], addr[i - 21], addr[i - 22], addr[i - 23],
+            addr[i - 24], addr[i - 25], addr[i - 26], addr[i - 27], addr[i - 28], addr[i - 29],
+            addr[i - 30], addr[i - 31]);
+        i -= 32;
     }
 #endif
 }
@@ -194,6 +192,7 @@ unsigned long adlak_alloc_from_bitmap_pool_reverse(struct adlak_mem *mm, size_t 
     addr_offset = (unsigned long)(pool->addr_base + start * ADLAK_MM_POOL_PAGE_SIZE);
 
     share_buf->ref_cnt++;
+    share_buf->share_buf_size = bitmap_count * ADLAK_MM_POOL_PAGE_SIZE;
 
     AML_LOG_INFO("[share mem]addr_offset 0x%08lX", (uintptr_t)addr_offset);
 ret:
@@ -232,6 +231,7 @@ void adlak_free_to_bitmap_pool_reverse(struct adlak_mem *mm) {
             pool->used_count -= bitmap_count;
             share_buf->bitmap_count_max = 0;
             share_buf->offset_start     = -1;
+            share_buf->share_buf_size   = 0;
             adlak_os_mutex_unlock(&pool->lock);
         }
     }
@@ -420,53 +420,42 @@ void adlak_mm_deinit(struct adlak_device *padlak) {
     padlak->mm = NULL;
 }
 
-int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info) {
+int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
+                      struct adlak_sync_cache_ext_info *sync_cache_ext_info) {
     struct adlak_mem *mm = padlak->mm;
 
     AML_LOG_DEBUG("%s", __func__);
     if (ADLAK_IS_ERR_OR_NULL(mm_info)) {
         return -1;
     }
-    if (0 == (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE)) {
-        return 0;
-    }
 
-    AML_LOG_DEBUG("%s cpu_addr 0x%lX", __func__, (uintptr_t)mm_info->cpu_addr);
-    if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_OS) {
-        adlak_os_flush_cache(mm, mm_info);
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_RESERVED) {
+    if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
         // TODO
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
-        // TODO
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_CMA) {
-        // nothing need to do.
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_EXT_PHYS) {
-        // nothing need to do.
+    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_OS ||
+               mm_info->mem_src == ADLAK_ENUM_MEMSRC_CMA ||
+               mm_info->mem_src == ADLAK_ENUM_MEMSRC_RESERVED ||
+               mm_info->mem_src == ADLAK_ENUM_MEMSRC_EXT_PHYS) {
+        adlak_os_flush_cache(mm, mm_info, sync_cache_ext_info);
     }
     return 0;
 }
 
-int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info) {
+int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
+                        struct adlak_sync_cache_ext_info *sync_cache_ext_info) {
     struct adlak_mem *mm = padlak->mm;
 
     AML_LOG_DEBUG("%s", __func__);
     if (ADLAK_IS_ERR_OR_NULL(mm_info)) {
         return -1;
     }
-    if (0 == (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE)) {
-        return 0;
-    }
-    AML_LOG_DEBUG("%s cpu_addr 0x%lX", __func__, (uintptr_t)mm_info->cpu_addr);
-    if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_OS) {
-        adlak_os_invalid_cache(mm, mm_info);
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_RESERVED) {
+
+    if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
         // TODO
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
-        // TODO
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_CMA) {
-        // nothing need to do.
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_EXT_PHYS) {
-        // nothing need to do.
+    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_OS ||
+               mm_info->mem_src == ADLAK_ENUM_MEMSRC_CMA ||
+               mm_info->mem_src == ADLAK_ENUM_MEMSRC_RESERVED ||
+               mm_info->mem_src == ADLAK_ENUM_MEMSRC_EXT_PHYS) {
+        adlak_os_invalid_cache(mm, mm_info, sync_cache_ext_info);
     }
     return 0;
 }
@@ -479,14 +468,8 @@ static void adlak_free_contiguous_to_system(struct adlak_mem *       mm,
 static int adlak_malloc_contiguous_from_system(struct adlak_mem *       mm,
                                                struct adlak_mem_handle *mm_info) {
     int ret;
-    mm_info->mem_src  = ADLAK_ENUM_MEMSRC_OS;
-    mm_info->mem_type = ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
-    if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE) {
-        // cacheable
-        mm_info->mem_type = mm_info->mem_type | ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE;
-    } else {
-        // uncacheable
-    }
+    mm_info->mem_src = ADLAK_ENUM_MEMSRC_OS;
+
     ret = adlak_os_alloc_contiguous(mm, mm_info);
     return ret;
 }
@@ -499,14 +482,8 @@ static void adlak_free_discontiguous_to_system(struct adlak_mem *       mm,
 static int adlak_malloc_discontiguous_from_system(struct adlak_mem *       mm,
                                                   struct adlak_mem_handle *mm_info) {
     int ret;
-    mm_info->mem_src  = ADLAK_ENUM_MEMSRC_OS;
-    mm_info->mem_type = 0;
-    if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE) {
-        mm_info->mem_type = mm_info->mem_type | ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE;
-        // cacheable
-    } else {
-        // uncacheable
-    }
+    mm_info->mem_src = ADLAK_ENUM_MEMSRC_OS;
+
     ret = adlak_os_alloc_discontiguous(mm, mm_info);
     return ret;
 }
@@ -525,13 +502,7 @@ static int adlak_malloc_from_mem_pool(struct adlak_mem *mm, struct adlak_mem_han
         mm_info->phys_addr = 0;
         return ERR(ENOMEM);
     }
-    mm_info->mem_type = ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
-    if (mm->mem_pool->cacheable) {
-        mm_info->mem_type = mm_info->mem_type | ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE;
-    }
-    if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE) {
-        mm_info->mem_type = mm_info->mem_type | ADLAK_ENUM_MEMTYPE_INNER_SHARE;
-    }
+
     mm_info->from_pool = 1;
     mm_info->mem_src   = mm->mem_pool->mem_src;
     mm_info->cpu_addr  = (void *)((dma_addr_t)mm->mem_pool->cpu_addr_base + (dma_addr_t)start);
@@ -558,7 +529,7 @@ static void adlak_free_to_mem_pool(struct adlak_mem *mm, struct adlak_mem_handle
     mm_info->phys_addr = 0;
 }
 
-void adlak_free_uncacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
+void adlak_mm_free_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
     AML_LOG_DEBUG("%s", __func__);
 
     if (mm->use_smmu) {
@@ -588,27 +559,27 @@ void adlak_free_uncacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_in
     }
 }
 
-static int adlak_malloc_uncacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
+static int adlak_mm_alloc_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
     int ret;
     AML_LOG_DEBUG("%s", __func__);
 
     if (mm->use_smmu) {
         if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS) {
-            // alloc uncacheable contiguous memory
+            // alloc contiguous memory
             return adlak_malloc_contiguous_from_system(mm, mm_info);
         } else {
-            // alloc uncacheable discontiguous memory
+            // alloc discontiguous memory
             return adlak_malloc_discontiguous_from_system(mm, mm_info);
         }
     } else {
         if (mm->has_mem_pool) {
-            // alloc uncacheable memory from memory pool
+            // alloc memory from memory pool
             ret = adlak_malloc_from_mem_pool(mm, mm_info);
             if (ERR(NONE) != ret) {
                 if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE) {
                     return ret;
                 }
-                // alloc uncacheable memory through dma api
+                // alloc memory through dma api
                 return adlak_malloc_through_dma(mm, mm_info);
             } else {
                 return ret;
@@ -617,48 +588,11 @@ static int adlak_malloc_uncacheable(struct adlak_mem *mm, struct adlak_mem_handl
             if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE) {
                 return adlak_malloc_share_through_dma(mm, mm_info);
             } else {
-                // alloc uncacheable memory through dma api
+                // alloc memory through dma api
                 return adlak_malloc_through_dma(mm, mm_info);
             }
         }
     }
-}
-
-void adlak_free_cacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    AML_LOG_DEBUG("%s", __func__);
-    if (mm->use_mbp) {
-        // free cacheable memory through MBP api
-        return adlak_free_through_mbp(mm, mm_info);
-    } else {
-        // free cacheable memory from system by myself
-        if (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS) {
-            // free cacheable contiguous memory
-            return adlak_free_contiguous_to_system(mm, mm_info);
-        } else {
-            // free cacheable discontiguous memory
-            return adlak_free_discontiguous_to_system(mm, mm_info);
-        }
-    }
-}
-
-static int adlak_malloc_cacheable(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    int ret = 0;
-    AML_LOG_DEBUG("%s", __func__);
-    if (mm->use_mbp) {
-        // alloc cacheable memory through MBP api
-        ret = adlak_malloc_through_mbp(mm, mm_info);
-    } else {
-        // alloc cacheable memory from system by myself
-        if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS) {
-            // alloc cacheable contiguous memory
-            ret = adlak_malloc_contiguous_from_system(mm, mm_info);
-        } else {
-            // alloc cacheable discontiguous memory
-            ret = adlak_malloc_discontiguous_from_system(mm, mm_info);
-        }
-    }
-    AML_LOG_DEBUG("%s cpu_addr 0x%lX", __func__, (uintptr_t)mm_info->cpu_addr);
-    return ret;
 }
 
 void adlak_mm_free(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
@@ -667,11 +601,8 @@ void adlak_mm_free(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
         adlak_smmu_iova_unmap(mm, mm_info);
     }
 
-    if (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE) {
-        adlak_free_cacheable(mm, mm_info);
-    } else {
-        adlak_free_uncacheable(mm, mm_info);
-    }
+    adlak_mm_free_buffer(mm, mm_info);
+
     adlak_os_free(mm_info);
 }
 
@@ -679,17 +610,14 @@ static void adlak_mm_rewrite_memtype(struct adlak_mem *mm, struct adlak_buf_req 
                                      struct adlak_mem_handle *mm_info) {
     mm_info->req.mem_type = 0;
 
-    if (pbuf_req->ret_desc.mem_type & ADLAK_ENUM_MEMTYPE_CACHEABLE) {
-        mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE;
-    }
-    if (!(pbuf_req->ret_desc.mem_type & ADLAK_ENUM_MEMTYPE_INNER)) {
+    if (!(pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_INNER)) {
         mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
     } else {
-        if (pbuf_req->ret_desc.mem_type & ADLAK_ENUM_MEMTYPE_CONTIGUOUS) {
+        if (pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_CONTIGUOUS) {
             mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
         }
         if (0 != mm->share_buf.share_swap_en) {
-            if ((pbuf_req->ret_desc.mem_type & ADLAK_ENUM_MEMTYPE_SHARE) && (!mm->use_smmu)) {
+            if ((pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_SHARE) && (!mm->use_smmu)) {
                 /*share memory between different model only supports soc without smmu for the time
                  * being*/
                 mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_SHARE;
@@ -700,21 +628,12 @@ static void adlak_mm_rewrite_memtype(struct adlak_mem *mm, struct adlak_buf_req 
         mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
         mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G;
     }
-    if (pbuf_req->ret_desc.mem_type & ADLAK_ENUM_MEMTYPE_PA_WITHIN_4G) {
+
+    if (pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_PA_WITHIN_4G) {
         mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G;
     }
-}
 
-static void adlak_mm_update_memtype(struct adlak_mem *mm, struct adlak_buf_req *pbuf_req,
-                                    struct adlak_mem_handle *mm_info) {
-    pbuf_req->ret_desc.mem_type = 0;
-
-    if (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE) {
-        pbuf_req->ret_desc.mem_type = pbuf_req->ret_desc.mem_type | ADLAK_ENUM_MEMTYPE_CACHEABLE;
-    }
-    if (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS) {
-        pbuf_req->ret_desc.mem_type = pbuf_req->ret_desc.mem_type | ADLAK_ENUM_MEMTYPE_CONTIGUOUS;
-    }
+    mm_info->mem_type = mm_info->req.mem_type;
 }
 
 struct adlak_mem_handle *adlak_mm_alloc(struct adlak_mem *mm, struct adlak_buf_req *pbuf_req) {
@@ -729,26 +648,20 @@ struct adlak_mem_handle *adlak_mm_alloc(struct adlak_mem *mm, struct adlak_buf_r
     }
     mm_info->iova_addr         = SMMU_IOVA_ADDR_SIZE;  // init as invalid value
     mm_info->req.bytes         = ADLAK_PAGE_ALIGN(pbuf_req->bytes);
-    mm_info->req.mem_direction = pbuf_req->ret_desc.mem_direction;
+    mm_info->req.mem_direction = pbuf_req->mem_direction;
 
     adlak_mm_rewrite_memtype(mm, pbuf_req, mm_info);
 
     mm_info->nr_pages = ADLAK_DIV_ROUND_UP(mm_info->req.bytes, ADLAK_PAGE_SIZE);
     mm_info->cpu_addr = NULL;
-    if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE) {
-        ret = adlak_malloc_cacheable(mm, mm_info);
-        if (ret) {
-            // If malloc fails, then retry malloc as uncacheable
-            mm_info->req.mem_type = (mm_info->req.mem_type & (~ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE));
-            ret                   = adlak_malloc_uncacheable(mm, mm_info);
-        }
-    } else {
-        ret = adlak_malloc_uncacheable(mm, mm_info);
-    }
+
+    ret = adlak_mm_alloc_buffer(mm, mm_info);
+
     if (ret) {
         AML_LOG_ERR("%s fail!", __FUNCTION__);
         goto err;
     }
+
     if (mm->use_smmu) {
         // update the tlb of smmu
         if (mm->padlak->smmu_entry) {
@@ -757,7 +670,6 @@ struct adlak_mem_handle *adlak_mm_alloc(struct adlak_mem *mm, struct adlak_buf_r
     } else {
         mm_info->iova_addr = mm_info->phys_addr;
     }
-    adlak_mm_update_memtype(mm, pbuf_req, mm_info);
 
 err:
     if (!ret) {
@@ -776,12 +688,12 @@ void adlak_mm_dettach(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
     if (!mm_info) {
         return;
     }
+
+    AML_LOG_DEBUG("%s", __func__);
     if (mm->use_smmu) {
         adlak_smmu_iova_unmap(mm, mm_info);
     }
-    if (mm_info->phys_addrs) {
-        adlak_os_free(mm_info->phys_addrs);
-    }
+    adlak_os_dettach_ext_mem_phys(mm, mm_info);
     adlak_os_free(mm_info);
 }
 
@@ -794,6 +706,8 @@ struct adlak_mem_handle *adlak_mm_attach(struct adlak_mem *            mm,
     if (!size || !ADLAK_IS_ALIGNED((unsigned long)(size), ADLAK_PAGE_SIZE)) {
         goto early_exit;
     }
+
+    AML_LOG_DEBUG("%s", __func__);
     mm_info = adlak_os_zalloc(sizeof(struct adlak_mem_handle), ADLAK_GFP_KERNEL);
     if (unlikely(!mm_info)) {
         goto end;
@@ -802,13 +716,14 @@ struct adlak_mem_handle *adlak_mm_attach(struct adlak_mem *            mm,
     mm_info->req.bytes    = size;
     mm_info->req.mem_type = ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
     // set as uncacheable for exttern memory
-    mm_info->req.mem_direction = pbuf_req->ret_desc.mem_direction;
+    mm_info->req.mem_direction = pbuf_req->mem_direction;
 
     mm_info->nr_pages = ADLAK_DIV_ROUND_UP(mm_info->req.bytes, ADLAK_PAGE_SIZE);
     mm_info->cpu_addr = NULL;
 
-    mm_info->mem_src = ADLAK_ENUM_MEMSRC_EXT_PHYS;
-    ret              = adlak_os_attach_ext_mem_phys(mm, mm_info, phys_addr);
+    mm_info->mem_src  = ADLAK_ENUM_MEMSRC_EXT_PHYS;
+    mm_info->mem_type = mm_info->req.mem_type;
+    ret               = adlak_os_attach_ext_mem_phys(mm, mm_info, phys_addr);
 
     if (!ret) {
         pbuf_req->errcode = 0;
@@ -832,10 +747,16 @@ early_exit:
 
 int adlak_mm_mmap(struct adlak_mem *mm, struct adlak_mem_handle *mm_info, void *const vma) {
     AML_LOG_DEBUG("%s", __func__);
+
     if (mm_info->mem_src != ADLAK_ENUM_MEMSRC_MBP) {
         adlak_os_mmap(mm, mm_info, vma);
     } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
         // TODO
+        AML_LOG_ERR("Not support memory src [%d]", mm_info->mem_src);
     }
     return 0;
 }
+
+void *adlak_mm_vmap(struct adlak_mem_handle *mm_info) { return adlak_os_mm_vmap(mm_info); }
+
+void adlak_mm_vunmap(struct adlak_mem_handle *mm_info) { adlak_os_mm_vunmap(mm_info); }

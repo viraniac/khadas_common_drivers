@@ -135,10 +135,10 @@ int adlak_device_deinit(struct adlak_device *padlak) {
     if (ret) {
         goto err_lock;
     }
-    adlak_platform_resume(padlak);
     adlak_os_mutex_unlock(&padlak->dev_mutex);
     adlak_dev_inference_deinit(padlak); /*the inference thread will internally call the dev_mutex*/
     adlak_os_mutex_lock(&padlak->dev_mutex);
+    adlak_platform_resume(padlak);
     adlak_hw_deinit(padlak);
     adlak_irq_deinit(padlak);
     adlak_queue_deinit(padlak);
@@ -163,9 +163,10 @@ err_lock:
  */
 int adlak_irq_proc(struct adlak_device *const padlak) {
     struct adlak_irq_status *   irqstatus;
-    struct adlak_task *         ptask      = NULL;
-    struct adlak_hw_stat *      phw_stat   = NULL;
-    struct adlak_dev_inference *pinference = NULL;
+    struct adlak_task *         ptask        = NULL;
+    struct adlak_hw_stat *      phw_stat     = NULL;
+    struct adlak_dev_inference *pinference   = NULL;
+    struct adlak_cmq_buffer *   cmq_buf_info = NULL;
     // adlak_cant_sleep();
     ptask = padlak->queue.ptask_sch_cur;
     if (NULL == ptask) {
@@ -174,8 +175,9 @@ int adlak_irq_proc(struct adlak_device *const padlak) {
     phw_stat   = &ptask->hw_stat;
     pinference = &padlak->queue.dev_inference;
 
-    irqstatus                          = adlak_hal_get_irq_status(phw_stat);
-    padlak->cmq_buf_info.cmq_rd_offset = phw_stat->ps_rbf_rpt;
+    irqstatus    = adlak_hal_get_irq_status(phw_stat);
+    cmq_buf_info = (struct adlak_cmq_buffer *)ptask->context->pmodel_attr->cmq_buffer;
+    cmq_buf_info->cmq_rd_offset = phw_stat->ps_rbf_rpt;
 
     AML_LOG_INFO("IRQ status[0x%08X]", irqstatus->irq_masked);
 
@@ -204,7 +206,9 @@ int adlak_irq_proc(struct adlak_device *const padlak) {
 #endif
     }
     adlak_hal_irq_clear(padlak, irqstatus->irq_masked);
-    adlak_os_sema_give_from_isr(pinference->sem_irq);
+    if (false == phw_stat->irq_status.timeout) {
+        adlak_os_sema_give_from_isr(pinference->sem_irq);
+    }
 
     return 0;
 }

@@ -59,9 +59,11 @@ void adlak_os_dettach_ext_mem_phys(struct adlak_mem *mm, struct adlak_mem_handle
 
 int adlak_os_mmap(struct adlak_mem *mm, struct adlak_mem_handle *mm_info, void *const vma);
 
-void adlak_os_flush_cache(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+void adlak_os_flush_cache(struct adlak_mem *mm, struct adlak_mem_handle *mm_info,
+                          struct adlak_sync_cache_ext_info *sync_cache_ext_info);
 
-void adlak_os_invalid_cache(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+void adlak_os_invalid_cache(struct adlak_mem *mm, struct adlak_mem_handle *mm_info,
+                            struct adlak_sync_cache_ext_info *sync_cache_ext_info);
 
 void adlak_free_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
@@ -78,6 +80,10 @@ int adlak_alloc_cma_region_nocache(struct adlak_mem *mm);
 void adlak_free_share_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
 int adlak_malloc_share_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+
+void *adlak_os_mm_vmap(struct adlak_mem_handle *mm_info);
+
+void adlak_os_mm_vunmap(struct adlak_mem_handle *mm_info);
 
 #ifdef __cplusplus
 }

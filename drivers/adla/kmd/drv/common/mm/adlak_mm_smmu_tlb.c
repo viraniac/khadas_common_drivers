@@ -50,8 +50,8 @@ int adlak_smmu_tlb_alloc(struct adlak_device *padlak) {
 
     psmmu->tlb_l1.size = ADLAK_ALIGN(SMMU_TLB1_SIZE, SMMU_ALIGN_SIZE);
 
-    buf_req.ret_desc.mem_type      = ADLAK_ENUM_MEMTYPE_CONTIGUOUS | ADLAK_ENUM_MEMTYPE_INNER;
-    buf_req.ret_desc.mem_direction = ADLAK_ENUM_MEM_DIR_WRITE_ONLY;
+    buf_req.mem_type      = ADLAK_ENUM_MEMTYPE_CONTIGUOUS | ADLAK_ENUM_MEMTYPE_INNER;
+    buf_req.mem_direction = ADLAK_ENUM_MEM_DIR_WRITE_ONLY;
 
     buf_req.bytes = psmmu->tlb_l1.size;
     mm_info       = adlak_mm_alloc(padlak->mm, &buf_req);
@@ -66,10 +66,10 @@ int adlak_smmu_tlb_alloc(struct adlak_device *padlak) {
     AML_LOG_INFO("Alloc tlb2 buffer.");
 #endif
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
-        psmmu->tlb_l2[idx1].size  = ADLAK_ALIGN(SMMU_TLB2_SIZE, SMMU_ALIGN_SIZE);
-        buf_req.ret_desc.mem_type = ADLAK_ENUM_MEMTYPE_CONTIGUOUS | ADLAK_ENUM_MEMTYPE_INNER;
-        buf_req.bytes             = psmmu->tlb_l2[idx1].size;
-        mm_info                   = adlak_mm_alloc(padlak->mm, &buf_req);
+        psmmu->tlb_l2[idx1].size = ADLAK_ALIGN(SMMU_TLB2_SIZE, SMMU_ALIGN_SIZE);
+        buf_req.mem_type         = ADLAK_ENUM_MEMTYPE_CONTIGUOUS | ADLAK_ENUM_MEMTYPE_INNER;
+        buf_req.bytes            = psmmu->tlb_l2[idx1].size;
+        mm_info                  = adlak_mm_alloc(padlak->mm, &buf_req);
         if (ADLAK_IS_ERR_OR_NULL(mm_info)) {
             ret = -1;
             AML_LOG_ERR("adlak_os_alloc_contiguous failed.");
@@ -83,9 +83,9 @@ int adlak_smmu_tlb_alloc(struct adlak_device *padlak) {
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
         for (idx2 = 0; idx2 < SMMU_TLB2_ENTRY_COUNT_2M; idx2++) {
             psmmu->tlb_l3[idx1][idx2].size = ADLAK_ALIGN(SMMU_TLB3_SIZE, SMMU_ALIGN_SIZE);
-            buf_req.ret_desc.mem_type = ADLAK_ENUM_MEMTYPE_CONTIGUOUS | ADLAK_ENUM_MEMTYPE_INNER;
-            buf_req.bytes             = psmmu->tlb_l3[idx1][idx2].size;
-            mm_info                   = adlak_mm_alloc(padlak->mm, &buf_req);
+            buf_req.mem_type = ADLAK_ENUM_MEMTYPE_CONTIGUOUS | ADLAK_ENUM_MEMTYPE_INNER;
+            buf_req.bytes    = psmmu->tlb_l3[idx1][idx2].size;
+            mm_info          = adlak_mm_alloc(padlak->mm, &buf_req);
             if (ADLAK_IS_ERR_OR_NULL(mm_info)) {
                 ret = -1;
                 AML_LOG_ERR("adlak_os_alloc_contiguous failed.");
@@ -116,8 +116,8 @@ int adlak_smmu_tlb_fill_init(struct __adlak_smmu *psmmu) {
 #endif
 
     /*fill tlb level 1*/
-    tlb_logic = (uintptr_t)psmmu->tlb_l1.mm_info->cpu_addr;
-    AML_LOG_DEBUG("l1 cpu_addr= %lX,mem_type=%u", (uintptr_t)psmmu->tlb_l1.mm_info->cpu_addr,
+    tlb_logic = (uintptr_t)adlak_mm_vmap(psmmu->tlb_l1.mm_info);
+    AML_LOG_DEBUG("l1 cpu_addr= %lX,mem_type=%u", (uintptr_t)adlak_mm_vmap(psmmu->tlb_l1.mm_info),
                   psmmu->tlb_l1.mm_info->mem_type);
 
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
@@ -135,7 +135,7 @@ int adlak_smmu_tlb_fill_init(struct __adlak_smmu *psmmu) {
 
     /*fill tlb level 2*/
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
-        tlb_logic = (uintptr_t)psmmu->tlb_l2[idx1].mm_info->cpu_addr;
+        tlb_logic = (uintptr_t)adlak_mm_vmap(psmmu->tlb_l2[idx1].mm_info);
         for (idx2 = 0; idx2 < SMMU_TLB2_ENTRY_COUNT_2M; idx2++) {
             entry_val = psmmu->tlb_l3[idx1][idx2].mm_info->phys_addr;
             entry_val = entry_val | SMMU_ENTRY_FLAG_L2_VALID_4K;
@@ -152,7 +152,7 @@ int adlak_smmu_tlb_fill_init(struct __adlak_smmu *psmmu) {
     /*fill tlb level 3*/
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
         for (idx2 = 0; idx2 < SMMU_TLB2_ENTRY_COUNT_2M; idx2++) {
-            tlb_logic = (uint64_t)(uintptr_t)psmmu->tlb_l3[idx1][idx2].mm_info->cpu_addr;
+            tlb_logic = (uint64_t)(uintptr_t)adlak_mm_vmap(psmmu->tlb_l3[idx1][idx2].mm_info);
             for (idx3 = 0; idx3 < SMMU_TLB3_ENTRY_COUNT_4K; idx3++) {
                 entry_val = 0;
                 entry_val = entry_val | SMMU_ENTRY_FLAG_L3_INVALID;
@@ -177,36 +177,39 @@ int adlak_smmu_tlb_dump(struct __adlak_smmu *psmmu) {
     int idx1, idx2, idx3;
     uintptr_t tlb_logic;
 
-    AML_LOG_DEBUG("%s", __func__);
+    adlak_os_printf("%s", __func__);
 
-    AML_LOG_DEBUG("TLB level 1");
-    tlb_logic = (uintptr_t)psmmu->tlb_l1.mm_info->cpu_addr;
+    adlak_os_printf("TLB level 1");
+    adlak_os_printf("phys_addr: 0x%08X\n", (uintptr_t)psmmu->tlb_l1.mm_info->phys_addr);
+    tlb_logic = (uintptr_t)adlak_mm_vmap(psmmu->tlb_l1.mm_info);
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
 #ifdef CONFIG_64BIT
-        AML_LOG_DEFAULT("offset:0x%08X\t0x%llX \n", (uint32_t)(idx1 * sizeof(uint64_t)),
+        adlak_os_printf("offset:0x%08X\t0x%llX \n", (uint32_t)(idx1 * sizeof(uint64_t)),
                         _read_page_entry(tlb_logic + (idx1 * sizeof(uint64_t))));
 #else
-        AML_LOG_DEFAULT("offset:0x%08X\t0x%08X 0x%08X\n", (uint32_t)(idx1 * sizeof(uint64_t)),
+        adlak_os_printf("offset:0x%08X\t0x%08X 0x%08X\n", (uint32_t)(idx1 * sizeof(uint64_t)),
                         _read_page_entry(tlb_logic + (idx1 * sizeof(uint32_t))),
                         _read_page_entry(tlb_logic + ((idx1 + 1) * sizeof(uint32_t))));
 
 #endif
     }
-    AML_LOG_DEBUG("TLB level 2");
+    adlak_os_printf("TLB level 2");
     // for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
     for (idx1 = 0; idx1 < 1; idx1++) {
-        AML_LOG_DEBUG("TLB level 2 idx=%d", idx1);
-        tlb_logic = (uintptr_t)psmmu->tlb_l2[idx1].mm_info->cpu_addr;
+        adlak_os_msleep(50);
+        adlak_os_printf("TLB level 2 idx=%d", idx1);
+        adlak_os_printf("phys_addr: 0x%08X\n", (uintptr_t)psmmu->tlb_l2[idx1].mm_info->phys_addr);
+        tlb_logic = (uintptr_t)adlak_mm_vmap(psmmu->tlb_l2[idx1].mm_info);
         for (idx2 = 0; idx2 < SMMU_TLB2_ENTRY_COUNT_2M;) {
 #ifdef CONFIG_64BIT
-            AML_LOG_DEFAULT("offset:0x%08X\t0x%llX 0x%llX 0x%llX 0x%llX \n",
+            adlak_os_printf("offset:0x%08X\t0x%llX 0x%llX 0x%llX 0x%llX \n",
                             (uint32_t)(idx2 * sizeof(uint64_t)),
                             _read_page_entry(tlb_logic + (idx2 * sizeof(uint64_t))),
                             _read_page_entry(tlb_logic + ((idx2 + 1) * sizeof(uint64_t))),
                             _read_page_entry(tlb_logic + ((idx2 + 2) * sizeof(uint64_t))),
                             _read_page_entry(tlb_logic + ((idx2 + 3) * sizeof(uint64_t))));
 #else
-            AML_LOG_DEFAULT(
+            adlak_os_printf(
                 "offset:0x%08X\t0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X\n",
                 (uint32_t)(idx2 * sizeof(uint64_t)),
                 _read_page_entry(tlb_logic + (idx2 * sizeof(uint32_t))),
@@ -222,27 +225,31 @@ int adlak_smmu_tlb_dump(struct __adlak_smmu *psmmu) {
             idx2 = idx2 + 4;
         }
 
-        AML_LOG_DEFAULT("\n");
+        adlak_os_printf("\n");
     }
 
-    AML_LOG_DEBUG("TLB level 3");
+    adlak_os_printf("TLB level 3");
 
-    // for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
-    //  for (idx2 = 0; idx2 < SMMU_TLB2_ENTRY_COUNT_2M; idx2++) {
-    for (idx1 = 0; idx1 < 1; idx1++) {
-        for (idx2 = 0; idx2 < 1; idx2++) {
-            AML_LOG_DEBUG("TLB level 3 [%d][%d]", idx1, idx2);
-            tlb_logic = (uintptr_t)psmmu->tlb_l3[idx1][idx2].mm_info->cpu_addr;
+    for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
+        adlak_os_msleep(50);
+        for (idx2 = 0; idx2 < SMMU_TLB2_ENTRY_COUNT_2M; idx2++) {
+            adlak_os_msleep(50);
+            // for (idx1 = 0; idx1 < 1; idx1++) {
+            //     for (idx2 = 0; idx2 < 1; idx2++) {
+            adlak_os_printf("TLB level 3 [%d][%d]", idx1, idx2);
+            adlak_os_printf("phys_addr: 0x%08X\n",
+                            (uintptr_t)psmmu->tlb_l3[idx1][idx2].mm_info->phys_addr);
+            tlb_logic = (uintptr_t)adlak_mm_vmap(psmmu->tlb_l3[idx1][idx2].mm_info);
             for (idx3 = 0; idx3 < SMMU_TLB2_ENTRY_COUNT_2M;) {
 #ifdef CONFIG_64BIT
-                AML_LOG_DEFAULT("offset:0x%08X\t0x%llX 0x%llX 0x%llX 0x%llX \n",
+                adlak_os_printf("offset:0x%08X\t0x%llX 0x%llX 0x%llX 0x%llX \n",
                                 (uint32_t)(idx3 * sizeof(uint64_t)),
                                 _read_page_entry(tlb_logic + (idx3 * sizeof(uint64_t))),
                                 _read_page_entry(tlb_logic + ((idx3 + 1) * sizeof(uint64_t))),
                                 _read_page_entry(tlb_logic + ((idx3 + 2) * sizeof(uint64_t))),
                                 _read_page_entry(tlb_logic + ((idx3 + 3) * sizeof(uint64_t))));
 #else
-                AML_LOG_DEFAULT(
+                adlak_os_printf(
                     "offset:0x%08X\t0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X\n",
                     (uint32_t)(idx3 * sizeof(uint64_t)),
                     _read_page_entry(tlb_logic + (idx3 * sizeof(uint32_t))),
@@ -286,7 +293,7 @@ int adlak_smmu_tlb_add(struct __adlak_smmu *psmmu, dma_addr_t iova_addr, phys_ad
                   tlb_l2_offset, tlb_l3_offset);
 #endif
 
-    tlb_logic = (uintptr_t)(psmmu->tlb_l3[tlb_l1_offset][tlb_l2_offset].mm_info->cpu_addr);
+    tlb_logic = (uintptr_t)(adlak_mm_vmap(psmmu->tlb_l3[tlb_l1_offset][tlb_l2_offset].mm_info));
     entry_val = phys_addr;
     entry_val = entry_val | SMMU_ENTRY_FLAG_L3_VALID;
 #if ADLAK_DEBUG_SMMU_EN
@@ -322,7 +329,7 @@ int adlak_smmu_tlb_del(struct __adlak_smmu *psmmu, dma_addr_t iova_addr) {
     tlb_l1_offset = GET_SMMU_TLB1_ENTRY_OFFSEST(iova_addr);
     tlb_l2_offset = GET_SMMU_TLB2_ENTRY_OFFSEST(iova_addr);
     tlb_l3_offset = GET_SMMU_TLB3_ENTRY_OFFSEST(iova_addr);
-    tlb_logic     = (uintptr_t)psmmu->tlb_l3[tlb_l1_offset][tlb_l2_offset].mm_info->cpu_addr;
+    tlb_logic     = (uintptr_t)adlak_mm_vmap(psmmu->tlb_l3[tlb_l1_offset][tlb_l2_offset].mm_info);
     entry_val     = 0;
     entry_val     = entry_val | SMMU_ENTRY_FLAG_L3_INVALID;
 #ifdef CONFIG_64BIT
@@ -350,7 +357,7 @@ static int adlak_smmu_tlb_init(struct adlak_mem *mm) {
     }
     adlak_smmu_tlb_fill_init((struct __adlak_smmu *)padlak->psmmu);
     padlak->smmu_entry = ((struct __adlak_smmu *)padlak->psmmu)->smmu_entry;
-    adlak_smmu_tlb_dump((struct __adlak_smmu *)padlak->psmmu);
+    // adlak_smmu_tlb_dump((struct __adlak_smmu *)padlak->psmmu);
     return 0;
 }
 
@@ -384,27 +391,28 @@ static int adlak_smmu_tlb_deinit(struct adlak_mem *mm) {
 }
 
 static int adlak_smmu_tlb_flush_cache(struct adlak_mem *mm) {
-    struct adlak_device *padlak = mm->padlak;
-    struct __adlak_smmu *psmmu  = padlak->psmmu;
-
-    uint32_t idx1, idx2;
+    struct adlak_device *            padlak = mm->padlak;
+    struct __adlak_smmu *            psmmu  = padlak->psmmu;
+    uint32_t                         idx1, idx2;
+    struct adlak_sync_cache_ext_info sync_cache_extern;
     if (!mm->use_smmu) {
         return 0;
     }
     AML_LOG_DEBUG("%s", __func__);
 
     /*flush cache level 1*/
-    adlak_flush_cache(padlak, psmmu->tlb_l1.mm_info);
+    sync_cache_extern.is_partial = 0;
+    adlak_flush_cache(padlak, psmmu->tlb_l1.mm_info, &sync_cache_extern);
 
     /*flush cache level 2*/
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
-        adlak_flush_cache(padlak, psmmu->tlb_l2[idx1].mm_info);
+        adlak_flush_cache(padlak, psmmu->tlb_l2[idx1].mm_info, &sync_cache_extern);
     }
 
     /*flush cache level 3*/
     for (idx1 = 0; idx1 < SMMU_TLB1_ENTRY_COUNT; idx1++) {
         for (idx2 = 0; idx2 < SMMU_TLB2_ENTRY_COUNT_2M; idx2++) {
-            adlak_flush_cache(padlak, psmmu->tlb_l3[idx1][idx2].mm_info);
+            adlak_flush_cache(padlak, psmmu->tlb_l3[idx1][idx2].mm_info, &sync_cache_extern);
         }
     }
 

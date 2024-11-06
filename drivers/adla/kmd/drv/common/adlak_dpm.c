@@ -27,22 +27,7 @@
 #include "adlak_platform_config.h"
 #include "adlak_submit.h"
 /************************** Constant Definitions *****************************/
-#define CONFIG_ADLAK_FREQ_ADJUST_NO (5)
 /**************************** Type Definitions *******************************/
-
-struct adlak_power_info {
-    struct adlak_device *padlak;
-    int32_t              invoke_task_cnt;
-    int32_t              cnt_elapsed;
-    int32_t              cnt_idel;
-    int32_t              cnt_busy;
-    int32_t              freq_cfg_idx;
-    int32_t              freq_cfg_list[2][CONFIG_ADLAK_FREQ_ADJUST_NO];  // 0:core freq; 1:axi freq
-    int32_t              core_freq_cur;
-    int32_t              axi_freq_cur;
-    int32_t              core_freq_expect;
-    int32_t              axi_freq_expect;
-};
 
 /***************** Macros (Inline Functions) Definitions *********************/
 
@@ -92,16 +77,13 @@ void adlak_dpm_stage_adjust(void *data, enum ADLAK_DPM_STRATEGY strategy) {
         adlak_os_mutex_lock(&padlak->dev_mutex);
         switch (strategy) {
             case ADLAK_DPM_STRATEGY_UP:
-                pdpm_info->cnt_busy++;
                 // adlak_freq_increase
                 pdpm_info->freq_cfg_idx--;
                 if (pdpm_info->freq_cfg_idx < 0) {
                     pdpm_info->freq_cfg_idx = 0;
                 }
-
                 break;
             case ADLAK_DPM_STRATEGY_DOWN:
-                pdpm_info->cnt_idel++;
                 // adlak_freq_decrease
                 pdpm_info->freq_cfg_idx++;
                 if (pdpm_info->freq_cfg_idx >=
@@ -111,35 +93,20 @@ void adlak_dpm_stage_adjust(void *data, enum ADLAK_DPM_STRATEGY strategy) {
                 break;
             case ADLAK_DPM_STRATEGY_MAX:
                 pdpm_info->freq_cfg_idx = 0;
-                pdpm_info->cnt_elapsed  = 0;
-                pdpm_info->cnt_idel     = 0;
-                pdpm_info->cnt_busy     = 0;
                 break;
             case ADLAK_DPM_STRATEGY_MIN:
                 pdpm_info->freq_cfg_idx = ADLAK_ARRAY_SIZE(pdpm_info->freq_cfg_list[0]) - 1;
-                pdpm_info->cnt_elapsed  = 0;
-                pdpm_info->cnt_idel     = 0;
-                pdpm_info->cnt_busy     = 0;
                 break;
             default:
                 ASSERT(0);
                 break;
-        }
-        pdpm_info->cnt_elapsed++;
-        if (pdpm_info->cnt_elapsed < pdpm_info->cnt_idel ||
-            pdpm_info->cnt_elapsed < pdpm_info->cnt_busy) {
-            pdpm_info->cnt_elapsed = 0;
-            pdpm_info->cnt_idel    = 0;
-            pdpm_info->cnt_busy    = 0;
         }
 
         pdpm_info->core_freq_expect = pdpm_info->freq_cfg_list[0][pdpm_info->freq_cfg_idx];
         pdpm_info->axi_freq_expect  = pdpm_info->freq_cfg_list[1][pdpm_info->freq_cfg_idx];
 
         if (pdpm_info->core_freq_expect != pdpm_info->core_freq_cur) {
-            if (!pdpm_info->invoke_task_cnt) {
-                adlak_dpm_adjust(padlak);
-            }
+            adlak_dpm_adjust(padlak);
         }
         adlak_os_mutex_unlock(&padlak->dev_mutex);
     }
@@ -205,8 +172,7 @@ int adlak_dpm_init(void *data) {
         ret = ERR(ENOMEM);
         goto err;
     }
-    padlak->pdpm      = (void *)pdpm_info;
-    pdpm_info->padlak = padlak;
+    padlak->pdpm = (void *)pdpm_info;
 
     AML_LOG_DEBUG("dpm_period_set =  %d ms", padlak->dpm_period_set);
     // init freq list
@@ -256,17 +222,14 @@ err:
 }
 int adlak_dmp_get_efficiency(void *data) {
 #if CONFIG_ADLAK_DPM_EN
-    struct adlak_device *    padlak = (struct adlak_device *)data;
-    struct adlak_power_info *pdpm_info;
-    int32_t                  efficiency;
+    struct adlak_device *   padlak = (struct adlak_device *)data;
+    struct adlak_workqueue *pwq    = &padlak->queue;
+    int32_t                 efficiency;
     AML_LOG_DEBUG("%s", __func__);
-    pdpm_info = (struct adlak_power_info *)padlak->pdpm;
-    if (!pdpm_info) {
-        return 0;
-    }
-    efficiency = (pdpm_info->cnt_busy * 100) / (pdpm_info->cnt_elapsed);
-    AML_LOG_INFO("adlak efficiency %d/%d = %d%%", pdpm_info->cnt_busy, pdpm_info->cnt_elapsed,
-                 efficiency);
+    efficiency = (pwq->dev_inference.cnt_busy * 100) / (pwq->dev_inference.cnt_elapsed);
+    AML_LOG_INFO("adlak efficiency %d/%d = %d%%", pwq->dev_inference.cnt_busy,
+                 pwq->dev_inference.cnt_elapsed, efficiency);
+
     return efficiency;
 #else
     return 0;

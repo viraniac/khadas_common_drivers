@@ -99,6 +99,7 @@ extern "C" {
 #define REG_ADLAK_0XFC (0xfc)  /* read,default=0x0 */
 #define REG_ADLAK_0X100 (0x100) /* read/write,default=0x0 */
 #define REG_ADLAK_0X104 (0x104)     /* read/write,default=0x0 */
+#define REG_ADLAK_0X108 (0x108)    /* read/write,default=0x0 */
 // AXI DRAM
 #define REG_ADLAK_0X110 (0x110)  /* read/write,default=0x0 */
 #define REG_ADLAK_0X114 (0x114) /* read/write,default=0x80808080 */
@@ -108,7 +109,7 @@ extern "C" {
 
 #define REG_ADLAK_0X120 (0x120) /* read/write,default=0x0 */
 
-#define REG_ADLAK_NUM_MAX (65)
+#define REG_ADLAK_NUM_MAX (66)
 // irq mask
 #define ADLAK_IRQ_MASK_PARSER_STOP_CMD (1 << 0) /* [0]: parser stop for command*/
 #define ADLAK_IRQ_MASK_PARSER_STOP_ERR (1 << 1) /* [1]: parser stop for error*/
@@ -135,23 +136,6 @@ typedef union { /* OFFSET:0x0 ADLAK_REV */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_REV_S;
-typedef union { /* OFFSET:0x4 ADLAK_WAIT_TIMER */
-    struct {
-        uint32_t wait_timer_val : 16; /* wait timer value, "0" means "timeout" disable */
-        uint32_t : 16;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_WAIT_TIMER_S;
-typedef union { /* OFFSET:0x10 ADLAK_IRQ_MASKED */
-    struct {
-        uint32_t irqsts_masked : 16; /* Interrupt masked status.
-                                                Clear this register by writing ‘1’ into
-                                   reg_irqsts_raw reg_irqsts_masked = reg_irqsts_mask &
-                                   reg_irqsts_raw */
-        uint32_t : 16;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_IRQ_MASKED_S;
 typedef union { /* OFFSET:0x14 ADLAK_IRQ_MASK */
     struct {
         uint32_t irqsts_mask : 16; /* Interrupt status mask
@@ -171,14 +155,28 @@ typedef union { /* OFFSET:0x14 ADLAK_IRQ_MASK */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_IRQ_MASK_S;
-typedef union { /* OFFSET:0x18 ADLAK_IRQ_RAW */
+typedef union { /* OFFSET:0x50 ADLAK_PS_CTRL */
     struct {
-        uint32_t irqsts_raw : 16; /* Interrupt raw status.
-                                             Clear this register by writing ‘1’ into this field */
-        uint32_t : 16;
+        uint32_t ps_rst : 1;      /* parser reset (also reset dependence information) */
+        uint32_t ps_dep_rst : 1;  /* reset dependence information */
+        uint32_t ps_start : 1;    /* parser start to work */
+        uint32_t ps_preempt : 1;  /* parser preempt to stop */
+        uint32_t ps_pend_rst : 1; /* reset pending timer */
+        uint32_t : 27;
     } bitc;
     uint32_t all;
-} HAL_ADLAK_IRQ_RAW_S;
+} HAL_ADLAK_PS_CTRL_S;
+typedef union { /* OFFSET:0x54 ADLAK_PS_STS */
+    struct {
+        uint32_t ps_stop_cmd : 1; /* parser status report: stop command */
+        uint32_t ps_stop_err : 1; /* parser status report: stop error */
+        uint32_t ps_stop_pmt : 1; /* parser status report: stop preempt */
+        uint32_t ps_busy : 1;     /* parser status report:  busy */
+        uint32_t ps_pmt_busy : 1; /* parser status report:  preempt_busy */
+        uint32_t : 27;
+    } bitc;
+    uint32_t all;
+} HAL_ADLAK_PS_STS_S;
 
 typedef union { /* OFFSET:0x1C ADLAK_REPORT_STATUS */
     struct {
@@ -223,181 +221,7 @@ typedef union { /* OFFSET:0x28 ADLAK_CLK_AUTOCLK */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_CLK_AUTOCLK_S;
-typedef union { /* OFFSET:0x2c ADLAK_CLK_IDLE_CNT */
-    struct {
-        uint32_t adlak_autoclk_idle_cnt : 5; /* auto gating clock idle count */
-        uint32_t : 3;
-        uint32_t adlak_autoclk_busy_cnt : 5; /* auto gating clock busy count */
-        uint32_t : 19;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_CLK_IDLE_CNT_S;
-typedef union { /* OFFSET:0x30 ADLAK_DBG_EN */
-    struct {
-        uint32_t dbg_en : 1; /* debug enable */
-        uint32_t : 31;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_EN_S;
-typedef union { /* OFFSET:0x34 ADLAK_DBG_SEL */
-    struct {
-        uint32_t dbg_mdl_sel : 8; /* debug module  selection */
-        uint32_t : 24;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_SEL_S;
-typedef union { /* OFFSET:0x38 ADLAK_DBG_SUB_SEL */
-    struct {
-        uint32_t dbg_sub_sel : 16; /* debug submodule selection */
-        uint32_t : 16;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_SUB_SEL_S;
-typedef union { /* OFFSET:0x3c ADLAK_DBG_DAT */
-    struct {
-        uint32_t dbg_dat : 32; /* debug data */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_DAT_S;
-typedef union { /* OFFSET:0x40 ADLAK_DBG_SRAM_CTRL */
-    struct {
-        uint32_t dbg_sram_wr : 1; /* debuf sram write */
-        uint32_t dbg_sram_rd : 1; /* debug sram read */
-        uint32_t : 30;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_SRAM_CTRL_S;
-typedef union { /* OFFSET:0x44 ADLAK_DBG_SRAM_ADDR */
-    struct {
-        uint32_t dbg_sram_addr : 16; /* debug sram address */
-        uint32_t dbg_sram_sel : 8;   /* debug sram select */
-        uint32_t : 8;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_SRAM_ADDR_S;
-typedef union { /* OFFSET:0x48 ADLAK_DBG_SRAM_WDAT */
-    struct {
-        uint32_t dbg_sram_wdata : 32; /* debug sram write data */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_SRAM_WDAT_S;
-typedef union { /* OFFSET:0x4c ADLAK_DBG_SRAM_RDAT */
-    struct {
-        uint32_t dbg_sram_rdata : 32; /* debug sram read data */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_DBG_SRAM_RDAT_S;
-typedef union { /* OFFSET:0x50 ADLAK_PS_CTRL */
-    struct {
-        uint32_t ps_rst : 1;      /* parser reset (also reset dependence information) */
-        uint32_t ps_dep_rst : 1;  /* reset dependence information */
-        uint32_t ps_start : 1;    /* parser start to work */
-        uint32_t ps_preempt : 1;  /* parser preempt to stop */
-        uint32_t ps_pend_rst : 1; /* reset pending timer */
-        uint32_t : 27;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_CTRL_S;
-typedef union { /* OFFSET:0x54 ADLAK_PS_STS */
-    struct {
-        uint32_t ps_stop_cmd : 1; /* parser status report: stop command */
-        uint32_t ps_stop_err : 1; /* parser status report: stop error */
-        uint32_t ps_stop_pmt : 1; /* parser status report: stop preempt */
-        uint32_t ps_busy : 1;     /* parser status report:  busy */
-        uint32_t ps_pmt_busy : 1; /* parser status report:  preempt_busy */
-        uint32_t : 27;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_STS_S;
-typedef union { /* OFFSET:0x58 ADLAK_PS_ERR_DAT */
-    struct {
-        uint32_t ps_error_data : 32; /* parser content when error */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_ERR_DAT_S;
-typedef union { /* OFFSET:0x5c ADLAK_PS_IDLE_STS */
-    struct {
-        uint32_t ps_idle_sts : 32; /* parser idle status */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_IDLE_STS_S;
-typedef union { /* OFFSET:0x60 ADLAK_PS_TIME_STAMP */
-    struct {
-        uint32_t ps_time_stamp : 32; /* time stamp */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_TIME_STAMP_S;
-typedef union { /* OFFSET:0x64 ADLAK_PS_RBF_BASE */
-    struct {
-        uint32_t ps_rbf_base : 32; /* base address, unit: byte, need 256 byte aligned */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_RBF_BASE_S;
-typedef union { /* OFFSET:0x68 ADLAK_PS_RBF_SIZE */
-    struct {
-        uint32_t ps_rbf_size : 28; /* memory size, unit: byte, need 256 byte aligned, max 256M */
-        uint32_t : 4;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_RBF_SIZE_S;
-typedef union { /* OFFSET:0x6c ADLAK_PS_RBF_WPT */
-    struct {
-        uint32_t ps_rbf_wpt_ofst : 28; /* write pointer offset, unit: byte, need 16 byte aligned */
-        uint32_t : 4;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_RBF_WPT_S;
-typedef union { /* OFFSET:0x70 ADLAK_PS_RBF_RPT */
-    struct {
-        uint32_t
-            ps_rbf_rpt_ofst : 28; /* read pointer offset, unit: byte, will be 16 byte aligned */
-        uint32_t : 4;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_RBF_RPT_S;
-typedef union { /* OFFSET:0x74 ADLAK_PS_RBF_PPT */
-    struct {
-        uint32_t
-            ps_rbf_ppt_ofst : 28; /* parsing pointer offset, unit: byte, will be 4 byte aligned */
-        uint32_t : 4;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_RBF_PPT_S;
-typedef union { /* OFFSET:0x78 ADLAK_PS_FINISH_ID */
-    struct {
-        uint32_t ps_pwe_flid_dat : 4; /* finished layer id */
-        uint32_t ps_pwx_flid_dat : 4; /* None */
-        uint32_t ps_rs_flid_dat : 4;  /* None */
-        uint32_t : 8;
-        uint32_t ps_pwe_flid_vld : 1; /* None */
-        uint32_t ps_pwx_flid_vld : 1; /* None */
-        uint32_t ps_rs_flid_vld : 1;  /* None */
-        uint32_t : 9;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_FINISH_ID_S;
-typedef union { /* OFFSET:0x7c ADLAK_PS_HCNT */
-    struct {
-        uint32_t ps_pwe_hcnt : 10; /* hcnt */
-        uint32_t : 6;
-        uint32_t ps_pwx_hcnt : 10; /* None */
-        uint32_t : 6;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_HCNT_S;
-typedef union { /* OFFSET:0x80 ADLAK_PS_OST */
-    struct {
-        uint32_t ps_ost_max : 3; /* None */
-        uint32_t : 1;
-        uint32_t ps_pwe_outstanding : 3; /* outstanding, max 4 */
-        uint32_t : 1;
-        uint32_t ps_pwx_outstanding : 3; /* outstanding, max 4 */
-        uint32_t : 1;
-        uint32_t ps_rs_outstanding : 3; /* outstanding, max 1 */
-        uint32_t : 17;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_OST_S;
+
 typedef union { /* OFFSET:0x84 ADLAK_PS_PEND_EN */
     struct {
         uint32_t ps_pend_timer_en : 1; /* pending timer enable */
@@ -412,35 +236,6 @@ typedef union { /* OFFSET:0x88 ADLAK_PS_PEND_VAL */
     uint32_t all;
 } HAL_ADLAK_PS_PEND_VAL_S;
 
-typedef union { /* OFFSET:0x8c ADLAK_PS_MODULE_IDLE_STS */
-    struct {    /* module idle status*/
-        uint32_t idle_sts_pwx : 1;
-        uint32_t idle_sts_pwe : 1;
-        uint32_t idle_sts_px : 1;
-        uint32_t idle_sts_dmdw : 1;
-        uint32_t idle_sts_dmdf : 1;
-        uint32_t idle_sts_dw : 1;
-        uint32_t idle_sts_pe : 1;
-        uint32_t idle_sts_dmcw : 1;
-        uint32_t idle_sts_dmcf : 1;
-        uint32_t idle_sts_mc : 1;
-        uint32_t idle_sts_rs : 1;
-        uint32_t idle_sts_ps : 1;
-        uint32_t idle_sts_ab : 1;
-        uint32_t idle_sts_smmu : 1;
-        uint32_t idle_sts_axibrg_dx : 1;
-        uint32_t idle_sts_axibrg_sx : 1;
-        uint32_t : 16;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_MODULE_IDLE_STS_S;
-typedef union { /* OFFSET:0x90 ADLAK_PS_DBG_SW_ID */
-    struct {
-        uint32_t ps_dbg_sw_id : 24; /* debug sw id (just for simulation used only) */
-        uint32_t : 8;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PS_DBG_SW_ID_S;
 typedef union { /* OFFSET:0xa0 ADLAK_AB_CTL */
     struct {
         uint32_t ab_force_stop_en : 1;    /* Enable AB force stop */
@@ -468,57 +263,7 @@ typedef union { /* OFFSET:0xa8 ADLAK_AB_AXI_EADDR */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_AB_AXI_EADDR_S;
-typedef union { /* OFFSET:0xac ADLAK_AB_R_CS_PRIO */
-    struct {
-        uint32_t ab_r_cs_arb_prio : 20; /* The arbitration priority weight of read complex port.
-                                      4bit per port. The wight is pow2(value). */
-        uint32_t : 8;
-        uint32_t ab_r_dec_arb_prio : 4; /* The arbitration priority weight of read decoder port.
-                                      4bit per port. The wight is pow2(value). */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AB_R_CS_PRIO_S;
-typedef union { /* OFFSET:0xb0 ADLAK_AB_R_LS_PRIO */
-    struct {
-        uint32_t ab_r_ls_arb_prio : 20; /* The arbitration priority weight of read lite port. 4bit
-                                      per port. The wight is pow2(value). */
-        uint32_t : 12;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AB_R_LS_PRIO_S;
-typedef union { /* OFFSET:0xb4 ADLAK_AB_R_L2_PRIO */
-    struct {
-        uint32_t
-            ab_r_mem_l2_arb_prio : 8; /* The priority weight of memory read level 2 arbiter. The
-                                     ports are include smmu [11:8], decoder [7:4] and normal
-                                     read [3:0]. 4bit per port. The wight is pow2(value). */
-        uint32_t : 23;
-        uint32_t ab_r_mem_hp_mode : 1; /*The save mode of high priority path for smmu.
-                                     [0]: normal performance mode. The respond is out of order and
-                                     interleaved. [1]: save mode. The respond data is reordered by
-                                     AB.
-                                     */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AB_R_L2_PRIO_S;
-typedef union { /* OFFSET:0xb8 ADLAK_AB_W_PRIO */
-    struct {
-        uint32_t ab_w_arb_prio : 10; /* The arbitration priority weight of write port. 2bit per
-                                   port. The wight is pow2(value). */
-        uint32_t : 4;
-        uint32_t ab_w_enc_arb_prio : 2; /* The arbitration priority weight of write encoder port.
-                                      2bit per port. The wight is pow2(value). */
-        uint32_t : 16;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AB_W_PRIO_S;
-typedef union { /* OFFSET:0xbc ADLAK_AB_AXI_USER */
-    struct {
-        uint32_t ab_axi_user_mem : 16;  /* AXI user id for external memory aruser and awuser */
-        uint32_t ab_axi_user_sram : 16; /* AXI user id for axi sram aruser and awuser */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AB_AXI_USER_S;
+
 typedef union { /* OFFSET:0xc0 ADLAK_SMMU_EN */
     struct {
         uint32_t smmu_en : 1;    /* smmu enable */
@@ -527,31 +272,7 @@ typedef union { /* OFFSET:0xc0 ADLAK_SMMU_EN */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_SMMU_EN_S;
-typedef union { /* OFFSET:0xc4 ADLAK_SMMU_TTBR_L */
-    struct {
-        uint32_t smmu_ttbr_l : 32; /* None */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_TTBR_L_S;
-typedef union { /* OFFSET:0xc8 ADLAK_SMMU_TTBR_H */
-    struct {
-        uint32_t smmu_ttbr_h : 32; /* None */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_TTBR_H_S;
-typedef union { /* OFFSET:0xcc ADLAK_SMMU_PRIO_POW2_0 */
-    struct {
-        uint32_t smmu_tlb_vab_prio_pow2_0 : 32; /* None */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_PRIO_POW2_0_S;
-typedef union { /* OFFSET:0xd0 ADLAK_SMMU_PRIO_POW2_1 */
-    struct {
-        uint32_t smmu_tlb_vab_prio_pow2_1 : 24; /* None */
-        uint32_t : 8;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_PRIO_POW2_1_S;
+
 typedef union { /* OFFSET:0xd4 ADLAK_SMMU_INV_CTL */
     struct {
         uint32_t smmu_invalid_rdy : 1; /* smmu invalid ready */
@@ -568,33 +289,7 @@ typedef union { /* OFFSET:0xd4 ADLAK_SMMU_INV_CTL */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_SMMU_INV_CTL_S;
-typedef union { /* OFFSET:0xd8 ADLAK_SMMU_INV_VA */
-    struct {
-        uint32_t smmu_invalid_addr : 32; /* smmu invalid one virtual address */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_INV_VA_S;
-typedef union { /* OFFSET:0xdc ADLAK_SMMU_DFT */
-    struct {
-        uint32_t
-            smmu_dft_pa4kb : 22; /* smmu default-pa of the translation of va2pa, unit: 4k bypte */
-        uint32_t : 10;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_DFT_S;
-typedef union { /* OFFSET:0xe0 ADLAK_SMMU_IVD_MDL */
-    struct {
-        uint32_t smmu_ivd_mdl_id : 5; /* the id of the module which send an invalid-va */
-        uint32_t : 27;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_IVD_MDL_S;
-typedef union { /* OFFSET:0xe4 ADLAK_SMMU_IVD_VA */
-    struct {
-        uint32_t smmu_ivd_mdl_va : 32; /* the invalid-va address, unit: byte */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_SMMU_IVD_VA_S;
+
 typedef union { /* OFFSET:0xf0 ADLAK_PM_EN */
     struct {
         uint32_t pm_en : 2;    /* pm enable
@@ -606,12 +301,7 @@ typedef union { /* OFFSET:0xf0 ADLAK_PM_EN */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_PM_EN_S;
-typedef union { /* OFFSET:0xf4 ADLAK_PM_RBF_BASE */
-    struct {
-        uint32_t pm_rbf_base : 32; /* base address, unit: byte, need 256 byte aligned */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_PM_RBF_BASE_S;
+
 typedef union { /* OFFSET:0xf8 ADLAK_PM_RBF_SIZE */
     struct {
         uint32_t pm_rbf_size : 28; /* memory size, unit: byte, need 256 byte aligned, max 256M */
@@ -619,6 +309,7 @@ typedef union { /* OFFSET:0xf8 ADLAK_PM_RBF_SIZE */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_PM_RBF_SIZE_S;
+
 typedef union { /* OFFSET:0xfc ADLAK_PM_RBF_WPT */
     struct {
         uint32_t
@@ -642,41 +333,6 @@ typedef union { /* OFFSET:0x104 ADLAK_PM_STS */
     } bitc;
     uint32_t all;
 } HAL_ADLAK_PM_STS_S;
-typedef union { /* OFFSET:0x110 ADLAK_AXIBRG_DX_CTL */
-    struct {
-        uint32_t axibrg_dx_force_stop_en : 1;   /* Enable DRAM AXIBRG force stop */
-        uint32_t axibrg_dx_force_stop_idle : 1; /* Bus idle of DRAM AXIBRG force stop */
-        uint32_t : 30;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AXIBRG_DX_CTL_S;
-typedef union { /* OFFSET:0x114 ADLAK_AXIBRG_DX_HOLD */
-    struct {
-        uint32_t axibrg_dx_holdnum : 32; /* DRAM AXIBRG hold number */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AXIBRG_DX_HOLD_S;
-typedef union { /* OFFSET:0x118 ADLAK_AXIBRG_SX_CTL */
-    struct {
-        uint32_t axibrg_sx_force_stop_en : 1;   /* Enable SRAM AXIBRG force stop */
-        uint32_t axibrg_sx_force_stop_idle : 1; /* Bus idle of SRAM AXIBRG force stop */
-        uint32_t : 30;
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AXIBRG_SX_CTL_S;
-typedef union { /* OFFSET:0x11c ADLAK_AXIBRG_SX_HOLD */
-    struct {
-        uint32_t axibrg_sx_holdnum : 32; /* SRAM AXIBRG hold number */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_AXIBRG_SX_HOLD_S;
-typedef union { /* OFFSET:0x120 ADLAK_MC_CTL */
-    struct {
-        uint32_t mc_ctl : 32; /* [0]: mc union clock gating enable
-                                                 [31:1]: reserved */
-    } bitc;
-    uint32_t all;
-} HAL_ADLAK_MC_CTL_S;
 
 #ifdef __cplusplus
 }

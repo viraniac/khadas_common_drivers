@@ -52,19 +52,22 @@ int adlak_create_context(void *adlak_device, struct adlak_context **p_context) {
     }
 
     INIT_LIST_HEAD(&context->sbuf_list);
-    INIT_LIST_HEAD(&context->net_list);
     adlak_os_mutex_init(&context->context_mutex);
 
     adlak_os_mutex_lock(&context->context_mutex);
     context->padlak     = adlak_device;
     context->state      = CONTEXT_STATE_INITED;
     context->invoke_cnt = 0;
-    ++padlak->net_id;
-    if (padlak->net_id < 0) {
-        padlak->net_id = 0;
+    ++padlak->net_count;
+    if (padlak->net_count < 0) {
+        padlak->net_count = 0;
     }
-    context->net_id      = padlak->net_id;
+    context->net_id      = padlak->net_count;
     context->mem_alloced = 0;
+
+    context->macc_count = 0;
+    context->invoke_time_elapsed_tmp = 0;
+    context->invoke_time_elapsed_total = 0;
 
     context->smmu_tlb_updated = 0;
     AML_LOG_DEBUG("new context created, net_id[%d]", context->net_id);
@@ -87,21 +90,14 @@ end:
 }
 
 int adlak_net_dettach_by_id(struct adlak_context *context, int net_id) {
-    int                ret   = 0;
-    struct adlak_task *ptask = NULL, *ptask_tmp = NULL;
-    struct list_head * hd = &context->net_list;
-    AML_LOG_DEBUG("%s", __func__);
-    if (!list_empty(hd)) {
-        list_for_each_entry_safe(ptask, ptask_tmp, hd, head) {
-            {
-                if ((net_id != -1) && (net_id != ptask->net_id)) {
-                    continue;
-                }
-                ret++;
-                list_del(&ptask->head);
-                adlak_task_destroy(ptask);
-            }
-        }
+    int ret = 0;
+    if (context->pmodel_attr) {
+        AML_LOG_DEBUG("%s", __func__);
+        ret++;
+        /*destroy the private command queue*/
+        adlak_destroy_command_queue_private(context->pmodel_attr);
+        adlak_model_destroy(context->pmodel_attr);
+        context->pmodel_attr = NULL;
     }
     return ret;
 }
@@ -257,24 +253,28 @@ int adlak_destroy_all_context(struct adlak_device *padlak) {
 }
 
 int adlak_context_flush_cache(struct adlak_context *context) {
-    struct context_buf *sbuf = NULL, *sbuf_tmp = NULL;
+    struct context_buf *             sbuf = NULL, *sbuf_tmp = NULL;
+    struct adlak_sync_cache_ext_info sync_cache_extern;
 
     AML_LOG_DEBUG("%s", __func__);
+    sync_cache_extern.is_partial = 0;
     list_for_each_entry_safe(sbuf, sbuf_tmp, &context->sbuf_list, head) {
         if (sbuf) {
-            adlak_flush_cache(context->padlak, sbuf->mm_info);
+            adlak_flush_cache(context->padlak, sbuf->mm_info, &sync_cache_extern);
         }
     }
     return 0;
 }
 
 int adlak_context_invalid_cache(struct adlak_context *context) {
-    struct context_buf *sbuf = NULL, *sbuf_tmp = NULL;
+    struct context_buf *             sbuf = NULL, *sbuf_tmp = NULL;
+    struct adlak_sync_cache_ext_info sync_cache_extern;
 
     AML_LOG_DEBUG("%s", __func__);
+    sync_cache_extern.is_partial = 0;
     list_for_each_entry_safe(sbuf, sbuf_tmp, &context->sbuf_list, head) {
         if (sbuf) {
-            adlak_invalid_cache(context->padlak, sbuf->mm_info);
+            adlak_invalid_cache(context->padlak, sbuf->mm_info, &sync_cache_extern);
         }
     }
     return 0;

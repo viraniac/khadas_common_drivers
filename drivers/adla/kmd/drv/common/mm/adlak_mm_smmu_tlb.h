@@ -59,12 +59,10 @@ struct adlak_smmu_private {
 
 /************************** Function Prototypes ******************************/
 
-int  adlak_smmu_tlb_add(struct __adlak_smmu *psmmu, dma_addr_t iova_addr, phys_addr_t phys_addr,
-                        size_t size);
-int  adlak_smmu_tlb_del(struct __adlak_smmu *psmmu, dma_addr_t iova_addr);
-int  adlak_smmu_tlb_dump(struct __adlak_smmu *psmmu);
-void adlak_debug_mem_fill_as_address(struct adlak_mem_handle *mm_info);
-void adlak_debug_mem_dump(struct adlak_mem_handle *mm_info);
+int adlak_smmu_tlb_add(struct __adlak_smmu *psmmu, dma_addr_t iova_addr, phys_addr_t phys_addr,
+                       size_t size);
+int adlak_smmu_tlb_del(struct __adlak_smmu *psmmu, dma_addr_t iova_addr);
+int adlak_smmu_tlb_dump(struct __adlak_smmu *psmmu);
 
 int adlak_smmu_init(struct adlak_mem *mm);
 

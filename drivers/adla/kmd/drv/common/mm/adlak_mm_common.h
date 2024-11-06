@@ -62,10 +62,11 @@ enum adlak_mem_src {
 };
 
 enum adlak_mem_type_inner {
-    ADLAK_ENUM_MEMTYPE_INNER_CACHEABLE    = (1u << 0),
-    ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS   = (1u << 1),
-    ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G = (1u << 4),  // physical address less than 4Gbytes
-    ADLAK_ENUM_MEMTYPE_INNER_SHARE        = (1u << 5)
+    ADLAK_ENUM_MEMTYPE_INNER_USER_CACHEABLE   = (1u << 0),
+    ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS       = (1u << 1),
+    ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G     = (1u << 4),  // physical address less than 4Gbytes
+    ADLAK_ENUM_MEMTYPE_INNER_SHARE            = (1u << 5),
+    ADLAK_ENUM_MEMTYPE_INNER_KERNEL_CACHEABLE = (1u << 6)
 };
 
 struct adlak_mem_pool_info {
@@ -156,6 +157,13 @@ struct adlak_mem {
     struct adlak_share_swap_buf share_buf;
 };
 
+struct adlak_sync_cache_ext_info {
+    /*If the value of is_partial is 0, the values of offset and size will be ignored*/
+    int          is_partial;
+    unsigned int offset;
+    size_t       size;
+};
+
 #ifndef ADLAK_MM_POOL_PAGE_SHIFT
 #define ADLAK_MM_POOL_PAGE_SHIFT (12)
 #endif
@@ -174,9 +182,11 @@ unsigned long adlak_alloc_from_bitmap_pool(struct adlak_mm_pool_priv *pool, size
 
 void adlak_free_to_bitmap_pool(struct adlak_mm_pool_priv *pool, dma_addr_t start, size_t size);
 
-int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info);
+int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
+                      struct adlak_sync_cache_ext_info *sync_cache_ext_info);
 
-int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info);
+int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
+                        struct adlak_sync_cache_ext_info *sync_cache_ext_info);
 
 void adlak_mm_free(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
@@ -188,6 +198,10 @@ struct adlak_mem_handle *adlak_mm_attach(struct adlak_mem *            mm,
                                          struct adlak_extern_buf_info *pbuf_req);
 
 int adlak_mm_mmap(struct adlak_mem *mm, struct adlak_mem_handle *mm_info, void *const vma);
+
+void *adlak_mm_vmap(struct adlak_mem_handle *mm_info);
+
+void adlak_mm_vunmap(struct adlak_mem_handle *mm_info);
 
 #ifdef __cplusplus
 }

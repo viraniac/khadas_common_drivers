@@ -48,21 +48,21 @@ extern "C" {
 
 #define ADLAK_IOCTL_QUERYCAP _IOWR(ADLAK_IOCTL_MAGIC, 0, struct adlak_caps_desc)
 #define ADLAK_IOCTL_REQBUF _IOWR(ADLAK_IOCTL_MAGIC, 1, struct adlak_buf_req)
-#define ADLAK_IOCTL_FREEBUF _IOW(ADLAK_IOCTL_MAGIC, 2, struct adlak_buf_desc)
+#define ADLAK_IOCTL_FREEBUF _IOWR(ADLAK_IOCTL_MAGIC, 2, uint64_t)
 #define ADLAK_IOCTL_REGISTER_NETWORK _IOWR(ADLAK_IOCTL_MAGIC, 3, struct adlak_network_desc)
 #define ADLAK_IOCTL_DESTROY_NETWORK _IOWR(ADLAK_IOCTL_MAGIC, 4, struct adlak_network_del_desc)
 #define ADLAK_IOCTL_INVOKE _IOWR(ADLAK_IOCTL_MAGIC, 5, struct adlak_network_invoke_desc)
-#define ADLAK_IOCTL_INVOKE_CANCLE _IOWR(ADLAK_IOCTL_MAGIC, 6, struct adlak_network_invoke_del_desc)
+#define ADLAK_IOCTL_INVOKE_CANCEL _IOWR(ADLAK_IOCTL_MAGIC, 6, struct adlak_network_invoke_del_desc)
 #define ADLAK_IOCTL_GET_STAT _IOWR(ADLAK_IOCTL_MAGIC, 7, struct adlak_get_stat_desc)
-#define ADLAK_IOCTL_FlUSH_CACHE _IOW(ADLAK_IOCTL_MAGIC, 8, struct adlak_buf_flush)
+#define ADLAK_IOCTL_FLUSH_CACHE _IOW(ADLAK_IOCTL_MAGIC, 8, struct adlak_buf_flush)
 
 // #define ADLAK_IOCTL_REQIO _IOWR(ADLAK_IOCTL_MAGIC, 9, struct adlak_io_req)
 #define ADLAK_IOCTL_TEST _IOWR(ADLAK_IOCTL_MAGIC, 10, struct adlak_test_desc)
-#define ADLAK_IOCTL_DEBUG_MEM_COPY _IOW(ADLAK_IOCTL_MAGIC, 11, struct adlak_buf_desc)
+#define ADLAK_IOCTL_DEBUG_MEM_COPY _IOW(ADLAK_IOCTL_MAGIC, 11, uint64_t)
 
 #define ADLAK_IOCTL_ATTACH_EXTERN_BUF _IOWR(ADLAK_IOCTL_MAGIC, 12, struct adlak_extern_buf_info)
-#define ADLAK_IOCTL_DETTACH_EXTERN_BUF _IOW(ADLAK_IOCTL_MAGIC, 13, struct adlak_extern_buf_info)
-#define ADLAK_IOCTL_PRPOFILE_CFG _IOWR(ADLAK_IOCTL_MAGIC, 14, struct adlak_profile_cfg_desc)
+#define ADLAK_IOCTL_DETTACH_EXTERN_BUF _IOW(ADLAK_IOCTL_MAGIC, 13, uint64_t)
+#define ADLAK_IOCTL_PROFILE_CFG _IOWR(ADLAK_IOCTL_MAGIC, 14, struct adlak_profile_cfg_desc)
 #define ADLAK_IOCTL_WAIT_UNTIL_FINISH _IOWR(ADLAK_IOCTL_MAGIC, 15, struct adlak_get_stat_desc)
 
 /************************** Function Prototypes ******************************/

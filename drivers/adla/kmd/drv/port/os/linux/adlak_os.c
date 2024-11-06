@@ -187,6 +187,8 @@ char *adlak_os_asprintf(gfp_t gfp, const char *fmt, ...) {
 
 void adlak_os_msleep(unsigned int ms) { msleep(ms); }
 
+void adlak_os_udelay(unsigned int us) { udelay(us); }
+
 typedef struct adlak_os_mutex_inner {
     struct mutex mutex_hd;
 } adlak_os_mutex_inner_t;
@@ -383,8 +385,6 @@ int adlak_os_sema_give_from_isr(adlak_os_sema_t sem) {
 
 typedef struct adlak_os_thread_inner {
     struct task_struct *kthread;
-    void * (*function)(void *);
-    void * arg;
 } adlak_os_thread_inner_t;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
@@ -409,18 +409,11 @@ static void signaler_set_rtpriority(adlak_os_thread_t *pthrd) {
 }
 #endif
 
-int adlak_kthread_cpuid = -1;
+static int adlak_kthread_cpuid = -1;
 module_param_named(kthread_cpuid, adlak_kthread_cpuid, int, 0644);
 MODULE_PARM_DESC(kthread_cpuid, "bind adlak_kthread the a \"housekeeping\" CPU");
 
-static int adlak_os_thread_function(void *param) {
-    adlak_os_thread_inner_t * pthread_inner = (adlak_os_thread_inner_t *)param;
-    if (pthread_inner->function)
-        pthread_inner->function(pthread_inner->arg);
-    return 0;
-}
-
-int adlak_os_thread_create(adlak_os_thread_t *pthrd, void *(*func)(void *), void *arg) {
+int adlak_os_thread_create(adlak_os_thread_t *pthrd, adlak_thread_cb_func_t func, void *arg) {
     static uint32_t          thread_num    = 0;
     adlak_os_thread_inner_t *pthread_inner = NULL;
 
@@ -432,10 +425,7 @@ int adlak_os_thread_create(adlak_os_thread_t *pthrd, void *(*func)(void *), void
         return ERR(ENOMEM);
     }
     pthrd->thrd_should_stop = 0;
-    pthread_inner->function = func;
-    pthread_inner->arg = arg;
-    pthread_inner->kthread =
-        kthread_create(adlak_os_thread_function, (void *)pthread_inner, "adlak_kthread_%d", thread_num);
+    pthread_inner->kthread  = kthread_create(func, (void *)arg, "adlak_kthread_%d", thread_num);
     if (ADLAK_IS_ERR_OR_NULL(pthread_inner->kthread)) {
         adlak_os_free(pthread_inner);
         pthrd->handle = (void *)pthread_inner;
@@ -459,7 +449,7 @@ int adlak_os_thread_create(adlak_os_thread_t *pthrd, void *(*func)(void *), void
     return ERR(NONE);
 }
 
-int adlak_os_thread_detach(adlak_os_thread_t *pthrd) {
+int adlak_os_thread_detach(adlak_os_thread_t *pthrd, void (*thread_finalize)(void *), void *arg) {
     int                      ret;
     adlak_os_thread_inner_t *pthread_inner = (adlak_os_thread_inner_t *)pthrd->handle;
     PRINT_FUNC_NAME;
@@ -468,6 +458,9 @@ int adlak_os_thread_detach(adlak_os_thread_t *pthrd) {
         if (pthread_inner->kthread) {
             pthrd->thrd_should_stop = 1;
 
+            if (thread_finalize) {
+                thread_finalize(arg);
+            }
             ret = kthread_stop(pthread_inner->kthread);
             if (ret) {
                 AML_LOG_ERR("pthread_detach fail!\n");
@@ -494,17 +487,9 @@ void adlak_os_thread_yield(void) {
 typedef struct adlak_os_timer_inner {
     struct timer_list timer;
     unsigned long     flags;
-    void (*function)(void *);
-    void * param;
 } adlak_os_timer_inner_t;
 
-static void adlak_os_timer_function(struct timer_list * ptimer) {
-    adlak_os_timer_inner_t * ptimer_inner = container_of(ptimer, adlak_os_timer_inner_t, timer);
-    if (ptimer_inner->function)
-        ptimer_inner->function(ptimer_inner->param);
-}
-
-int adlak_os_timer_init(adlak_os_timer_t *ptim, void (*func)(void *), void *param) {
+int adlak_os_timer_init(adlak_os_timer_t *ptim, adlak_timer_cb_func_t func, void *param) {
     adlak_os_timer_inner_t *ptimer_inner = NULL;
     PRINT_FUNC_NAME;
     ptimer_inner =
@@ -512,9 +497,7 @@ int adlak_os_timer_init(adlak_os_timer_t *ptim, void (*func)(void *), void *para
     if (ADLAK_IS_ERR_OR_NULL(ptimer_inner)) {
         return ERR(ENOMEM);
     }
-    ptimer_inner->function = func;
-    ptimer_inner->param = param;
-    timer_setup(&ptimer_inner->timer, adlak_os_timer_function, 0);
+    timer_setup(&ptimer_inner->timer, func, 0);
     *ptim = ptimer_inner;
     AML_LOG_DEBUG("timer_init success!\n");
     return ERR(NONE);
@@ -546,18 +529,26 @@ int adlak_os_timer_del(adlak_os_timer_t *ptim) {
 
 int adlak_os_timer_add(adlak_os_timer_t *ptim, unsigned int timeout_ms) {
     adlak_os_timer_inner_t *ptimer_inner = (adlak_os_timer_inner_t *)*ptim;
-    unsigned long           expire;
     PRINT_FUNC_NAME;
 
     if (ptimer_inner != NULL) {
-        expire                      = jiffies + msecs_to_jiffies(timeout_ms);
-        ptimer_inner->timer.expires = round_jiffies_relative(expire);
+        ptimer_inner->timer.expires = jiffies + msecs_to_jiffies(timeout_ms);
         add_timer(&ptimer_inner->timer);
         return ERR(NONE);
     }
     return ERR(EINVAL);
 }
 
+int adlak_os_timer_modify(adlak_os_timer_t *ptim, unsigned int timeout_ms) {
+    adlak_os_timer_inner_t *ptimer_inner = (adlak_os_timer_inner_t *)*ptim;
+    PRINT_FUNC_NAME;
+
+    if (ptimer_inner != NULL) {
+        mod_timer(&ptimer_inner->timer, jiffies + msecs_to_jiffies(timeout_ms));
+        return ERR(NONE);
+    }
+    return ERR(EINVAL);
+}
 /**
  * @brief task wait handle init
  *
