@@ -34,14 +34,10 @@ extern "C" {
 /**************************Type Definition and Structure**********************/
 
 struct adlak_buf_desc {
-    uint64_t iova_addr;     /* virtual address in smmu*/
-    uint64_t va_user;       /* virtual address in user mode*/
-    uint64_t va_kernel;     /* virtual address in kernel mode*/
-    uint64_t phys_addr;     /* physical base address if mem_type is contiguous*/
-    uint64_t bytes;         /*return real size*/
-    uint32_t mem_type;      /*request info*/
-    uint32_t mem_src;       /*request info*/
-    uint32_t mem_direction; /*request info*/
+    uint64_t iova_addr; /* virtual address in smmu*/
+    uint64_t va_user;   /* virtual address in user mode*/
+    uint64_t phys_addr; /* physical base address if mem_type is contiguous*/
+    uint64_t bytes;     /*return real size*/
 } __packed;
 
 enum adlak_mem_type {
@@ -59,21 +55,27 @@ enum adlak_mem_direction {
 } __packed;
 
 struct adlak_buf_req {
+    uint64_t              mem_handle;    /* return memory info handle in kernel */
     uint64_t              bytes;         /* bytes requested to allocate */
     uint32_t              align_in_page; /* alignment requirements (in 4KB) */
     uint32_t              data_type;     /* type of data in the buffer to allocate */
+    uint32_t              mem_type;      /*request info*/
+    uint32_t              mem_direction; /*request info*/
     struct adlak_buf_desc ret_desc;      /* info of buffer successfully allocated */
     uint32_t              mmap_en;       /* the flag of mmap */
     uint32_t              errcode;       /* return err number */
 } __packed;
 
 struct adlak_extern_buf_info {
-    uint64_t              buf_handle; /* buf handle */
-    uint64_t              bytes;      /* bytes of buffer */
-    uint32_t              buf_type;   /* type of buf handle */
-    struct adlak_buf_desc ret_desc;   /* info of buffer successfully import */
-    uint32_t              mmap_en;    /* the flag of mmap */
-    uint32_t              errcode;    /* return err number */
+    uint64_t              mem_handle;    /* return memory info handle in kernel */
+    uint64_t              buf_handle;    /* buf handle */
+    uint64_t              bytes;         /* bytes of buffer */
+    uint32_t              buf_type;      /* type of buf handle */
+    uint32_t              mem_type;      /*request info*/
+    uint32_t              mem_direction; /*request info*/
+    struct adlak_buf_desc ret_desc;      /* info of buffer successfully import */
+    uint32_t              mmap_en;       /* the flag of mmap */
+    uint32_t              errcode;       /* return err number */
 } __packed;
 
 enum adlak_flush_cache_direction {
@@ -83,13 +85,35 @@ enum adlak_flush_cache_direction {
 };
 
 struct adlak_buf_flush {
-    struct adlak_buf_desc buf_desc; /* info of buffer  */
-    uint32_t              direction;
-    uint32_t              errcode; /* return err number */
+    uint64_t mem_handle; /* info of buffer  */
+    uint32_t direction;
+    uint32_t is_partial; /* is dma sync partial*/
+    uint64_t offset;
+    uint64_t size;
+    uint32_t errcode; /* return err number */
 } __packed;
 
+struct adlak_cmd_buf_attr {
+    int32_t  support;
+    uint32_t reserve_count_modify_head;
+    uint32_t reserve_count_modify_tail;
+    uint32_t reserve_count_common_head;
+    uint32_t reserve_count_common_tail;
+    uint64_t mem_handle;
+} __packed;
+
+enum adlak_context_priority {
+    ADLAK_CONTEXT_PRIORITY_DEFAULT = 0,
+    ADLAK_CONTEXT_PRIORITY_HIGH,
+};
+
+enum adlak_cmq_buffer_type {
+    ADLAK_CMQ_BUFFER_TYPE_PRIVATE = 0,
+    ADLAK_CMQ_BUFFER_TYPE_PUBLIC,
+};
+
 struct adlak_network_desc {
-    int32_t  config_size;
+    int32_t  config_total_size;
     int32_t  dep_fixups_num;
     int32_t  reg_fixups_num;
     int32_t  tasks_num;
@@ -100,7 +124,11 @@ struct adlak_network_desc {
     int32_t  profile_en;  // profilling enable
     uint64_t profile_iova;
     uint32_t profile_buf_size;
+    int32_t  cmq_buffer_type;
+    uint32_t priority;          // submit priority
     int32_t  net_register_idx;  // return from kmd
+    int64_t  macc_count;
+    struct adlak_cmd_buf_attr cmd_buf_attr;
 
 } __packed;
 
@@ -132,7 +160,7 @@ struct adlak_get_stat_desc {
     int32_t  end_idx;         // return from kmd
     int32_t  ret_state;       // 0: success,1:running,-1: timeout, -3: other err
     int32_t  profile_en;      // profilling enable
-    uint32_t profile_rpt;     // profilling read point
+    uint32_t profile_rpt;     // deprecated
     int32_t  invoke_time_us;  // invoke time which get from os
 
     uint64_t axi_freq_cur;      // adlak axi clock frequency currently

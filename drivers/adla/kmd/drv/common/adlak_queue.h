@@ -36,40 +36,34 @@ extern "C" {
 /**************************Global Variable************************************/
 
 /**************************Type Definition and Structure**********************/
-struct adlak_global_id {
-    int32_t  global_id_rs;
-    int32_t  global_id_pwe;
-    int32_t  global_id_pwx;
-    uint32_t global_id_sw;  // global sw index
-    uint32_t global_time_stamp;
-    int32_t  start_id_rs;
-    int32_t  start_id_pwe;
-    int32_t  start_id_pwx;
-};
 
 struct adlak_dev_inference {
     adlak_os_spinlock_t spinlock;
     adlak_os_sema_t     sem_irq;
+    adlak_os_sema_t     sem_dpm;
     adlak_os_timer_t    emu_timer;
     adlak_os_timer_t    dpm_timer;
     adlak_os_thread_t   thrd_inference;
-    uint32_t            dmp_timeout;
+    unsigned int        dpm_period_set;
+    uint32_t            wq_idel_cnt;
+    uint32_t            cnt_elapsed;
+    uint32_t            cnt_idel;
+    uint32_t            cnt_busy;
 };
 struct adlak_workqueue {
     adlak_os_mutex_t wq_mutex;
     adlak_os_sema_t  wk_update;
-    struct list_head pending_list;
+    struct list_head pending_list;  // invoke list
     struct list_head scheduled_list;
     struct list_head finished_list;
 
     int   sched_num;
     int   sched_num_max;
     int   pending_num;
-    int   valid_num;
+    int   submit_num;
     int   finished_num;
     void *ptask_sch_cur;
-
-    struct adlak_global_id id_cur;  // for rollback
+    void *cmq_buffer_pre;  // the previous cmq buffer that submit
 
     struct adlak_dev_inference dev_inference;
 };
@@ -80,10 +74,6 @@ int adlak_queue_deinit(struct adlak_device *padlak);
 int adlak_queue_reset(struct adlak_device *padlak);
 
 int adlak_debug_invoke_list_dump(struct adlak_device *padlak, uint32_t debug);
-
-int adlak_test_irq_emu(struct adlak_device *padlak);
-
-uint32_t adlak_cmd_get_sw_id(struct adlak_workqueue *pwq);
 
 int adlak_dev_inference_init(struct adlak_device *padlak);
 int adlak_dev_inference_deinit(struct adlak_device *padlak);

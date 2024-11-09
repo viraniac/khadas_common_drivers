@@ -62,6 +62,7 @@ int   adlak_os_printf(const char *format, ...);
 int   adlak_os_snprintf(char *buffer, ssize_t buf_size, const char *format, ...);
 char *adlak_os_asprintf(gfp_t gfp, const char *fmt, ...);
 void  adlak_os_msleep(unsigned int ms);
+void  adlak_os_udelay(unsigned int us);
 
 uintptr_t     adlak_os_msecs_to_jiffies(uintptr_t ms);
 typedef void *adlak_os_mutex_t;
@@ -84,23 +85,34 @@ int adlak_os_sema_take_timeout(adlak_os_sema_t sem, unsigned int time_ms);
 int adlak_os_sema_give(adlak_os_sema_t sem);
 int adlak_os_sema_give_from_isr(adlak_os_sema_t sem);
 
+// avoid CFI security check fail
+#ifndef CONFIG_ADLA_FREERTOS
+typedef struct timer_list *adlak_os_timer_cb_t;
+typedef int (*adlak_thread_cb_func_t)(void *);
+typedef void (*adlak_timer_cb_func_t)(adlak_os_timer_cb_t);
+#else
+typedef TimerHandle_t adlak_os_timer_cb_t;
+typedef void *(*adlak_thread_cb_func_t)(void *);
+typedef void (*adlak_timer_cb_func_t)(adlak_os_timer_cb_t);
+#endif
+
 typedef struct {
     void *       handle;
     unsigned int thrd_should_stop;
 } adlak_os_thread_t;
 
-int  adlak_os_thread_create(adlak_os_thread_t *pthrd, void *(*func)(void *), void *arg);
+int  adlak_os_thread_create(adlak_os_thread_t *pthrd, adlak_thread_cb_func_t, void *arg);
 int  adlak_os_thread_join(adlak_os_thread_t *pthrd);
-int  adlak_os_thread_detach(adlak_os_thread_t *pthrd);
+int  adlak_os_thread_detach(adlak_os_thread_t *pthrd, void (*thread_finalize)(void *), void *arg);
 void adlak_os_thread_yield(void);
 
 typedef void *adlak_os_timer_t;
-
-int adlak_os_timer_init(adlak_os_timer_t *ptim, void (*func)(void *), void *param);
-int adlak_os_timer_destroy(adlak_os_timer_t *ptim);
-int adlak_os_timer_del(adlak_os_timer_t *ptim);
+int           adlak_os_timer_init(adlak_os_timer_t *ptim, adlak_timer_cb_func_t, void *param);
+int           adlak_os_timer_destroy(adlak_os_timer_t *ptim);
+int           adlak_os_timer_del(adlak_os_timer_t *ptim);
 
 int adlak_os_timer_add(adlak_os_timer_t *ptim, unsigned int timeout_ms);
+int adlak_os_timer_modify(adlak_os_timer_t *ptim, unsigned int timeout_ms);
 
 int adlak_to_umd_sinal_init(uintptr_t *hd);
 int adlak_to_umd_sinal_deinit(uintptr_t *hd);

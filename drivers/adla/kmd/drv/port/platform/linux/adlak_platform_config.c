@@ -103,7 +103,6 @@ extern uint32_t g_adlak_emu_dev_cmq_total_size;
 #endif
 struct regulator            *nn_regulator;
 int                         nn_regulator_flag;
-extern int                  adlak_kthread_cpuid;
 
 /************************** Function Prototypes ******************************/
 
@@ -456,7 +455,6 @@ int adlak_voltage_init(void *data) {
 
 int adlak_voltage_uninit(void *data) {
     int ret = 0;
-    struct adlak_device *padlak = (struct adlak_device *)data;
 
     if (nn_regulator)
     {
@@ -526,10 +524,6 @@ int adlak_platform_get_resource(void *data) {
 
     padlak->nn_dts_hw_ver = (int)adlak_get_nn_hw_version(padlak->dev);
     padlak->nn_regulator_type = (int)adlak_regulator_nn_available(padlak->dev);
-    /* t7c & s5 bind kthread to cpu1 */
-    if (padlak->nn_dts_hw_ver == Adla_Hw_Ver_r2p0 || padlak->nn_dts_hw_ver == Adla_Hw_Ver_r1p0) {
-        adlak_kthread_cpuid = 1;
-    }
 
     /* get ADLAK IO */
 
@@ -586,13 +580,11 @@ int adlak_platform_get_resource(void *data) {
     padlak->hw_timeout_ms = (adlak_sch_time_max_ms);
     AML_LOG_DEBUG("padlak->hw_timeout_ms =  %d ms", adlak_sch_time_max_ms);
 
-    padlak->cmq_buf_info.size       = ADLAK_ALIGN(adlak_cmd_queue_size, 256);
-    padlak->cmq_buf_info.total_size = padlak->cmq_buf_info.size;
+    padlak->cmq_buffer_public.size = ADLAK_ALIGN(adlak_cmd_queue_size, 256);
 #if CONFIG_ADLAK_EMU_EN
-    g_adlak_emu_dev_cmq_total_size = padlak->cmq_buf_info.total_size;
+    g_adlak_emu_dev_cmq_total_size = padlak->cmq_buffer_public.size;
 #endif
-    AML_LOG_DEBUG("cmq_size=%d byte,total size=%d", padlak->cmq_buf_info.size,
-                  padlak->cmq_buf_info.total_size);
+    AML_LOG_DEBUG("cmq_size=%d byte", padlak->cmq_buffer_public.size);
 
     if (adlak_dependency_mode >= ADLAK_DEPENDENCY_MODE_COUNT) {
         adlak_dependency_mode = ADLAK_DEPENDENCY_MODE_MODULE_H_COUNT;
@@ -602,7 +594,7 @@ int adlak_platform_get_resource(void *data) {
 
     padlak->clk_axi = devm_clk_get(padlak->dev, "adla_axi_clk");
     if (IS_ERR(padlak->clk_axi)) {
-        AML_LOG_WARN("Failed to get adla_axi_clk\n");
+        AML_LOG_DEBUG("Failed to get adla_axi_clk\n");
     }
     padlak->clk_core = devm_clk_get(padlak->dev, "adla_core_clk");
     if (IS_ERR(padlak->clk_core)) {
@@ -713,6 +705,7 @@ void adlak_platform_set_clock(void *data, bool enable, int core_freq, int axi_fr
             }
             padlak->is_clk_core_enabled = false;
         }
+        padlak->clk_core_freq_real = 0;
     } else {
         // clk enable
         if (false == padlak->is_clk_axi_enabled) {
@@ -732,6 +725,7 @@ void adlak_platform_set_clock(void *data, bool enable, int core_freq, int axi_fr
                 }
                 padlak->is_clk_core_enabled = true;
             }
+        }
             if (!ADLAK_IS_ERR_OR_NULL(padlak->clk_axi)) {
                 clk_set_rate(padlak->clk_axi, axi_freq);
                 if (ret) {
@@ -748,10 +742,10 @@ void adlak_platform_set_clock(void *data, bool enable, int core_freq, int axi_fr
                 }
                 padlak->clk_core_freq_real = (int)clk_get_rate(padlak->clk_core);
 
-                adlak_os_printf("adlak_core clk requirement of %d Hz,and real val is %d Hz.",
+                AML_LOG_DEBUG("adlak_core clk requirement of %d Hz,and real val is %d Hz.",
                                 core_freq, padlak->clk_core_freq_real);
             }
-        }
+        //}
     }
     adlak_dpm_clk_update(padlak, core_freq, axi_freq);
 }
@@ -763,6 +757,7 @@ void adlak_platform_set_power(void *data, bool enable) {
 #endif
     AML_LOG_DEBUG("%s", __func__);
     if (false == enable) {
+        AML_LOG_WARN("adla power off\n");
 #if CONFIG_HAS_PM_DOMAIN
         pm_runtime_put_sync(padlak->dev);
         if (pm_runtime_enabled(padlak->dev)) {
@@ -771,6 +766,7 @@ void adlak_platform_set_power(void *data, bool enable) {
 #endif
 
     } else {
+        AML_LOG_WARN("adla power on\n");
 #if CONFIG_HAS_PM_DOMAIN
         pm_runtime_enable(padlak->dev);
         if (pm_runtime_enabled(padlak->dev)) {
@@ -793,12 +789,14 @@ int adlak_platform_pm_init(void *data) {
         AML_LOG_ERR("Get power failed\n");
         goto end;
     }
+
+    adlak_os_sema_init(&padlak->sem_pm_wakeup, 1, 0);
+    padlak->pm_suspend = false;
     // power on
     adlak_platform_set_power(padlak, true);
     // clk enable
     adlak_platform_set_clock(padlak, true, padlak->clk_core_freq_set, padlak->clk_axi_freq_set);
-    padlak->is_suspend       = false;
-    padlak->need_reset_queue = true;
+    padlak->is_suspend = false;
 end:
     return ret;
 }
@@ -810,6 +808,7 @@ void adlak_platform_pm_deinit(void *data) {
     // power off
     adlak_platform_set_power(padlak, false);
     padlak->is_suspend = true;
+    adlak_os_sema_destroy(&padlak->sem_pm_wakeup);
 }
 
 void adlak_platform_resume(void *data) {
@@ -833,8 +832,7 @@ void adlak_platform_suspend(void *data) {
     AML_LOG_INFO("%s", __func__);
     if (false == padlak->is_suspend) {
         adlak_hw_dev_suspend(padlak);
-        padlak->is_suspend       = true;
-        padlak->need_reset_queue = true;
+        padlak->is_suspend = true;
         // clk disable
         adlak_platform_set_clock(padlak, false, 0, 0);
         // power off

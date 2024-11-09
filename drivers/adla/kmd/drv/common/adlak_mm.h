@@ -44,23 +44,28 @@ extern "C" {
 /**************************Type Definition and Structure**********************/
 
 int adlak_mem_alloc_request(struct adlak_context *context, struct adlak_buf_req *pbuf_req);
-int adlak_mem_free_request(struct adlak_context *context, struct adlak_buf_desc *pbuf_desc);
+int adlak_mem_free_request(struct adlak_context *context, uint64_t mem_handle);
 int adlak_mem_free_all_context(struct adlak_context *context);
 int adlak_ext_mem_attach_request(struct adlak_context *        context,
                                  struct adlak_extern_buf_info *pbuf_req);
-int adlak_ext_mem_dettach_request(struct adlak_context *        context,
-                                  struct adlak_extern_buf_info *pbuf_desc);
+int adlak_ext_mem_dettach_request(struct adlak_context *context, uint64_t mem_handle);
 int adlak_mem_flush_request(struct adlak_context *context, struct adlak_buf_flush *pflush_desc);
 
 int adlak_mem_init(struct adlak_device *padlak);
 
 int adlak_mem_deinit(struct adlak_device *padlak);
 
-int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info);
+int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
+                      struct adlak_sync_cache_ext_info *sync_cache_ext_info);
 
-int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info);
+int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
+                        struct adlak_sync_cache_ext_info *sync_cache_ext_info);
 
 int adlak_mem_mmap(struct adlak_context *context, void *const vma, uint64_t iova);
+
+struct adlak_mem_handle *adlak_cmq_buf_alloc(struct adlak_mem *mm, size_t size);
+
+void adlak_cmq_buf_free(struct adlak_mem *mm, struct adlak_mem_handle *cmq_mm_info);
 
 #ifdef __cplusplus
 }

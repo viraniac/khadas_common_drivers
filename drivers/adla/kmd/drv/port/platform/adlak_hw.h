@@ -70,8 +70,6 @@ struct adlak_irq_status {
 };
 
 struct adlak_hw_stat {
-    HAL_ADLAK_CLK_IDLE_CNT_S clk_cnt;
-
     uint32_t                ps_finish_id;
     uint32_t                ps_status;
     uint32_t                ps_err_dat;
@@ -155,6 +153,16 @@ void adlak_hw_dev_resume(void *data);
 void adlak_hw_dev_suspend(void *data);
 
 int adlak_check_dev_is_idle(void *data);
+
+int adlak_hal_parser_resume(void *data, void *parser_storage);
+
+int adlak_hal_save_parser_info(void *data, void *parser_storage);
+
+int adlak_hal_check_preempt_is_done(void *data);
+
+void     adlak_hal_set_preempt(void *data);
+uint32_t adlak_hal_get_reg(void *data, uint32_t offset);
+
 #ifdef __cplusplus
 }
 #endif

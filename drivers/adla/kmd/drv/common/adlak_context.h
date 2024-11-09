@@ -45,17 +45,21 @@ struct context_buf {
 
 /**
  * @brief private data struct for every file open operation
+ * a context binds only one model
  *
  */
 struct adlak_context {
     struct list_head     head;
     struct adlak_device *padlak;
     struct list_head     sbuf_list;
-    struct list_head     net_list;
     adlak_os_mutex_t     context_mutex;
     uintptr_t            wait;  // wait_queue_head_t *
     uint32_t             state;
     uint32_t             invoke_cnt;
+
+    uint32_t             invoke_time_elapsed_total;
+    uint32_t             invoke_time_elapsed_tmp;
+    int64_t              macc_count;
 
     uint32_t        smmu_tlb_updated;
     adlak_os_sema_t invoke_state;
@@ -68,6 +72,7 @@ struct adlak_context {
 #ifdef CONFIG_ADLAK_DEBUG_INNNER
     struct adlak_dbg_info *dbg_info;
 #endif
+    struct adlak_model_attr *pmodel_attr;
 
     adlak_os_sema_t ctx_idle;
 };
