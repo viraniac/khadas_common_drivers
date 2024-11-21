@@ -71,28 +71,32 @@ int adlak_submit_wait(struct adlak_dev_inference *pinference, struct adlak_task 
 #endif
 
     AML_LOG_INFO("set submit hw_timeout_ms=%u ms", ptask->context->pmodel_attr->hw_timeout_ms);
-    do {
-        ret = adlak_os_sema_take_timeout(pinference->sem_irq,
-                                         ptask->context->pmodel_attr->hw_timeout_ms);
-        if (ERR(NONE) == ret) {
-            AML_LOG_INFO("%s\n", "sema_take success");
-            timeout = false;
-            break;
-        } else {
-            AML_LOG_WARN("%s\n", "sema_take_timeout");
-            timeout = true;
+    if (ptask->context->pmodel_attr->hw_timeout_ms) {
+        do {
+            ret = adlak_os_sema_take_timeout(pinference->sem_irq,
+                                             ptask->context->pmodel_attr->hw_timeout_ms);
+            if (ERR(NONE) == ret) {
+                AML_LOG_INFO("%s\n", "sema_take success");
+                timeout = false;
+                break;
+            } else {
+                AML_LOG_WARN("%s\n", "sema_take_timeout");
+                timeout = true;
 #if defined(CONFIG_ADLAK_EMU_EN) && (CONFIG_ADLAK_EMU_EN == 1)
-            adlak_os_timer_del(&pinference->emu_timer);
-            break;
+                adlak_os_timer_del(&pinference->emu_timer);
+                break;
 #endif
+            }
+            repeat++;
+        } while (repeat < 2);
+        ptask->hw_stat.irq_status.timeout = timeout;
+        if (true == timeout) {
+            adlak_os_spinlock_lock(&padlak->spinlock);
+            adlak_irq_proc(padlak);
+            adlak_os_spinlock_unlock(&padlak->spinlock);
         }
-        repeat++;
-    } while (repeat < 2);
-    ptask->hw_stat.irq_status.timeout = timeout;
-    if (true == timeout) {
-        adlak_os_spinlock_lock(&padlak->spinlock);
-        adlak_irq_proc(padlak);
-        adlak_os_spinlock_unlock(&padlak->spinlock);
+    } else {
+        ret = adlak_os_sema_take(pinference->sem_irq);
     }
     return ret;
 }
@@ -143,6 +147,24 @@ static void adlak_dpm_timer_cb(adlak_os_timer_cb_t t) {
     adlak_os_spinlock_unlock(&pwq->dev_inference.spinlock);
 }
 
+static int adlak_check_netid_is_valid(struct adlak_device *padlak, int32_t net_id) {
+    int                   ret = -1;
+    struct adlak_context *context, *context_tmp;
+
+    adlak_os_mutex_lock(&padlak->dev_mutex);
+    list_for_each_entry_safe(context, context_tmp, &padlak->context_list, head) {
+        if (context) {
+            if (context->net_id == net_id) {
+                ret = 0;
+                break;
+            }
+        }
+    }
+    adlak_os_mutex_unlock(&padlak->dev_mutex);
+
+    return ret;
+}
+
 static int32_t adlak_get_valid_num(struct adlak_workqueue *pwq, int32_t *net_id_pre) {
     /* if the net_id of context has been destroyed,the net_id will be set to -1*/
     int32_t            valid_num = 0;
@@ -163,6 +185,14 @@ static int32_t adlak_get_valid_num(struct adlak_workqueue *pwq, int32_t *net_id_
                         find = 1;
                     }
                     break;
+                }
+            }
+            if (1 != find) {
+                // Check if net still exists
+                if (0 != adlak_check_netid_is_valid(pwq->padlak, *net_id_pre)) {
+                    // Sometimes wil reach here when context exiting abnormally.
+                    *net_id_pre = -1;
+                    AML_LOG_WARN("the net id [%d] is invalid!", net_id);
                 }
             }
         }
@@ -212,7 +242,7 @@ static void *adlak_dev_inference_cb(void *args) {
 
     while (!pthrd->thrd_should_stop) {
         // adlak_might_sleep();
-        AML_LOG_DEBUG("%s\n", __func__);
+        AML_LOG_DEBUG("%s inference_state %d\n", __func__, inference_state);
 
 #ifdef CONFIG_PM
         adlak_os_mutex_lock(&padlak->dev_mutex);
@@ -309,13 +339,13 @@ static void *adlak_dev_inference_cb(void *args) {
                     AML_LOG_INFO("nothing need to do!\n");
                     if (10 <= pwq->dev_inference.wq_idel_cnt) {
                         /*If CONFIG_ADLAK_DPM_EN==0, here can never be reached*/
-                        //if (ADLAK_DPM_STRATEGY_MIN != dpm_stategy) {
+                        // if (ADLAK_DPM_STRATEGY_MIN != dpm_stategy) {
                             if (ptask_sch_pre || ptask_sch_cur) {
                                 ASSERT(0);
                             }
                             dpm_stategy = ADLAK_DPM_STRATEGY_MIN;
                             adlak_dpm_stage_adjust(padlak, ADLAK_DPM_STRATEGY_MIN);
-                        //}
+                        // }
                     }
                 }
 #ifdef CONFIG_PM
@@ -541,40 +571,40 @@ err:
 
 static void adlak_irq_status_decode(uint32_t state) {
     if (state & ADLAK_IRQ_MASK_PARSER_STOP_CMD) {
-        AML_LOG_INFO(" [0]: parser stop for command");
+        AML_LOG_WARN(" [0]: parser stop for command");
     }
     if (state & ADLAK_IRQ_MASK_PARSER_STOP_ERR) {
-        AML_LOG_INFO(" [1]: parser stop for error");
+        AML_LOG_WARN(" [1]: parser stop for error");
     }
     if (state & ADLAK_IRQ_MASK_PARSER_STOP_PMT) {
-        AML_LOG_INFO(" [2]: parser stop for preempt");
+        AML_LOG_WARN(" [2]: parser stop for preempt");
     }
     if (state & ADLAK_IRQ_MASK_PEND_TIMOUT) {
-        AML_LOG_INFO(" [3]: pending timer timeout");
+        AML_LOG_WARN(" [3]: pending timer timeout");
     }
     if (state & ADLAK_IRQ_MASK_LAYER_END) {
-        AML_LOG_INFO(" [4]: layer end event");
+        AML_LOG_WARN(" [4]: layer end event");
     }
     if (state & ADLAK_IRQ_MASK_TIM_STAMP) {
-        AML_LOG_INFO(" [5]: time_stamp irq event");
+        AML_LOG_WARN(" [5]: time_stamp irq event");
     }
     if (state & ADLAK_IRQ_MASK_APB_WAIT_TIMOUT) {
-        AML_LOG_INFO(" [6]: apb wait timer timeout");
+        AML_LOG_WARN(" [6]: apb wait timer timeout");
     }
     if (state & ADLAK_IRQ_MASK_PM_DRAM_OVF) {
-        AML_LOG_INFO(" [7]: pm dram overflow");
+        AML_LOG_WARN(" [7]: pm dram overflow");
     }
     if (state & ADLAK_IRQ_MASK_PM_FIFO_OVF) {
-        AML_LOG_INFO(" [8]: pm fifo overflow");
+        AML_LOG_WARN(" [8]: pm fifo overflow");
     }
     if (state & ADLAK_IRQ_MASK_PM_ARBITER_OVF) {
-        AML_LOG_INFO(" [9]: pm arbiter overflow");
+        AML_LOG_WARN(" [9]: pm arbiter overflow");
     }
     if (state & ADLAK_IRQ_MASK_INVALID_IOVA) {
-        AML_LOG_INFO(" [10]: smmu has an invalid-va");
+        AML_LOG_WARN(" [10]: smmu has an invalid-va");
     }
     if (state & ADLAK_IRQ_MASK_SW_TIMEOUT) {
-        AML_LOG_INFO("user define : software timeout");
+        AML_LOG_WARN("user define : software timeout");
     }
 }
 
@@ -583,28 +613,43 @@ static void adlak_status_report_decode(uint32_t state) {
     d.all = state;
 
     if (d.bitc.hang_dw_sramf) {
-        AML_LOG_INFO(" [0]: dw sramf hang");
+        AML_LOG_WARN(" [0]: dw sramf hang");
     }
     if (d.bitc.hang_dw_sramw) {
-        AML_LOG_INFO(" [1]: dw sramw hang");
+        AML_LOG_WARN(" [1]: dw sramw hang");
     }
     if (d.bitc.hang_pe_srama) {
-        AML_LOG_INFO(" [2]: pe srama hang");
+        AML_LOG_WARN(" [2]: pe srama hang");
     }
     if (d.bitc.hang_pe_sramm) {
-        AML_LOG_INFO(" [3]: pe sramm hang");
+        AML_LOG_WARN(" [3]: pe sramm hang");
     }
     if (d.bitc.hang_px_srama) {
-        AML_LOG_INFO(" [4]: px srama hang");
+        AML_LOG_WARN(" [4]: px srama hang");
     }
     if (d.bitc.hang_px_sramm) {
-        AML_LOG_INFO(" [5]: px sramm hang");
+        AML_LOG_WARN(" [5]: px sramm hang");
     }
     if (d.bitc.rsv1) {
-        AML_LOG_INFO(" [6]: reserved");
+        AML_LOG_WARN(" [6]: reserved");
     }
     if (d.bitc.hang_vlc_decoder) {
-        AML_LOG_INFO(" [7]: vlc decoder hang rpid = %d.", d.bitc.vlc_decoder_rpid);
+        AML_LOG_WARN(" [7]: vlc decoder hang rpid = %d.", d.bitc.vlc_decoder_rpid);
+    }
+    if (d.bitc.hang_ps_dep) {
+        AML_LOG_WARN(" [16]: ps dependence hang");
+    }
+    if (d.bitc.hang_mc_dep) {
+        AML_LOG_WARN(" [17]: mc dependence hang");
+    }
+    if (d.bitc.hang_dw_f_dep) {
+        AML_LOG_WARN(" [18]: dw_f dependence hang");
+    }
+    if (d.bitc.hang_dw_w_dep) {
+        AML_LOG_WARN(" [19]: dw_w dependence hang");
+    }
+    if (d.bitc.hang_rs_dep) {
+        AML_LOG_WARN(" [20]: rs dependence hang");
     }
 }
 

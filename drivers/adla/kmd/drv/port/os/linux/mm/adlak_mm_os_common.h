@@ -40,9 +40,9 @@ void adlak_cma_deinit(struct device *dev);
 
 int adlak_cma_init(struct device *dev);
 
-int adlak_remap_region_nocache(struct adlak_mem *mm);
+int adlak_remap_region_nocache(struct adlak_device *padlak, struct adlak_mem_pool_info **ptr);
 
-void adlak_unmap_region_nocache(struct adlak_mem *mm);
+void adlak_unmap_region_nocache(struct adlak_mem_pool_info **ptr);
 
 int adlak_os_alloc_discontiguous(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
@@ -52,10 +52,10 @@ void adlak_os_free_discontiguous(struct adlak_mem *mm, struct adlak_mem_handle *
 
 void adlak_os_free_contiguous(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
-int adlak_os_attach_ext_mem_phys(struct adlak_mem *mm, struct adlak_mem_handle *mm_info,
-                                 uint64_t phys_addr);
+int adlak_os_attach_ext_mem(struct adlak_mem *mm, struct adlak_mem_handle *mm_info,
+                            uint64_t phys_addr);
 
-void adlak_os_dettach_ext_mem_phys(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+void adlak_os_dettach_ext_mem(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
 int adlak_os_mmap(struct adlak_mem *mm, struct adlak_mem_handle *mm_info, void *const vma);
 
@@ -72,14 +72,6 @@ int adlak_malloc_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_i
 int adlak_os_mmap2userspace(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
 void adlak_os_unmmap_userspace(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-
-void adlak_free_cma_region_nocache(struct adlak_mem *mm);
-
-int adlak_alloc_cma_region_nocache(struct adlak_mem *mm);
-
-void adlak_free_share_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-
-int adlak_malloc_share_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
 
 void *adlak_os_mm_vmap(struct adlak_mem_handle *mm_info);
 

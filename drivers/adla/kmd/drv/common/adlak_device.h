@@ -68,6 +68,12 @@ struct adlak_parser_storage {
     uint32_t is_save_from_hw;
 };
 
+struct adlak_simple_bitmap {
+    void *   bitmap_pool;
+    uint32_t size;
+    uint32_t rpt;
+};
+
 typedef struct {
     uint32_t *data;
     uint32_t  size;
@@ -94,20 +100,21 @@ struct adlak_device {
     int                     major;
     struct clk *            clk_axi;
     struct clk *            clk_core;
+    struct clk *            clk;
+    struct clk *            clk_parent0;
+    struct clk *            clk_parent1;
     struct dentry *         debugfs_parent;
 #endif
-    int32_t                   net_count;
+    struct adlak_simple_bitmap net_id_bitmap;
+
     adlak_os_mutex_t          dev_mutex;
     adlak_os_spinlock_t       spinlock;
     struct adlak_hardware_res hw_res;
     struct adlak_device_caps  dev_caps;
-    struct adlak_mem *        mm;
     struct adlak_workqueue    queue;
     struct adlak_proc_info    proc;
     struct list_head          context_list;
     void *                    hw_info;
-    uint64_t                  smmu_entry;
-    void *                    psmmu;
     uint32_t                  hw_timeout_ms;  // unit is system tick
     int                       dependency_mode;
     int                       all_task_num;
@@ -134,12 +141,9 @@ struct adlak_device {
     void *       pdpm;          // dynamic power management
     bool         share_swap_en; /*Share swap memory between diffrent models*/
     unsigned int share_buf_size;
-    uint32_t             save_time_en;
-    uint32_t             dev_hw_version; //Gops, base on
-
-    int             nn_regulator_type;
-    int             nn_dts_hw_ver;
-    uint32_t        nn_voltage;
+    unsigned int iova_max_size_GB;  // unit is Gbyte
+    uint32_t     save_time_en;
+    uint32_t     dev_hw_version; //Gops, base on
 };
 
 /**

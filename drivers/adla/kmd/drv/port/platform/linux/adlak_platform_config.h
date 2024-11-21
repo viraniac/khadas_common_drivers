@@ -22,8 +22,6 @@
 #define __ADLAK_PLATFORM_CONFIG_H__
 
 /***************************** Include Files *********************************/
-#include <linux/module.h>
-#include <linux/amlogic/gki_module.h>
 #include "adlak_typedef.h"
 #ifdef __cplusplus
 extern "C" {
@@ -75,8 +73,6 @@ void adlak_platform_set_power(void *data, bool enable);
 void adlak_platform_resume(void *data);
 
 void adlak_platform_suspend(void *data);
-int adlak_voltage_init(void *data);
-int adlak_voltage_uninit(void *data);
 #ifdef __cplusplus
 }
 #endif

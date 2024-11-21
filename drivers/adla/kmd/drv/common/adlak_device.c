@@ -58,7 +58,11 @@ int adlak_device_init(struct adlak_device *padlak) {
     if (ret) {
         goto err_lock;
     }
-
+    padlak->net_id_bitmap.size = ADLAK_MAX_NET_IDS;
+    ret                        = adlak_simple_bitmap_pool_init(&padlak->net_id_bitmap);
+    if (ret) {
+        goto err_netid_pool_init;
+    }
     ret = adlak_platform_pm_init(padlak);
     if (ret) {
         goto err_pm_init;
@@ -83,7 +87,6 @@ int adlak_device_init(struct adlak_device *padlak) {
     if (ret) {
         goto err_hw_init;
     }
-
     ret = adlak_dev_inference_init(padlak);
     if (ret) {
         AML_LOG_ERR("inference init fail!");
@@ -103,12 +106,11 @@ int adlak_device_init(struct adlak_device *padlak) {
     return 0;
 
 err_irq_init:
-
+    adlak_dev_inference_deinit(padlak);
+err_inference_init:
     adlak_hw_deinit(padlak);
 err_hw_init:
     adlak_dpm_deinit(padlak);
-err_inference_init:
-    adlak_dev_inference_deinit(padlak);
 
 err_dpm_init:
     adlak_queue_deinit(padlak);
@@ -118,6 +120,8 @@ err_queue_init:
 err_mem_init:
     adlak_platform_pm_deinit(padlak);
 err_pm_init:
+    adlak_simple_bitmap_pool_deinit(&padlak->net_id_bitmap);
+err_netid_pool_init:
     adlak_os_mutex_unlock(&padlak->dev_mutex);
 err_lock:
     return -1;
@@ -148,6 +152,7 @@ int adlak_device_deinit(struct adlak_device *padlak) {
     adlak_mem_deinit(padlak);
     adlak_platform_pm_deinit(padlak);
     adlak_dpm_deinit(padlak);
+    adlak_simple_bitmap_pool_deinit(&padlak->net_id_bitmap);
     adlak_os_mutex_unlock(&padlak->dev_mutex);
 
     return 0;
@@ -206,8 +211,12 @@ int adlak_irq_proc(struct adlak_device *const padlak) {
 #endif
     }
     adlak_hal_irq_clear(padlak, irqstatus->irq_masked);
-    if (false == phw_stat->irq_status.timeout) {
-        adlak_os_sema_give_from_isr(pinference->sem_irq);
+    if (1 != ptask->invoke_partial) {
+        if (false == phw_stat->irq_status.timeout) {
+            adlak_os_sema_give_from_isr(pinference->sem_irq);
+        }
+    } else {
+        adlak_os_sema_give_from_isr(ptask->context->sem_irq);
     }
 
     return 0;

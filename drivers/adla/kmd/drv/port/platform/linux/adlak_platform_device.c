@@ -28,6 +28,8 @@
 #include "adlak_platform_config.h"
 #include "adlak_profile.h"
 #include "adlak_submit.h"
+#include "adlak_regulator.h"
+#include "adlak_platform_addon.h"
 
 /************************** Constant Definitions *****************************/
 
@@ -175,8 +177,7 @@ static int adlak_platform_remove(struct platform_device *pdev) {
     adlak_os_mutex_lock(&padlak->dev_mutex);
 
     ret = adlak_voltage_uninit(padlak);
-    if (ret < 0)
-    {
+    if (ret < 0) {
         AML_LOG_ERR("voltage uninit fail!\n");
     }
 
@@ -225,7 +226,6 @@ static int adlak_platform_probe(struct platform_device *pdev) {
     if (dma_set_mask_and_coherent(padlak->dev, DMA_BIT_MASK(34))) {
         AML_LOG_WARN("set device dma mask failed,No suitable DMA available!");
     }
-    padlak->net_count = 0;
     padlak->save_time_en = 0;
     ret               = adlak_platform_get_resource(padlak);
     if (ret) {
@@ -236,6 +236,11 @@ static int adlak_platform_probe(struct platform_device *pdev) {
     if (ret < 0)
     {
         AML_LOG_ERR("voltage init fail!\n");
+    }
+    ret = adlak_axi_sram_init(padlak);
+    if (ret < 0)
+    {
+        AML_LOG_ERR("axi sram init fail!\n");
     }
     ret = adlak_platform_request_resource(padlak);
     if (ret) {

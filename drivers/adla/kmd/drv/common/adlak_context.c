@@ -41,15 +41,23 @@ int adlak_create_context(void *adlak_device, struct adlak_context **p_context) {
     int                   ret     = ERR(NONE);
     struct adlak_context *context = NULL;
     struct adlak_device * padlak  = (struct adlak_device *)adlak_device;
+    int                   net_id;
     AML_LOG_DEBUG("%s", __func__);
     if ((!adlak_device) || (!p_context)) {
         AML_LOG_ERR("invalid input context or common args to be null!");
+        ret = ERR(EFAULT);
+        goto end;
+    }
+    net_id = adlak_simple_bitmap_alloc(&padlak->net_id_bitmap);
+    if (net_id < 0) {
+        ret = ERR(ENOSPC);
         goto end;
     }
     context = adlak_os_zalloc(sizeof(struct adlak_context), ADLAK_GFP_KERNEL);
     if (!context) {
         return ERR(ENOMEM);
     }
+    context->net_id = (int32_t)net_id;
 
     INIT_LIST_HEAD(&context->sbuf_list);
     adlak_os_mutex_init(&context->context_mutex);
@@ -58,21 +66,17 @@ int adlak_create_context(void *adlak_device, struct adlak_context **p_context) {
     context->padlak     = adlak_device;
     context->state      = CONTEXT_STATE_INITED;
     context->invoke_cnt = 0;
-    ++padlak->net_count;
-    if (padlak->net_count < 0) {
-        padlak->net_count = 0;
-    }
-    context->net_id      = padlak->net_count;
+
     context->mem_alloced = 0;
 
     context->macc_count = 0;
     context->invoke_time_elapsed_tmp = 0;
     context->invoke_time_elapsed_total = 0;
 
-    context->smmu_tlb_updated = 0;
     AML_LOG_DEBUG("new context created, net_id[%d]", context->net_id);
 
     adlak_os_sema_init(&context->invoke_state, 1, 0);
+    adlak_os_sema_init(&context->sem_irq, 1, 0);
 
     adlak_to_umd_sinal_init(&context->wait);
     /*Add to context queue*/
@@ -96,6 +100,16 @@ int adlak_net_dettach_by_id(struct adlak_context *context, int net_id) {
         ret++;
         /*destroy the private command queue*/
         adlak_destroy_command_queue_private(context->pmodel_attr);
+
+        if (context->smmu_attr.smmu_public) {
+            adlak_mem_destroy_smmu(&context->smmu_attr.smmu_public,
+                                   ADLAK_ENUM_SMMU_TLB_TYPE_PUBLIC_ONLY);
+        }
+        if (context->smmu_attr.smmu_private) {
+            adlak_mem_destroy_smmu(&context->smmu_attr.smmu_private,
+                                   ADLAK_ENUM_SMMU_TLB_TYPE_PRIVATE_ONLY);
+        }
+
         adlak_model_destroy(context->pmodel_attr);
         context->pmodel_attr = NULL;
     }
@@ -139,6 +153,7 @@ int adlak_destroy_context(struct adlak_device *padlak, struct adlak_context *con
         adlak_to_umd_sinal_deinit(&context->wait);
 
         adlak_os_sema_destroy(&context->ctx_idle);
+        adlak_os_sema_destroy(&context->sem_irq);
         adlak_os_sema_destroy(&context->invoke_state);
         adlak_os_mutex_unlock(&context->context_mutex);
         adlak_os_mutex_destroy(&context->context_mutex);
@@ -146,6 +161,7 @@ int adlak_destroy_context(struct adlak_device *padlak, struct adlak_context *con
         adlak_os_mutex_lock(&padlak->dev_mutex);
         list_del(&context->head); /*del from context list*/
         adlak_os_free(context);   // destroy context
+        adlak_simple_bitmap_free(&padlak->net_id_bitmap, net_id);
         AML_LOG_DEBUG("net_id [%d] destroyed", net_id);
         adlak_os_mutex_unlock(&padlak->dev_mutex);
     }
@@ -172,7 +188,7 @@ struct context_buf *find_buffer_by_desc(struct adlak_context *context, void *pmm
         context_buf = list_entry(node, struct context_buf, head);
         if (context_buf) {
             pmm_info_tmp = (struct adlak_mem_handle *)((context_buf->mm_info));
-            if (pmm_info_tmp->iova_addr == ((struct adlak_mem_handle *)pmm_info)->iova_addr) {
+            if (pmm_info_tmp->uid == ((struct adlak_mem_handle *)pmm_info)->uid) {
                 target_buf = context_buf;
                 AML_LOG_DEBUG("found matched buffer.");
                 break;

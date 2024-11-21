@@ -65,6 +65,9 @@ extern "C" {
 #define ADLAK_IOCTL_PROFILE_CFG _IOWR(ADLAK_IOCTL_MAGIC, 14, struct adlak_profile_cfg_desc)
 #define ADLAK_IOCTL_WAIT_UNTIL_FINISH _IOWR(ADLAK_IOCTL_MAGIC, 15, struct adlak_get_stat_desc)
 
+#define ADLAK_IOCTL_SET_CONTEXT_ATTRIBUTE \
+    _IOWR(ADLAK_IOCTL_MAGIC, 16, struct adlak_context_attribute)
+
 /************************** Function Prototypes ******************************/
 
 #ifdef __cplusplus

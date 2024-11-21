@@ -34,6 +34,7 @@ extern "C" {
 #define REG_ADLAK_0X0 (0x0) /* read,default=0x0 */
 
 #define REG_ADLAK_0X4 (0x4) /* read/write,default=0xff */
+#define REG_ADLAK_0X8 (0x8)   /* read */
 // irq
 #define REG_ADLAK_0X10 (0x10) /* read,default=0x0 */
 #define REG_ADLAK_0X14 (0x14)   /* read/write,default=0x0 */
@@ -108,8 +109,9 @@ extern "C" {
 #define REG_ADLAK_0X11C (0x11c) /* read/write,default=0x80808080 */
 
 #define REG_ADLAK_0X120 (0x120) /* read/write,default=0x0 */
+#define REG_ADLAK_0X124 (0x124) /* read/write,default=0x0 */
 
-#define REG_ADLAK_NUM_MAX (66)
+#define REG_ADLAK_NUM_MAX (68)
 // irq mask
 #define ADLAK_IRQ_MASK_PARSER_STOP_CMD (1 << 0) /* [0]: parser stop for command*/
 #define ADLAK_IRQ_MASK_PARSER_STOP_ERR (1 << 1) /* [1]: parser stop for error*/

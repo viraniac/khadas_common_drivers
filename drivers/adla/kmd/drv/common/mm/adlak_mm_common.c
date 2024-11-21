@@ -21,10 +21,9 @@
 /***************************** Include Files *********************************/
 #include "adlak_mm_common.h"
 
-#include "adlak_mm_mbp.h"
+#include "adlak_mm_mbd.h"
 #include "adlak_mm_os_common.h"
 #include "adlak_mm_smmu.h"
-#include "adlak_mm_smmu_tlb.h"
 /************************** Constant Definitions *****************************/
 
 /**************************** Type Definitions *******************************/
@@ -32,58 +31,50 @@
 /***************** Macros (Inline Functions) Definitions *********************/
 
 /************************** Variable Definitions *****************************/
+static struct adlak_simple_bitmap *ptr_mem_uid = NULL;
 
 /************************** Function Prototypes ******************************/
 
-static int adlak_malloc_contiguous_from_system(struct adlak_mem *       mm,
-                                               struct adlak_mem_handle *mm_info);
-static int adlak_malloc_discontiguous_from_system(struct adlak_mem *       mm,
-                                                  struct adlak_mem_handle *mm_info);
-
-static int adlak_malloc_from_mem_pool(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-
-static void adlak_free_to_mem_pool(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-
-static void adlak_mm_free_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-
-static int adlak_mm_alloc_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
-
-#if CONFIG_ADLAK_MEM_POOL_EN
-static int adlak_mem_pools_mgr_init(struct adlak_mem *mm);
-
-static void adlak_mem_pools_mgr_deinit(struct adlak_mem *mm);
-
-static int adlak_mem_pools_mgr_init(struct adlak_mem *mm) {
-    size_t pool_size = mm->mem_pool->size;
+int adlak_bitmap_pool_init(struct adlak_mm_pool_priv *pool, size_t pool_size,
+                           struct adlak_mem_exclude *exclude_area) {
+    size_t bitmap_size, start;
+    size_t exclude_bitmap_count, exclude_area_start_aligned, exclude_area_size_aligned;
     AML_LOG_DEBUG("%s", __func__);
+    bitmap_size = BITS_TO_LONGS(pool_size >> ADLAK_MM_POOL_PAGE_SHIFT) * sizeof(unsigned long);
+    AML_LOG_DEBUG("%s pool_size 0x%lX bitmap_size 0x%lX", __func__, (uintptr_t)pool_size,
+                  (uintptr_t)bitmap_size);
 
-    mm->usage.mem_pools_size += pool_size;
-
-    return adlak_bitmap_pool_init(&mm->mem_pool->bitmap_area, pool_size);
-}
-
-static void adlak_mem_pools_mgr_deinit(struct adlak_mem *mm) {
-    adlak_bitmap_pool_deinit(&mm->mem_pool->bitmap_area);
-}
-
-#endif
-
-int adlak_bitmap_pool_init(struct adlak_mm_pool_priv *pool, size_t pool_size) {
-    size_t bitmap_size;
-    AML_LOG_DEBUG("%s", __func__);
-    bitmap_size  = BITS_TO_LONGS(pool_size >> ADLAK_MM_POOL_PAGE_SHIFT) * sizeof(unsigned long);
     pool->bitmap = adlak_os_vzalloc(bitmap_size, ADLAK_GFP_KERNEL);
     if (!pool->bitmap) {
         return ERR(ENOMEM);
     }
-    pool->addr_base  = 0;
-    pool->used_count = 0;
-    pool->bits       = (pool_size >> ADLAK_MM_POOL_PAGE_SHIFT);
+    pool->bitmap_size = bitmap_size;
+    pool->addr_base   = 0;
+    pool->used_count  = 0;
+    pool->bits        = (pool_size >> ADLAK_MM_POOL_PAGE_SHIFT);
+
+    // set the excluded area as invalid area
+    if (exclude_area->size) {
+        exclude_area_start_aligned = (exclude_area->start & ADLAK_MM_POOL_PAGE_MASK);
+        exclude_area_size_aligned =
+            ADLAK_ALIGN(exclude_area->start + exclude_area->size, ADLAK_MM_POOL_PAGE_SIZE) -
+            exclude_area_start_aligned;
+
+        exclude_area_start_aligned = exclude_area_start_aligned - pool->addr_base;
+        exclude_bitmap_count       = exclude_area_size_aligned >> ADLAK_MM_POOL_PAGE_SHIFT;
+        start                      = (exclude_area_start_aligned >> ADLAK_MM_POOL_PAGE_SHIFT);
+
+        if (start < pool->bits) {
+            AML_LOG_INFO("set exclude area in bitmap pool: start 0x%08lX, count 0x%08lX ",
+                         (uintptr_t)(start), (uintptr_t)exclude_bitmap_count);
+            bitmap_set(pool->bitmap, start, exclude_bitmap_count);
+        }
+    }
 
     AML_LOG_INFO(
-        "mm_pool size = %lu Mbytes, bitmap_size = %lu bytes, bitmap_maxno = %lu, "
-        "pool_addr_base=0x%lX.",
-        (uintptr_t)pool_size / (1024 * 1024), (uintptr_t)bitmap_size, (uintptr_t)pool->bits,
+        "mm_pool size = 0x%lX byte, bitmap_size = 0x%lX byte, bitmap_maxno = 0x%lX, "
+        "pool_addr_base = 0x%lX.",
+        (uintptr_t)pool_size, (uintptr_t)bitmap_size, (uintptr_t)pool->bits,
         (uintptr_t)pool->addr_base);
     adlak_os_mutex_init(&pool->lock);
     return 0;
@@ -101,154 +92,43 @@ void adlak_bitmap_pool_deinit(struct adlak_mm_pool_priv *pool) {
 
 void adlak_bitmap_dump(struct adlak_mm_pool_priv *pool) {
 #if ADLAK_DEBUG
-    int   bitmap_size = pool->bits / BITS_PER_BYTE;
-    char *addr        = pool->bitmap;
-    int   i;
+    uint32_t bitmap_size = pool->bitmap_size;
+    uint8_t *addr        = pool->bitmap;
+    size_t   i;
 
     AML_LOG_WARN("%s", __func__);
     if (bitmap_size > (1024 * 1024 * 1024 / 4096 / BITS_PER_BYTE)) {
-        bitmap_size = (1024 * 1024 * 1024 / 4096 / BITS_PER_BYTE);
+        //  bitmap_size = (1024 * 1024 * 1024 / 4096 / BITS_PER_BYTE);
     }
-    for (i = bitmap_size - 1; i > 0;) {
+    for (i = bitmap_size - 1; i >= 15;) {
         AML_LOG_WARN(
-            "%02X %02X %02X %02X %02X %02X %02X %02X "
-            "%02X %02X %02X %02X %02X %02X %02X %02X "
-            "%02X %02X %02X %02X %02X %02X %02X %02X "
-            "%02X %02X %02X %02X %02X %02X %02X %02X ",
-            addr[i - 0], addr[i - 1], addr[i - 2], addr[i - 3], addr[i - 4], addr[i - 5],
-            addr[i - 6], addr[i - 7], addr[i - 8], addr[i - 9], addr[i - 10], addr[i - 11],
-            addr[i - 12], addr[i - 13], addr[i - 14], addr[i - 15], addr[i - 16], addr[i - 17],
-            addr[i - 18], addr[i - 19], addr[i - 20], addr[i - 21], addr[i - 22], addr[i - 23],
-            addr[i - 24], addr[i - 25], addr[i - 26], addr[i - 27], addr[i - 28], addr[i - 29],
-            addr[i - 30], addr[i - 31]);
-        i -= 32;
-    }
-#endif
-}
-
-/*Reverse lookup of a region from the bitmap pool,
- */
-unsigned long adlak_alloc_from_bitmap_pool_reverse(struct adlak_mem *mm, size_t size) {
-    size_t                       start = 0, search_start;
-    size_t                       bitmap_count;
-    unsigned long                addr_offset = ERR(ENOMEM);
-    struct adlak_mm_pool_priv *  pool        = &mm->mem_pool->bitmap_area;
-    struct adlak_share_swap_buf *share_buf   = &mm->share_buf;
-
-    AML_LOG_DEBUG("%s\n", __func__);
-    if (!pool || size == 0) {
-        return ERR(ENOMEM);
-    }
-    size         = ADLAK_ALIGN(size, ADLAK_MM_POOL_PAGE_SIZE);
-    bitmap_count = size >> ADLAK_MM_POOL_PAGE_SHIFT;
-
-    AML_LOG_DEBUG("[share mem]need  bitmap_count %lu", (uintptr_t)bitmap_count);
-    // get max value
-    bitmap_count = ((bitmap_count) < (share_buf->bitmap_count_max) ? (share_buf->bitmap_count_max)
-                                                                   : (bitmap_count));
-    adlak_os_mutex_lock(&pool->lock);
-    if ((bitmap_count - share_buf->bitmap_count_max) > (pool->bits - pool->used_count)) {
-        start = SMMU_IOVA_ADDR_SIZE;
-        AML_LOG_WARN(
-            "Didn't find zero area from mem-pool!\nbitmap_maxno = %lu,bitmap_usedno = "
-            "%lu,bitmap_count = %lu",
-            (uintptr_t)pool->bits, (uintptr_t)pool->used_count,
-            (uintptr_t)(bitmap_count - share_buf->bitmap_count_max));
-        goto ret;
-    }
-
-    if (share_buf->bitmap_count_max) {
-        /* Shared space is already taken by another context*/
-        AML_LOG_DEBUG("[share mem]clear bitmap from %lu,bitmap_count %lu\n",
-                      (uintptr_t)share_buf->offset_start, (uintptr_t)share_buf->bitmap_count_max);
-        bitmap_clear(pool->bitmap, share_buf->offset_start, share_buf->bitmap_count_max);
-    }
-    AML_LOG_DEBUG("[share mem]real alloc  bitmap_count %lu", (uintptr_t)bitmap_count);
-
-    search_start = pool->bits - bitmap_count;
-    start = bitmap_find_next_zero_area(pool->bitmap, pool->bits, search_start, bitmap_count, 0);
-
-    if (start > pool->bits) {
-        start = SMMU_IOVA_ADDR_SIZE;
-        AML_LOG_WARN(
-            "Didn't find zero area from mem-pool!\nbitmap_maxno = %lu,bitmap_usedno = "
-            "%lu,bitmap_count = %lu",
-            (uintptr_t)pool->bits, (uintptr_t)pool->used_count, (uintptr_t)bitmap_count);
-        goto ret;
-    }
-
-    if (share_buf->offset_start < pool->bits) {
-        pool->used_count -= share_buf->bitmap_count_max;
-    }
-    share_buf->bitmap_count_max = bitmap_count;  // update the share_buf->bitmap_count
-    pool->used_count += share_buf->bitmap_count_max;
-
-    share_buf->offset_start = start;
-
-    AML_LOG_DEBUG("start = %lu, bitmap_maxno = %lu,bitmap_usedno = %lu,bitmap_count = %lu",
-                  (uintptr_t)start, (uintptr_t)pool->bits, (uintptr_t)pool->used_count,
-                  (uintptr_t)bitmap_count);
-    bitmap_set(pool->bitmap, start, bitmap_count);
-    addr_offset = (unsigned long)(pool->addr_base + start * ADLAK_MM_POOL_PAGE_SIZE);
-
-    share_buf->ref_cnt++;
-    share_buf->share_buf_size = bitmap_count * ADLAK_MM_POOL_PAGE_SIZE;
-
-    AML_LOG_INFO("[share mem]addr_offset 0x%08lX", (uintptr_t)addr_offset);
-ret:
-    if (SMMU_IOVA_ADDR_SIZE == start) {
-        adlak_bitmap_dump(pool);
-    }
-    adlak_os_mutex_unlock(&pool->lock);
-
-    return addr_offset;
-}
-
-void adlak_free_to_bitmap_pool_reverse(struct adlak_mem *mm) {
-    struct adlak_mm_pool_priv *  pool      = &mm->mem_pool->bitmap_area;
-    struct adlak_share_swap_buf *share_buf = &mm->share_buf;
-    int                          bitmap_count;
-    int                          ref_cnt;
-
-    if (!pool) {
-        return;
-    }
-    AML_LOG_DEBUG("%s\n", __func__);
-    adlak_os_mutex_lock(&pool->lock);
-    share_buf->ref_cnt--;
-    ref_cnt = share_buf->ref_cnt;
-    adlak_os_mutex_unlock(&pool->lock);
-    if (0 > ref_cnt) {
-        AML_LOG_ERR("%s, ref_cnt[%d] less than zero!\n", __func__, ref_cnt);
-    }
-    if (0 == ref_cnt) {
-        // TODO  Avoid counting errors caused by double free,so check the net_id
-        AML_LOG_INFO("[share mem] free share buf");
-        if (share_buf->bitmap_count_max) {
-            bitmap_count = share_buf->bitmap_count_max;
-            adlak_os_mutex_lock(&pool->lock);
-            bitmap_clear(pool->bitmap, share_buf->offset_start, bitmap_count);
-            pool->used_count -= bitmap_count;
-            share_buf->bitmap_count_max = 0;
-            share_buf->offset_start     = -1;
-            share_buf->share_buf_size   = 0;
-            adlak_os_mutex_unlock(&pool->lock);
+            "offset %08lX ~ %08lX: %02X %02X %02X %02X %02X %02X %02X "
+            "%02X %02X %02X %02X %02X "
+            "%02X %02X %02X %02X ",
+            (uintptr_t)i, (uintptr_t)(i - 15), addr[i - 0], addr[i - 1], addr[i - 2], addr[i - 3],
+            addr[i - 4], addr[i - 5], addr[i - 6], addr[i - 7], addr[i - 8], addr[i - 9],
+            addr[i - 10], addr[i - 11], addr[i - 12], addr[i - 13], addr[i - 14], addr[i - 15]);
+        if (i >= 16) {
+            i -= 16;
+        } else {
+            i = 0;
         }
     }
+#endif
 }
 
 unsigned long adlak_alloc_from_bitmap_pool(struct adlak_mm_pool_priv *pool, size_t size) {
     size_t        start = 0;
     size_t        bitmap_count;
-    unsigned long addr_offset = ERR(ENOMEM);
+    unsigned long addr_offset = ADLAK_INVALID_ADDR;
     if (!pool || size == 0) {
         return ERR(ENOMEM);
     }
     size         = ADLAK_ALIGN(size, ADLAK_MM_POOL_PAGE_SIZE);
     bitmap_count = size >> ADLAK_MM_POOL_PAGE_SHIFT;
+    AML_LOG_DEBUG("%s 0x%lX byte", __func__, (uintptr_t)size);
     adlak_os_mutex_lock(&pool->lock);
     if (bitmap_count > (pool->bits - pool->used_count)) {
-        start = SMMU_IOVA_ADDR_SIZE;
         AML_LOG_WARN(
             "Didn't find zero area from mem-pool!\nbitmap_maxno = %lu,bitmap_usedno = "
             "%lu,bitmap_count = %lu",
@@ -256,8 +136,7 @@ unsigned long adlak_alloc_from_bitmap_pool(struct adlak_mm_pool_priv *pool, size
         goto ret;
     }
     start = bitmap_find_next_zero_area(pool->bitmap, pool->bits, 0, bitmap_count, 0);
-    if (start > pool->bits) {
-        start = SMMU_IOVA_ADDR_SIZE;
+    if (start >= pool->bits) {
         AML_LOG_WARN(
             "Didn't find zero area from mem-pool!\nbitmap_maxno = %lu,bitmap_usedno = "
             "%lu,bitmap_count = %lu",
@@ -271,7 +150,7 @@ unsigned long adlak_alloc_from_bitmap_pool(struct adlak_mm_pool_priv *pool, size
     bitmap_set(pool->bitmap, start, bitmap_count);
     addr_offset = (unsigned long)(pool->addr_base + start * ADLAK_MM_POOL_PAGE_SIZE);
 ret:
-    if (SMMU_IOVA_ADDR_SIZE == start) {
+    if (ADLAK_INVALID_ADDR == addr_offset) {
         adlak_bitmap_dump(pool);
     }
     adlak_os_mutex_unlock(&pool->lock);
@@ -279,484 +158,254 @@ ret:
     return addr_offset;
 }
 
-void adlak_free_to_bitmap_pool(struct adlak_mm_pool_priv *pool, dma_addr_t start, size_t size) {
+void adlak_free_to_bitmap_pool(struct adlak_mm_pool_priv *pool, dma_addr_t addr_offset,
+                               size_t size) {
     int bitmap_count;
 
-    if (!pool || ADLAK_IS_ERR((void *)start)) {
+    if (!pool) {
+        return;
+    }
+    if (ADLAK_INVALID_ADDR == addr_offset) {
         return;
     }
     size         = ADLAK_ALIGN(size, ADLAK_MM_POOL_PAGE_SIZE);
     bitmap_count = size >> ADLAK_MM_POOL_PAGE_SHIFT;
     adlak_os_mutex_lock(&pool->lock);
-    bitmap_clear(pool->bitmap, (start - pool->addr_base) / ADLAK_MM_POOL_PAGE_SIZE, bitmap_count);
+    bitmap_clear(pool->bitmap, (addr_offset - pool->addr_base) / ADLAK_MM_POOL_PAGE_SIZE,
+                 bitmap_count);
     pool->used_count -= bitmap_count;
     adlak_os_mutex_unlock(&pool->lock);
 }
 
-int adlak_mm_init(struct adlak_device *padlak) {
-    int               ret = 0;
-    struct adlak_mem *mm  = NULL;
+void adlak_set_bitmap_pool(struct adlak_mm_pool_priv *pool, dma_addr_t addr_offset, size_t size) {
+    int bitmap_count;
 
-    AML_LOG_DEBUG("%s", __func__);
-    mm = adlak_os_zalloc(sizeof(struct adlak_mem), ADLAK_GFP_KERNEL);
-    if (ADLAK_IS_ERR_OR_NULL(mm)) {
-        ret = -1;
-        goto err_alloc;
-    }
-    padlak->mm       = mm;
-    mm->padlak       = padlak;
-    mm->use_smmu     = padlak->smmu_en;
-    mm->has_mem_pool = false;
-
-#ifndef CONFIG_ADLA_FREERTOS
-    mm->dev = padlak->dev;
-#endif
-    mm->usage.mem_alloced_kmd = 0;
-    mm->usage.mem_alloced_umd = 0;
-    mm->usage.mem_pools_size  = -1;
-
-    /*Share swap memory between different models to avoid dram size usage*/
-    mm->share_buf.ref_cnt          = 0;
-    mm->share_buf.offset_start     = -1;
-    mm->share_buf.bitmap_count_max = 0;
-    mm->share_buf.share_swap_en    = padlak->share_swap_en;
-    if (mm->share_buf.share_swap_en) {
-        adlak_os_printf("share buffer enabled\n");
-        mm->share_buf.share_buf_size      = padlak->share_buf_size;
-        mm->share_buf.share_buf_cpu_addr  = 0;
-        mm->share_buf.share_buf_dma_addr  = 0;
-        mm->share_buf.share_buf_phys_addr = 0;
-    }
-
-    if (!mm->use_smmu) {
-#ifndef CONFIG_ADLA_FREERTOS
-        ret = adlak_cma_init(padlak->dev);
-        if (ret) {
-            ret = -1;
-            goto err;
-        }
-#endif
-#if CONFIG_ADLAK_MEM_POOL_EN
-#if defined(CONFIG_ADLAK_USE_MBP)
-        // Create unCacheable memory pool from MBP
-        if (0 != adlak_create_mem_pool_from_mbp_uncache(mm)) {
-            ret = -1;
-            goto err;
-        }
-#elif defined(CONFIG_ADLAK_USE_RESERVED_MEMORY)
-        // Create unCacheable memory pool from reserved memory
-        if (0 != adlak_remap_region_nocache(mm)) {
-            ret = -1;
-            goto err;
-        }
-#else
-#if defined(CONFIG_ADLA_FREERTOS)
-#error "Not support CMA in freertos.Please change with reserved_memory or others"
-#endif
-        // Create unCacheable memory pool from CMA
-        if (0 != adlak_alloc_cma_region_nocache(mm)) {
-            ret = -1;
-            goto err;
-        }
-#endif
-        if (!ret) {
-            mm->has_mem_pool = true;
-        }
-        if (mm->has_mem_pool) {
-            mm->usage.mem_pools_size = 0;
-            // init bitmap for memory pools
-            if (0 != adlak_mem_pools_mgr_init(mm)) {
-                goto err;
-            }
-        }
-#endif
-    } else {
-        adlak_smmu_addr_pool_init(mm);
-        adlak_smmu_init(mm);
-    }
-    return ERR(NONE);
-
-err:
-
-    adlak_mm_deinit(padlak);
-err_alloc:
-    return ret;
-}
-
-void adlak_mm_deinit(struct adlak_device *padlak) {
-    struct adlak_mem *mm = padlak->mm;
-    if (ADLAK_IS_ERR_OR_NULL(mm)) {
+    if (!pool) {
         return;
     }
-    if (!mm->use_smmu) {
-#if CONFIG_ADLAK_MEM_POOL_EN
-        if (mm->has_mem_pool) {
-            adlak_mem_pools_mgr_deinit(mm);
-            mm->usage.mem_pools_size = 0;
+    if (ADLAK_INVALID_ADDR == addr_offset) {
+        return;
+    }
+    size         = ADLAK_ALIGN(size, ADLAK_MM_POOL_PAGE_SIZE);
+    bitmap_count = size >> ADLAK_MM_POOL_PAGE_SHIFT;
+    AML_LOG_INFO("%s %lu byte", __func__, (uintptr_t)size);
+    adlak_os_mutex_lock(&pool->lock);
+    bitmap_set(pool->bitmap, (addr_offset - pool->addr_base) / ADLAK_MM_POOL_PAGE_SIZE,
+               bitmap_count);
+    pool->used_count -= bitmap_count;
+    adlak_os_mutex_unlock(&pool->lock);
+}
+
+/**
+ * bitmap_find_next_zero_area - find a contiguous aligned zero area
+ * @map: The address to base the search on
+ * @bitmap_size: byte of bitmap
+ * @bits: The bitmap size in bits
+ * @offset: The bitnumber to start searching at
+ * @nr: The number of zeroed bits we're looking for
+ *
+ */
+
+signed long adlak_bitmap_find_next_zero_area_reverse(void *map, signed long pool_size,
+                                                     signed long bits, signed long offset,
+                                                     signed long nr) {
+    signed long    consecutive_zeros       = 0;
+    signed long    consecutive_zeros_start = -1;
+    unsigned long  ulong_max               = -1;
+    unsigned long *bitmap                  = (unsigned long *)map;
+    signed long    i, j, index;
+    signed long    bits_all     = pool_size * BITS_PER_BYTE;
+    signed long    start_index  = bits_all;  // init as invalid value;
+    signed long    bits_invalid = bits_all - bits;
+    signed long    length       = pool_size / sizeof(long);
+    signed long    start        = bits_all - (offset + bits_invalid) - 1;
+
+    AML_LOG_INFO("pool size %lu, allocate %lu bits, start %lu\n", pool_size, nr, start);
+    AML_LOG_DEBUG("ulong_max %016lX,BITS_PER_LONG %u\n", ulong_max, BITS_PER_LONG);
+    // Iterate over the bitmap in units of long
+    for (i = length - 1; i >= 0; --i) {
+        AML_LOG_DEBUG("step 1: 0x%lX: 0x%016lX\n", i * 8, bitmap[i]);
+        if (bitmap[i] == ulong_max) {
+            consecutive_zeros       = 0;   // Reset consecutive zero count
+            consecutive_zeros_start = -1;  /// Reset start index of consecutive zeros
+            continue;
         }
 
-#if defined(CONFIG_ADLAK_USE_MBP)
-        // destroy unCacheable memory pool from MBP
-        adlak_destroy_mem_pool_from_mbp_uncache(mm);
-#elif defined(CONFIG_ADLAK_USE_RESERVED_MEMORY)
-        // destroy unCacheable memory pool from reserved memory
-        adlak_unmap_region_nocache(mm);
-#else
-        // destroy unCacheable memory pool from CMA
-        adlak_free_cma_region_nocache(mm);
+        AML_LOG_DEBUG("step 2: 0x%lX: 0x%016lX\n", i * 8, bitmap[i]);
+        // Iterate over each bit in the current long
+        for (j = BITS_PER_LONG - 1; j >= 0; --j) {
+            if (!(bitmap[i] & (1ul << j))) {
+                index = i * BITS_PER_LONG + j;
+                if (index <= start) {
+                    consecutive_zeros++;
+                    if (consecutive_zeros_start == -1) {
+                        consecutive_zeros_start = index;
+                    }
+                }
+            } else {
+                consecutive_zeros       = 0;   // Reset consecutive zero count
+                consecutive_zeros_start = -1;  // Reset start index of consecutive zeros
+            }
+            // If enough consecutive zeros are found, return the start index
+            if (consecutive_zeros >= nr) {
+                start_index = consecutive_zeros_start - nr + 1;
+                goto end;
+            }
+        }
+    }
+end:
+    if (start_index == bits_all) {
+        AML_LOG_ERR("Insufficient contiguous free %lu bits\n", nr);
+    }
+#if 0
+    else {
+        if (start_index != bitmap_find_next_zero_area(map, bits, start_index, nr, 0)) {
+            AML_LOG_ERR("alloc bitmap reverse double check fail");
+            return bits_all;
+        }
+    }
 #endif
-
-#endif
-
-#ifndef CONFIG_ADLA_FREERTOS
-        adlak_cma_deinit(padlak->dev);
-#endif
-    } else {
-        adlak_smmu_deinit(mm);
-        adlak_smmu_addr_pool_deinit(mm);
-    }
-
-    adlak_os_free(mm);
-    padlak->mm = NULL;
+    return start_index;
 }
 
-int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
-                      struct adlak_sync_cache_ext_info *sync_cache_ext_info) {
-    struct adlak_mem *mm = padlak->mm;
-
-    AML_LOG_DEBUG("%s", __func__);
-    if (ADLAK_IS_ERR_OR_NULL(mm_info)) {
-        return -1;
-    }
-
-    if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
-        // TODO
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_OS ||
-               mm_info->mem_src == ADLAK_ENUM_MEMSRC_CMA ||
-               mm_info->mem_src == ADLAK_ENUM_MEMSRC_RESERVED ||
-               mm_info->mem_src == ADLAK_ENUM_MEMSRC_EXT_PHYS) {
-        adlak_os_flush_cache(mm, mm_info, sync_cache_ext_info);
-    }
-    return 0;
-}
-
-int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
-                        struct adlak_sync_cache_ext_info *sync_cache_ext_info) {
-    struct adlak_mem *mm = padlak->mm;
-
-    AML_LOG_DEBUG("%s", __func__);
-    if (ADLAK_IS_ERR_OR_NULL(mm_info)) {
-        return -1;
-    }
-
-    if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
-        // TODO
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_OS ||
-               mm_info->mem_src == ADLAK_ENUM_MEMSRC_CMA ||
-               mm_info->mem_src == ADLAK_ENUM_MEMSRC_RESERVED ||
-               mm_info->mem_src == ADLAK_ENUM_MEMSRC_EXT_PHYS) {
-        adlak_os_invalid_cache(mm, mm_info, sync_cache_ext_info);
-    }
-    return 0;
-}
-
-static void adlak_free_contiguous_to_system(struct adlak_mem *       mm,
-                                            struct adlak_mem_handle *mm_info) {
-    adlak_os_free_contiguous(mm, mm_info);
-}
-
-static int adlak_malloc_contiguous_from_system(struct adlak_mem *       mm,
-                                               struct adlak_mem_handle *mm_info) {
-    int ret;
-    mm_info->mem_src = ADLAK_ENUM_MEMSRC_OS;
-
-    ret = adlak_os_alloc_contiguous(mm, mm_info);
-    return ret;
-}
-
-static void adlak_free_discontiguous_to_system(struct adlak_mem *       mm,
-                                               struct adlak_mem_handle *mm_info) {
-    adlak_os_free_discontiguous(mm, mm_info);
-}
-
-static int adlak_malloc_discontiguous_from_system(struct adlak_mem *       mm,
-                                                  struct adlak_mem_handle *mm_info) {
-    int ret;
-    mm_info->mem_src = ADLAK_ENUM_MEMSRC_OS;
-
-    ret = adlak_os_alloc_discontiguous(mm, mm_info);
-    return ret;
-}
-
-static int adlak_malloc_from_mem_pool(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    unsigned long start;
-    AML_LOG_DEBUG("%s", __func__);
-    if (!(mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE)) {
-        start =
-            adlak_alloc_from_bitmap_pool(&mm->mem_pool->bitmap_area, (size_t)mm_info->req.bytes);
-    } else {
-        start = adlak_alloc_from_bitmap_pool_reverse(mm, (size_t)mm_info->req.bytes);
-    }
-
-    if (ADLAK_IS_ERR((void *)start)) {
-        mm_info->phys_addr = 0;
+unsigned long adlak_alloc_from_bitmap_pool_reverse(struct adlak_mm_pool_priv *pool, size_t size) {
+    size_t        start = 0;
+    size_t        bitmap_count;
+    unsigned long addr_offset = ADLAK_INVALID_ADDR;
+    if (!pool || size == 0) {
         return ERR(ENOMEM);
     }
+    size         = ADLAK_ALIGN(size, ADLAK_MM_POOL_PAGE_SIZE);
+    bitmap_count = size >> ADLAK_MM_POOL_PAGE_SHIFT;
 
-    mm_info->from_pool = 1;
-    mm_info->mem_src   = mm->mem_pool->mem_src;
-    mm_info->cpu_addr  = (void *)((dma_addr_t)mm->mem_pool->cpu_addr_base + (dma_addr_t)start);
-    mm_info->dma_addr  = mm->mem_pool->dma_addr_base + (dma_addr_t)start;
-    mm_info->phys_addr = mm->mem_pool->phys_addr_base + (phys_addr_t)start;
+    AML_LOG_INFO("%s %lu byte", __func__, (uintptr_t)size);
+    adlak_os_mutex_lock(&pool->lock);
+    if (bitmap_count > (pool->bits - pool->used_count)) {
+        AML_LOG_WARN(
+            "Didn't find zero area from mem-pool!\nbitmap_maxno = %lu,bitmap_usedno = "
+            "%lu,bitmap_count = %lu",
+            (uintptr_t)pool->bits, (uintptr_t)pool->used_count, (uintptr_t)bitmap_count);
+        goto ret;
+    }
+    start = adlak_bitmap_find_next_zero_area_reverse(pool->bitmap, pool->bitmap_size, pool->bits, 0,
+                                                     bitmap_count);
+    if (start >= pool->bits) {
+        AML_LOG_WARN(
+            "Didn't find zero area from mem-pool!\nbitmap_maxno = %lu,bitmap_usedno = "
+            "%lu,bitmap_count = %lu",
+            (uintptr_t)pool->bits, (uintptr_t)pool->used_count, (uintptr_t)bitmap_count);
+        goto ret;
+    }
+    pool->used_count += bitmap_count;
+    AML_LOG_INFO("start = %lu, bitmap_maxno = %lu,bitmap_usedno = %lu,bitmap_count = %lu",
+                 (uintptr_t)start, (uintptr_t)pool->bits, (uintptr_t)pool->used_count,
+                 (uintptr_t)bitmap_count);
+    bitmap_set(pool->bitmap, start, bitmap_count);
+    addr_offset = (unsigned long)(pool->addr_base + start * ADLAK_MM_POOL_PAGE_SIZE);
+ret:
+    if (ADLAK_INVALID_ADDR == addr_offset) {
+        adlak_bitmap_dump(pool);
+    }
+    adlak_os_mutex_unlock(&pool->lock);
 
-    mm_info->iova_addr = mm_info->phys_addr;
-
-    return ERR(NONE);
+    return addr_offset;
 }
 
-static void adlak_free_to_mem_pool(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    unsigned long start;
-    AML_LOG_DEBUG("%s", __func__);
-    if (mm_info->phys_addr) {
-        start = mm_info->phys_addr - mm->mem_pool->phys_addr_base;
-        if (!(mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE)) {
-            adlak_free_to_bitmap_pool(&mm->mem_pool->bitmap_area, start,
-                                      (size_t)mm_info->req.bytes);
+int adlak_mem_uid_init(void) {
+    int                      ret = 0;
+    if (!ptr_mem_uid) {
+        ptr_mem_uid = adlak_os_zalloc(sizeof(*ptr_mem_uid), ADLAK_GFP_KERNEL);
+        if (unlikely(!ptr_mem_uid)) {
+            ret = -1;
+            goto end;
+        }
+        ptr_mem_uid->size = ADLAK_MEM_UID_SIZE;
+        ret               = adlak_simple_bitmap_pool_init(ptr_mem_uid);
+        if (unlikely(ret)) {
+            ret = -1;
+            goto end;
         } else {
-            adlak_free_to_bitmap_pool_reverse(mm);
+            ret = 0;
         }
     }
-    mm_info->phys_addr = 0;
-}
-
-void adlak_mm_free_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    AML_LOG_DEBUG("%s", __func__);
-
-    if (mm->use_smmu) {
-        if (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS) {
-            // free uncacheable contiguous memory
-            return adlak_free_contiguous_to_system(mm, mm_info);
-        } else {
-            // free uncacheable discontiguous memory
-            return adlak_free_discontiguous_to_system(mm, mm_info);
-        }
-    } else {
-        if (mm->has_mem_pool) {
-            // free uncacheable memory from memory pool
-            if (mm_info->from_pool) {
-                return adlak_free_to_mem_pool(mm, mm_info);
-            } else {
-                return adlak_free_through_dma(mm, mm_info);
-            }
-        } else {
-            if (mm_info->mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE) {
-                return adlak_free_share_through_dma(mm, mm_info);
-            } else {
-                // free uncacheable memory through dma api
-                return adlak_free_through_dma(mm, mm_info);
-            }
-        }
-    }
-}
-
-static int adlak_mm_alloc_buffer(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    int ret;
-    AML_LOG_DEBUG("%s", __func__);
-
-    if (mm->use_smmu) {
-        if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS) {
-            // alloc contiguous memory
-            return adlak_malloc_contiguous_from_system(mm, mm_info);
-        } else {
-            // alloc discontiguous memory
-            return adlak_malloc_discontiguous_from_system(mm, mm_info);
-        }
-    } else {
-        if (mm->has_mem_pool) {
-            // alloc memory from memory pool
-            ret = adlak_malloc_from_mem_pool(mm, mm_info);
-            if (ERR(NONE) != ret) {
-                if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE) {
-                    return ret;
-                }
-                // alloc memory through dma api
-                return adlak_malloc_through_dma(mm, mm_info);
-            } else {
-                return ret;
-            }
-        } else {
-            if (mm_info->req.mem_type & ADLAK_ENUM_MEMTYPE_INNER_SHARE) {
-                return adlak_malloc_share_through_dma(mm, mm_info);
-            } else {
-                // alloc memory through dma api
-                return adlak_malloc_through_dma(mm, mm_info);
-            }
-        }
-    }
-}
-
-void adlak_mm_free(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    ASSERT(mm_info);
-    if (mm->use_smmu) {
-        adlak_smmu_iova_unmap(mm, mm_info);
-    }
-
-    adlak_mm_free_buffer(mm, mm_info);
-
-    adlak_os_free(mm_info);
-}
-
-static void adlak_mm_rewrite_memtype(struct adlak_mem *mm, struct adlak_buf_req *pbuf_req,
-                                     struct adlak_mem_handle *mm_info) {
-    mm_info->req.mem_type = 0;
-
-    if (!(pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_INNER)) {
-        mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
-    } else {
-        if (pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_CONTIGUOUS) {
-            mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
-        }
-        if (0 != mm->share_buf.share_swap_en) {
-            if ((pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_SHARE) && (!mm->use_smmu)) {
-                /*share memory between different model only supports soc without smmu for the time
-                 * being*/
-                mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_SHARE;
-            }
-        }
-    }
-    if (!mm->use_smmu) {
-        mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
-        mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G;
-    }
-
-    if (pbuf_req->mem_type & ADLAK_ENUM_MEMTYPE_PA_WITHIN_4G) {
-        mm_info->req.mem_type = mm_info->req.mem_type | ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G;
-    }
-
-    mm_info->mem_type = mm_info->req.mem_type;
-}
-
-struct adlak_mem_handle *adlak_mm_alloc(struct adlak_mem *mm, struct adlak_buf_req *pbuf_req) {
-    int                      ret;
-    struct adlak_mem_handle *mm_info;
-    if (!pbuf_req->bytes) {
-        return (void *)NULL;
-    }
-    mm_info = adlak_os_zalloc(sizeof(struct adlak_mem_handle), ADLAK_GFP_KERNEL);
-    if (unlikely(!mm_info)) {
-        goto end;
-    }
-    mm_info->iova_addr         = SMMU_IOVA_ADDR_SIZE;  // init as invalid value
-    mm_info->req.bytes         = ADLAK_PAGE_ALIGN(pbuf_req->bytes);
-    mm_info->req.mem_direction = pbuf_req->mem_direction;
-
-    adlak_mm_rewrite_memtype(mm, pbuf_req, mm_info);
-
-    mm_info->nr_pages = ADLAK_DIV_ROUND_UP(mm_info->req.bytes, ADLAK_PAGE_SIZE);
-    mm_info->cpu_addr = NULL;
-
-    ret = adlak_mm_alloc_buffer(mm, mm_info);
-
+end:
     if (ret) {
-        AML_LOG_ERR("%s fail!", __FUNCTION__);
-        goto err;
+        ASSERT(0);
     }
+    return ret;
+    return 0;
+}
+void adlak_mem_uid_deinit(void) {
+    if (ptr_mem_uid) {
+        adlak_simple_bitmap_pool_deinit(ptr_mem_uid);
+    }
+}
 
-    if (mm->use_smmu) {
-        // update the tlb of smmu
-        if (mm->padlak->smmu_entry) {
-            ret = adlak_smmu_iova_map(mm, mm_info);
+uint64_t adlak_mem_uid_alloc(void) {
+    uint64_t uid = ADLAK_INVALID_ADDR;
+    int      id;
+    if (ptr_mem_uid) {
+        id = adlak_simple_bitmap_alloc(ptr_mem_uid);
+        if (id >= 0) {
+            uid = id << ADLAK_MM_POOL_PAGE_SHIFT;
         }
-    } else {
-        mm_info->iova_addr = mm_info->phys_addr;
     }
-
-err:
-    if (!ret) {
-        pbuf_req->errcode = 0;
-    } else {
-        pbuf_req->errcode = ret;
-        adlak_mm_free(mm, mm_info);
-        mm_info = NULL;
+    if (ADLAK_INVALID_ADDR == uid) {
+        AML_LOG_ERR("alloc mem uid fail, you may need to increase the pool size of uid!");
+        ASSERT(0);
     }
-
-end:
-    return mm_info;
+    return uid;
+}
+void adlak_mem_uid_free(uint64_t uid) {
+    int id;
+    // the net id info may stored in the lower 12 bits
+    id = (uid >> ADLAK_MM_POOL_PAGE_SHIFT);
+    adlak_simple_bitmap_free(ptr_mem_uid, id);
 }
 
-void adlak_mm_dettach(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    if (!mm_info) {
-        return;
+int adlak_simple_bitmap_pool_init(struct adlak_simple_bitmap *p_bitmap) {
+    /* Allocate memory for the bitmap */
+    uint32_t pool_size    = BITS_TO_LONGS(p_bitmap->size) * sizeof(unsigned long);
+    p_bitmap->bitmap_pool = adlak_os_malloc(pool_size, ADLAK_GFP_KERNEL);
+    if (!p_bitmap->bitmap_pool) {
+        AML_LOG_ERR("Failed to allocate memory for bitmap\n");
+        return -ENOMEM;
     }
+    /* Initialize the bitmap */
+    bitmap_zero(p_bitmap->bitmap_pool, p_bitmap->size);
+    p_bitmap->rpt = 0;
 
-    AML_LOG_DEBUG("%s", __func__);
-    if (mm->use_smmu) {
-        adlak_smmu_iova_unmap(mm, mm_info);
-    }
-    adlak_os_dettach_ext_mem_phys(mm, mm_info);
-    adlak_os_free(mm_info);
-}
-
-struct adlak_mem_handle *adlak_mm_attach(struct adlak_mem *            mm,
-                                         struct adlak_extern_buf_info *pbuf_req) {
-    int                      ret;
-    struct adlak_mem_handle *mm_info   = NULL;
-    uint64_t                 phys_addr = pbuf_req->buf_handle;
-    size_t                   size      = pbuf_req->bytes;
-    if (!size || !ADLAK_IS_ALIGNED((unsigned long)(size), ADLAK_PAGE_SIZE)) {
-        goto early_exit;
-    }
-
-    AML_LOG_DEBUG("%s", __func__);
-    mm_info = adlak_os_zalloc(sizeof(struct adlak_mem_handle), ADLAK_GFP_KERNEL);
-    if (unlikely(!mm_info)) {
-        goto end;
-    }
-    mm_info->iova_addr    = SMMU_IOVA_ADDR_SIZE;  // init as invalid value
-    mm_info->req.bytes    = size;
-    mm_info->req.mem_type = ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS;
-    // set as uncacheable for exttern memory
-    mm_info->req.mem_direction = pbuf_req->mem_direction;
-
-    mm_info->nr_pages = ADLAK_DIV_ROUND_UP(mm_info->req.bytes, ADLAK_PAGE_SIZE);
-    mm_info->cpu_addr = NULL;
-
-    mm_info->mem_src  = ADLAK_ENUM_MEMSRC_EXT_PHYS;
-    mm_info->mem_type = mm_info->req.mem_type;
-    ret               = adlak_os_attach_ext_mem_phys(mm, mm_info, phys_addr);
-
-    if (!ret) {
-        pbuf_req->errcode = 0;
-    } else {
-        pbuf_req->errcode = ret;
-        adlak_os_free(mm_info);
-        mm_info = (void *)NULL;
-        goto end;
-    }
-    if (mm->use_smmu) {
-        // update the tlb of smmu
-        ret = adlak_smmu_iova_map(mm, mm_info);
-    } else {
-        mm_info->iova_addr = mm_info->phys_addr;
-    }
-end:
-early_exit:
-
-    return mm_info;
-}
-
-int adlak_mm_mmap(struct adlak_mem *mm, struct adlak_mem_handle *mm_info, void *const vma) {
-    AML_LOG_DEBUG("%s", __func__);
-
-    if (mm_info->mem_src != ADLAK_ENUM_MEMSRC_MBP) {
-        adlak_os_mmap(mm, mm_info, vma);
-    } else if (mm_info->mem_src == ADLAK_ENUM_MEMSRC_MBP) {
-        // TODO
-        AML_LOG_ERR("Not support memory src [%d]", mm_info->mem_src);
-    }
     return 0;
 }
 
-void *adlak_mm_vmap(struct adlak_mem_handle *mm_info) { return adlak_os_mm_vmap(mm_info); }
+void adlak_simple_bitmap_pool_deinit(struct adlak_simple_bitmap *p_bitmap) {
+    if (p_bitmap->bitmap_pool) {
+        adlak_os_free(p_bitmap->bitmap_pool);
+        p_bitmap->bitmap_pool = NULL;
+    }
+}
 
-void adlak_mm_vunmap(struct adlak_mem_handle *mm_info) { adlak_os_mm_vunmap(mm_info); }
+int adlak_simple_bitmap_alloc(struct adlak_simple_bitmap *p_bitmap) {
+    int id;
+    {
+        /* Find the first zero bit and set it */
+        id = find_first_zero_bit(p_bitmap->bitmap_pool, p_bitmap->size);
+        if (id >= p_bitmap->size) {
+            AML_LOG_ERR("No available bit in bitmap\n");
+            return -1; /* No available ID */
+        }
+    }
+    p_bitmap->rpt = id+1;
+    /* Set the bit to mark the ID as used */
+    set_bit(id, p_bitmap->bitmap_pool);
+    return id;
+}
+
+void adlak_simple_bitmap_free(struct adlak_simple_bitmap *p_bitmap, int id) {
+    if (id < 0 || id >= p_bitmap->size) {
+        AML_LOG_ERR("Invalid ID to free: %d\n", id);
+        return;
+    }
+    /* Clear the bit to mark the ID as free */
+    clear_bit(id, p_bitmap->bitmap_pool);
+}

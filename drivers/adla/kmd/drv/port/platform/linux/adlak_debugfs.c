@@ -314,8 +314,10 @@ static DEVICE_ATTR_RW(dpm_period);
 
 static int adlak_set_clk_core(struct adlak_device *padlak, uint32_t value)
 {
+#if CONFIG_ADLAK_DPM_EN
     struct adlak_power_info *pdpm_info;
     pdpm_info = (struct adlak_power_info *)padlak->pdpm;
+#endif
 
     pr_info("Adla clk core set : %d Hz ->%d Hz\n", padlak->clk_core_freq_set, value);
     padlak->clk_core_freq_set = value;
@@ -330,12 +332,15 @@ static int adlak_set_clk_core(struct adlak_device *padlak, uint32_t value)
         adlak_platform_resume(padlak);
     }
 
+#if CONFIG_ADLAK_DPM_EN
+
     pdpm_info->core_freq_expect = padlak->clk_core_freq_real;
-    padlak->clk_core_freq_set  = padlak->clk_core_freq_real;
 
     pdpm_info->freq_cfg_list[0][0] = padlak->clk_core_freq_set;
 
     pr_info("Adla clk core real set : %d Hz\n", padlak->clk_core_freq_set);
+#endif
+    padlak->clk_core_freq_set  = padlak->clk_core_freq_real;
     return 0;
 
 }
@@ -431,28 +436,33 @@ static adla_hw_info t3x_hw_info = {
     .kernel_vlc         = true,
     .feature_vlc        = true,
 };
+static adla_hw_info s6_hw_info = {
+    .hw_ver             = "r3p1",
+    .hw_release_id      = 3,
+    .hw_patch_id        = 1,
+    .mac_no_i8          = 2048,
+    .mac_no_i16         = 512,
+    .max_frq            = 1000,
+    .GOPS               = 4000,
+    .kernel_vlc         = true,
+    .feature_vlc        = true,
+};
 
 static int adlak_get_hw_info (struct adlak_device *padlak, char *buf, size_t size)
 {
     int count                       = 0;
-    int32_t device_release_id       = 0;
-    int32_t device_patch_id         = 0;
-    uint32_t val                    = 0;
     int buf_size                    = size;
     uint32_t cur_freq               = 0;
-    struct io_region *region        = padlak->hw_res.preg;
     adla_hw_info *hw_info           = NULL;
+    struct adlak_hw_info *hw_ver_info = (struct adlak_hw_info *)padlak->hw_info;
 
     if (padlak->is_suspend) {
         adlak_platform_resume(padlak);
     }
 
     cur_freq = (uint32_t)padlak->clk_core_freq_set;
-    val = adlak_read32(region, 0x0);
-    device_release_id = (val >> 8) & 0xff;
-    device_patch_id   = val & 0xff;
 
-    switch (device_release_id) {
+    switch (hw_ver_info->rev.bitc.major) {
         case r0p0 :
             hw_info = &c3_hw_info;
             break;
@@ -463,7 +473,12 @@ static int adlak_get_hw_info (struct adlak_device *padlak, char *buf, size_t siz
             hw_info = &t7c_hw_info;
             break;
         case r3p0 :
-            hw_info = &t3x_hw_info;
+            if (hw_ver_info->rev.bitc.minor == 1) {
+                hw_info = &s6_hw_info;
+            }
+            else {
+                hw_info = &t3x_hw_info;
+            }
             break;
         default :
             count = adlak_os_snprintf(buf, buf_size, "devices not support.\n");
@@ -530,6 +545,8 @@ static int adlak_get_utilization(struct adlak_device *padlak, char *buf, size_t 
         case 0x00000200 :
         case 0x00000300 :
             dev_macc_count = 2048 * cur_freq; //Mops
+        case 0x00000301 :
+            dev_macc_count = 2048 * s6_hw_info.max_frq; //Mops
             break;
         default :
             count += adlak_os_snprintf(buf + count, buf_size - count, "dev hw version error,please check!\n");
