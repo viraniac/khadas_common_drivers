@@ -73,6 +73,7 @@ static long drv_ioctl(struct file *filp, unsigned int ioctl_code, unsigned long 
     struct adlak_buf_flush               flush_desc;
     struct adlak_extern_buf_info         ext_buf_attach;
     struct adlak_profile_cfg_desc        profile_cfg;
+    struct adlak_context_attribute       context_attr;
     uint64_t                             mem_handle;
     u_long                               size;
     AML_LOG_DEBUG("%s", __func__);
@@ -99,6 +100,7 @@ static long drv_ioctl(struct file *filp, unsigned int ioctl_code, unsigned long 
             if (!udata) {
                 ret = padlak->dev_caps.size;
             } else {
+                adlak_mem_usage_update(padlak);
                 /* copy cap info/errcode to user for reference */
                 cp_ret = copy_to_user(udata, padlak->dev_caps.data, padlak->dev_caps.size);
                 if ((ERR(NONE) == ret) && (ERR(NONE) != cp_ret)) {
@@ -366,6 +368,22 @@ static long drv_ioctl(struct file *filp, unsigned int ioctl_code, unsigned long 
             }
 
             break;
+        case ADLAK_IOCTL_SET_CONTEXT_ATTRIBUTE:
+            AML_LOG_DEBUG("ADLAK_IOCTL_SET_CONTEXT_ATTRIBUTE");
+            ret = copy_from_user(&context_attr, udata, sizeof(struct adlak_context_attribute));
+            if (ret) {
+                AML_LOG_ERR("stat desc copy from user failed!");
+                ret = ERR(EFAULT);
+                break;
+            }
+            ret = adlak_set_context_attribute(context, &context_attr);
+            /* copy buf info/errcode to user for reference */
+            cp_ret = copy_to_user(udata, &context_attr, sizeof(struct adlak_context_attribute));
+            if ((ERR(NONE) == ret) && (ERR(NONE) != cp_ret)) {
+                ret = cp_ret;
+            }
+
+            break;
         default:
             /*not support command*/
             ret = ERR(ENOTTY);
@@ -383,14 +401,15 @@ static long drv_ioctl_compat(struct file *filp, unsigned int ioctl_code, unsigne
 #endif
 static int drv_mmap(struct file *filp, struct vm_area_struct *vma) {
     int                   ret;
-    struct adlak_context *context = filp->private_data;
-    uint64_t              iova    = vma->vm_pgoff * ADLAK_PAGE_SIZE;
+    struct adlak_context *context        = filp->private_data;
+    unsigned long         vm_pgoff_store = vma->vm_pgoff;
+    uint64_t              uid            = vma->vm_pgoff * ADLAK_PAGE_SIZE;
 
-    AML_LOG_DEBUG("%s iova=0x%lX", __func__, (uintptr_t)iova);
+    AML_LOG_DEBUG("%s uid=0x%lX", __func__, (uintptr_t)uid);
 
     vma->vm_pgoff = 0;
-    ret           = adlak_mem_mmap(context, vma, iova);
-    vma->vm_pgoff = iova;
+    ret           = adlak_mem_mmap(context, vma, uid);
+    vma->vm_pgoff = vm_pgoff_store;
     return ret;
 }
 unsigned int drv_poll(struct file *filp, struct poll_table_struct *wait) {

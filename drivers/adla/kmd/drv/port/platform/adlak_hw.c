@@ -60,7 +60,7 @@ static int adlak_parser_set_wpt(struct io_region *region, uint32_t wpt) {
         ret = -1;
         goto end;
     }
-    AML_LOG_DEBUG("Set CMQ WPT=0x%08X", wpt);
+    AML_LOG_INFO("Set CMQ WPT=0x%08X", wpt);
     adlak_write32(region, REG_ADLAK_0X6C, wpt & 0x0FFFFFFF);
 end:
     return -1;
@@ -215,7 +215,7 @@ static int adlak_hal_soft_reset(void *data) {
  * @return int
  */
 static int adlak_hal_hard_reset(void *data) {
-    // TODO(shiwei.sun)The function is empty because the hardware does not support it
+    // TODO You need to add this function according to the api of soc
     AML_LOG_DEBUG("%s", __func__);
 
     return 0;
@@ -230,15 +230,15 @@ uint32_t adlak_hal_get_reg(void *data, uint32_t offset) {
     return val;
 }
 
-int adlak_hal_set_mmu(void *data, bool enable) {
-    struct adlak_device * padlak   = (struct adlak_device *)data;
-    struct adlak_hw_info *phw_info = (struct adlak_hw_info *)padlak->hw_info;
+int adlak_hal_set_mmu(void *data, bool enable, uint64_t smmu_entry) {
+    struct adlak_device *padlak = (struct adlak_device *)data;
 
     // struct adlak_workqueue *pwq    = &padlak->queue;
     struct io_region *  region = padlak->hw_res.preg;
     HAL_ADLAK_SMMU_EN_S d;
-    uint64_t            smmu_entry;
     AML_LOG_DEBUG("%s", __func__);
+
+    adlak_check_dev_is_idle(padlak);
 
     if (enable) {
         d.bitc.smmu_en = true;
@@ -248,9 +248,8 @@ int adlak_hal_set_mmu(void *data, bool enable) {
     adlak_write32(region, REG_ADLAK_0XC0, d.all);
 
     if (enable) {
-        smmu_entry = phw_info->smmu_entry;
+        AML_LOG_INFO("SMMU Enable, and set smmu_entry addr=0x%lX", (uintptr_t)smmu_entry);
         smmu_entry = ((smmu_entry >> 5) << 12);
-        AML_LOG_INFO("SMMU Enable, and set smmu_entry=0x%lX", (uintptr_t)smmu_entry);
 
         adlak_write32(region, REG_ADLAK_0XC4, (uint32_t)(smmu_entry & (0xFFFFFFFF)));
         adlak_write32(region, REG_ADLAK_0XC8, (uint32_t)((smmu_entry >> 32) & (0xFFFFFFFF)));
@@ -314,9 +313,13 @@ void adlak_parser_set_apb_timeout(struct io_region *region, uint32_t time) {
 }
 
 void adlak_hal_enable(void *data, uint32_t en) {
-    struct adlak_device *padlak = (struct adlak_device *)data;
-    HAL_ADLAK_ADLAK_EN_S d;
+    struct adlak_device * padlak   = (struct adlak_device *)data;
+    struct adlak_hw_info *phw_info = (struct adlak_hw_info *)padlak->hw_info;
+    HAL_ADLAK_ADLAK_EN_S  d;
     AML_LOG_DEBUG("%s", __func__);
+    if (phw_info->rev.bitc.major == 3 && phw_info->rev.bitc.minor == 1) {
+        adlak_write32(padlak->hw_res.preg, REG_ADLAK_0X124, 0x01);
+    }
 
     d.bitc.adlak_en = 0;
     if (en) {
@@ -358,8 +361,7 @@ static void adlak_hal_get_revision(void *data) {
     phw_info->rev.bitc.major = d.bitc.major_rev;
     phw_info->rev.bitc.minor = d.bitc.minor_rev;
     padlak->dev_hw_version = phw_info->rev.all;
-    AML_LOG_INFO("ADLAK HW Revision:%d.%d,REG_ADLAK_0X2C=0x%08X", phw_info->rev.bitc.major,
-                 phw_info->rev.bitc.minor, adlak_read32(region, REG_ADLAK_0X2C));
+    AML_LOG_INFO("ADLAK HW Revision:%d.%d", phw_info->rev.bitc.major, phw_info->rev.bitc.minor);
 }
 
 void adlak_hal_get_all_regs(struct adlak_hw_stat *phw_stat) {
@@ -399,8 +401,10 @@ uint32_t adlak_get_hw_status(struct adlak_hw_stat *phw_stat) {
     phw_stat->ps_status      = adlak_read32(region, REG_ADLAK_0X54);
     phw_stat->ps_idle_status = adlak_read32(region, REG_ADLAK_0X5C);
 
-    phw_stat->ps_rbf_base = adlak_read32(region, REG_ADLAK_0X64);
-    phw_stat->ps_rbf_size = adlak_read32(region, REG_ADLAK_0X68);
+    phw_stat->ps_rbf_base    = adlak_read32(region, REG_ADLAK_0X64);
+    phw_stat->ps_rbf_size    = adlak_read32(region, REG_ADLAK_0X68);
+    phw_stat->ps_dbg_id      = adlak_read32(region, REG_ADLAK_0X90);
+    phw_stat->ps_module_stat = adlak_read32(region, REG_ADLAK_0X8C);
 #endif
     phw_stat->ps_rbf_wpt = adlak_read32(region, REG_ADLAK_0X6C);
     phw_stat->ps_rbf_rpt = adlak_read32(region, REG_ADLAK_0X70);
@@ -441,14 +445,19 @@ void adlak_status_dump(struct adlak_hw_stat *phw_stat) {
     AML_LOG_DEBUG("%s", __func__);
     AML_LOG_DEBUG("REG_ADLAK_0X10   : 0x%08X", phw_stat->irq_status.irq_masked);
     AML_LOG_DEBUG("REG_ADLAK_0X18      : 0x%08X", phw_stat->irq_status.irq_raw);
+    AML_LOG_DEBUG("REG_ADLAK_0X1C   : 0x%08X", phw_stat->irq_status.status_report);
     AML_LOG_DEBUG("REG_ADLAK_0X58   : 0x%08X", phw_stat->ps_err_dat);
     AML_LOG_DEBUG("REG_ADLAK_0X78 : 0x%08X", phw_stat->ps_finish_id);
     AML_LOG_DEBUG("REG_ADLAK_0X54       : 0x%08X", phw_stat->ps_status);
     AML_LOG_DEBUG("REG_ADLAK_0X60: 0x%08X", phw_stat->irq_status.time_stamp);
     AML_LOG_DEBUG("REG_ADLAK_0X5C  : 0x%08X", phw_stat->ps_idle_status);
-    AML_LOG_DEBUG("REG_ADLAK_0XDC     : 0x%08X", phw_stat->smmu_err_dft_pa);
-    AML_LOG_DEBUG("REG_ADLAK_0XE0 : 0x%08X", phw_stat->smmu_err_mdl_id);
-    AML_LOG_DEBUG("REG_ADLAK_0XE4  : 0x%08X", phw_stat->smmu_err_iova);
+    AML_LOG_DEBUG("REG_ADLAK_0X90 : 0x%08X", phw_stat->ps_dbg_id);
+    AML_LOG_DEBUG("REG_ADLAK_0X8C  : 0x%08X", phw_stat->ps_module_stat);
+    if (phw_stat->ps_status & ADLAK_IRQ_MASK_INVALID_IOVA) {
+        AML_LOG_DEBUG("REG_ADLAK_0XDC     : 0x%08X", phw_stat->smmu_err_dft_pa);
+        AML_LOG_DEBUG("REG_ADLAK_0XE0 : 0x%08X", phw_stat->smmu_err_mdl_id);
+        AML_LOG_DEBUG("REG_ADLAK_0XE4  : 0x%08X", phw_stat->smmu_err_iova);
+    }
     AML_LOG_DEBUG("REG_ADLAK_0X64  : 0x%08X", phw_stat->ps_rbf_base);
     AML_LOG_DEBUG("REG_ADLAK_0X68  : 0x%08X", phw_stat->ps_rbf_size);
     AML_LOG_DEBUG("REG_ADLAK_0X6C   : 0x%08X", phw_stat->ps_rbf_wpt);
@@ -508,9 +517,9 @@ static int adlak_hal_set_autoclock(void *data, uint32_t en) {
         adlak_write32(region, REG_ADLAK_0X28, 0x0);
         adlak_write32(region, REG_ADLAK_0X120, 0x0);
     } else {
-        adlak_write32(region, REG_ADLAK_0X28, 0x3FFF);
+        adlak_write32(region, REG_ADLAK_0X28, 0xFFFF);
         adlak_write32(region, REG_ADLAK_0X120, 0xDF);
-        adlak_write32(region, REG_ADLAK_0X2C, 0x0608);
+        adlak_write32(region, REG_ADLAK_0X2C, 0x0508);
     }
     return 0;
 }
@@ -538,7 +547,7 @@ int adlak_hal_start(void *data) {
     adlak_check_dev_is_idle(padlak);
     adlak_hal_set_autoclock(padlak, true);
     /*2.2. Set MMU enable */
-    adlak_hal_set_mmu(padlak, padlak->smmu_en);
+    adlak_hal_set_mmu(padlak, padlak->smmu_en, 0);
 
     adlak_hal_set_axisram(padlak);
     adlak_parser_set_apb_timeout(padlak->hw_res.preg, 0xFF);
@@ -553,7 +562,7 @@ int adlak_hal_stop(void *data) {
     AML_LOG_DEBUG("%s", __func__);
 
     /*2.2. Set MMU enable */
-    adlak_hal_set_mmu(padlak, false);
+    adlak_hal_set_mmu(padlak, false, 0);
     // adlak_hal_irq_clear(padlak,0xFF);
     adlak_hal_irq_enable(padlak, false);
     return 0;
@@ -583,6 +592,8 @@ int adlak_get_reg_name(int offset, char *buf, size_t buf_size) {
 
         case REG_ADLAK_0X4:
             return adlak_os_snprintf(buf, buf_size, "%s", "WAIT_TIMER");
+        case REG_ADLAK_0X8:
+            return adlak_os_snprintf(buf, buf_size, "%s", "SECURITY");
         // irq
         case REG_ADLAK_0X10:
             return adlak_os_snprintf(buf, buf_size, "%s", "IRQ_MASKED");
@@ -721,6 +732,8 @@ int adlak_get_reg_name(int offset, char *buf, size_t buf_size) {
 
         case REG_ADLAK_0X120:
             return adlak_os_snprintf(buf, buf_size, "%s", "MC_CTL");
+        case REG_ADLAK_0X124:
+            return adlak_os_snprintf(buf, buf_size, "%s", "MC_CLK_PHASE");
         default:
             return 0;
     }
@@ -732,6 +745,7 @@ static void adlak_reg_lst_init(struct adlak_hw_info *phw_info) {
     phw_info->reg_lst[idx++] = REG_ADLAK_0X0;
 
     phw_info->reg_lst[idx++] = REG_ADLAK_0X4;
+    phw_info->reg_lst[idx++] = REG_ADLAK_0X8;
     // irq
     phw_info->reg_lst[idx++] = REG_ADLAK_0X10;
     phw_info->reg_lst[idx++] = REG_ADLAK_0X14;
@@ -806,16 +820,24 @@ static void adlak_reg_lst_init(struct adlak_hw_info *phw_info) {
     phw_info->reg_lst[idx++] = REG_ADLAK_0X11C;
 
     phw_info->reg_lst[idx++] = REG_ADLAK_0X120;
+    phw_info->reg_lst[idx++] = REG_ADLAK_0X124;
+    ASSERT(idx == REG_ADLAK_NUM_MAX);
 }
-static void adlak_hw_caps_update(struct adlak_device *padlak, struct adlak_caps_desc *uapi_caps) {
-    struct adlak_hw_info *phw_info = (struct adlak_hw_info *)padlak->hw_info;
-    uapi_caps->hw_ver              = phw_info->rev.all;
-    uapi_caps->core_freq_max       = padlak->clk_core_freq_set;
-    uapi_caps->axi_freq_max        = padlak->clk_axi_freq_set;
-    uapi_caps->cmq_size            = 0xFFFFFFFF;  // deprecated
-    uapi_caps->sram_base           = padlak->hw_res.adlak_sram_pa;
-    uapi_caps->sram_size           = padlak->hw_res.adlak_sram_size;
+
+static void adlak_hw_caps_update(struct adlak_device *padlak) {
+    struct adlak_hw_info *  phw_info  = (struct adlak_hw_info *)padlak->hw_info;
+    struct adlak_caps_desc *uapi_caps = &adlak_priv_caps.uapi_caps_data;
+    uapi_caps->hw_ver                 = phw_info->rev.all;
+    uapi_caps->core_freq_max          = padlak->clk_core_freq_set;
+    uapi_caps->axi_freq_max           = padlak->clk_axi_freq_set;
+    uapi_caps->cmq_size               = 0xFFFFFFFF;  // deprecated
+    uapi_caps->sram_base              = padlak->hw_res.adlak_sram_pa;
+    uapi_caps->sram_size              = padlak->hw_res.adlak_sram_size;
+    uapi_caps->hw_iova_max_size       = 0;
+    uapi_caps->iova_max_size          = 0;
+    uapi_caps->iova_free_size         = 0;
 }
+
 int adlak_hw_init(void *data) {
     struct adlak_device * padlak = (struct adlak_device *)data;
     struct adlak_hw_info *phw_info;
@@ -825,9 +847,9 @@ int adlak_hw_init(void *data) {
     padlak->hw_info = (void *)phw_info;
     adlak_reg_lst_init(padlak->hw_info);
 
-    adlak_hal_enable(data, true);  // alda enable
-
     adlak_hal_get_revision((void *)padlak);
+
+    adlak_hal_enable(data, true);  // alda enable
 
     phw_info->irq_cfg.mask_err = ADLAK_IRQ_MASK_PEND_TIMOUT | ADLAK_IRQ_MASK_APB_WAIT_TIMOUT |
                                  ADLAK_IRQ_MASK_PARSER_STOP_ERR | ADLAK_IRQ_MASK_INVALID_IOVA |
@@ -843,12 +865,12 @@ int adlak_hw_init(void *data) {
 #endif
     phw_info->irq_cfg.mask =
         ((phw_info->irq_cfg.mask_err ^ ADLAK_IRQ_MASK_SW_TIMEOUT) | phw_info->irq_cfg.mask_normal);
-    phw_info->smmu_entry = padlak->smmu_entry;
-    phw_info->region     = padlak->hw_res.preg;
+
+    phw_info->region = padlak->hw_res.preg;
 
     padlak->dev_caps.data = &adlak_priv_caps.uapi_caps_data;
     padlak->dev_caps.size = sizeof(adlak_priv_caps.uapi_caps_data);
-    adlak_hw_caps_update(padlak, &adlak_priv_caps.uapi_caps_data);
+    adlak_hw_caps_update(padlak);
     return adlak_hal_reset_and_start(data);
 }
 
@@ -894,16 +916,24 @@ int adlak_check_dev_is_idle(void *data) {
 #if !(CONFIG_ADLAK_EMU_EN)
     struct adlak_device * padlak   = (struct adlak_device *)data;
     struct adlak_hw_info *phw_info = (struct adlak_hw_info *)padlak->hw_info;
-    uint32_t              idel_sts;
+    uint32_t              idel_sts, cnt;
     AML_LOG_DEBUG("%s", __func__);
-
-    idel_sts = adlak_read32(phw_info->region, REG_ADLAK_0X8C);
-    if (idel_sts != 0xFFFFFFFF) {
-        AML_LOG_WARN("REG_ADLAK_0X8C   : 0x%08X", idel_sts);
-        return ERR(EIO);
-    } else {
-        return ERR(NONE);
-    }
+    cnt = 0;
+    while (1) {
+        idel_sts = adlak_read32(phw_info->region, REG_ADLAK_0X8C);
+        if (idel_sts != 0xFFFFFFFF) {
+            AML_LOG_WARN("REG_ADLAK_0X8C   : 0x%08X", idel_sts);
+        } else {
+            break;
+        }
+        adlak_os_udelay(1);
+        cnt++;
+        if (cnt > 30000) {
+            AML_LOG_ERR("wait device idel timeout!");
+            return ERR(EIO);
+        }
+    };
+    return ERR(NONE);
 #else
     return ERR(NONE);
 #endif

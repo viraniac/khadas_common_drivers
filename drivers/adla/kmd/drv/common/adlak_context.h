@@ -43,6 +43,14 @@ struct context_buf {
     struct list_head head;
 };
 
+struct adlak_context_smmu_attr {
+    uint8_t  smmu_tlb_type;
+    void *   smmu_public;
+    void *   smmu_private;
+    uint32_t smmu_tlb_updated;
+    uint64_t alloc_byte;
+};
+
 /**
  * @brief private data struct for every file open operation
  * a context binds only one model
@@ -61,8 +69,9 @@ struct adlak_context {
     uint32_t             invoke_time_elapsed_tmp;
     int64_t              macc_count;
 
-    uint32_t        smmu_tlb_updated;
     adlak_os_sema_t invoke_state;
+
+    adlak_os_sema_t sem_irq;
 
 #define CONTEXT_STATE_USED (1 << 2)
 #define CONTEXT_STATE_INITED (1 << 1)
@@ -73,6 +82,8 @@ struct adlak_context {
     struct adlak_dbg_info *dbg_info;
 #endif
     struct adlak_model_attr *pmodel_attr;
+
+    struct adlak_context_smmu_attr smmu_attr;
 
     adlak_os_sema_t ctx_idle;
 };

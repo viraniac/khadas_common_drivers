@@ -53,6 +53,7 @@ int adlak_queue_init(struct adlak_device *padlak) {
     adlak_os_sema_init(&pwq->wk_update, 1, 0);
 
     adlak_os_mutex_lock(&pwq->wq_mutex);
+    pwq->padlak = padlak;
     adlak_queue_reset(padlak);
 
     adlak_os_mutex_unlock(&pwq->wq_mutex);

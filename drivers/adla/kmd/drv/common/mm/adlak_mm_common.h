@@ -32,12 +32,22 @@ extern "C" {
 
 /************************** Constant Definitions *****************************/
 
+#define ADLAK_INVALID_ADDR (0x1UL)
+#define ADLAK_MEM_UID_SIZE (512 * 1024)  // the uid use to manage memory
+
+#ifndef ADLAK_MM_POOL_PAGE_SHIFT
+#define ADLAK_MM_POOL_PAGE_SHIFT (12)
+#endif
+#define ADLAK_MM_POOL_PAGE_SIZE (1UL << ADLAK_MM_POOL_PAGE_SHIFT)
+#define ADLAK_MM_POOL_PAGE_MASK (~(ADLAK_MM_POOL_PAGE_SIZE - 1))
+
 /**************************Global Variable************************************/
 
 /**************************Type Definition and Structure**********************/
 
 struct adlak_mm_pool_priv {
     void *           bitmap;
+    size_t           bitmap_size;
     dma_addr_t       addr_base;
     size_t           bits;  // bitmap_maxno
     size_t           used_count;
@@ -66,7 +76,10 @@ enum adlak_mem_type_inner {
     ADLAK_ENUM_MEMTYPE_INNER_CONTIGUOUS       = (1u << 1),
     ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G     = (1u << 4),  // physical address less than 4Gbytes
     ADLAK_ENUM_MEMTYPE_INNER_SHARE            = (1u << 5),
-    ADLAK_ENUM_MEMTYPE_INNER_KERNEL_CACHEABLE = (1u << 6)
+    ADLAK_ENUM_MEMTYPE_INNER_KERNEL_CACHEABLE = (1u << 6),
+    ADLAK_ENUM_MEMTYPE_INNER_SMMU_TLB_DEF     = (1u << 7),  //
+    ADLAK_ENUM_MEMTYPE_INNER_SMMU_TLB_ID1     = (1u << 8),  //
+    ADLAK_ENUM_MEMTYPE_INNER_SMMU_PRIV        = (1u << 9)   //
 };
 
 struct adlak_mem_pool_info {
@@ -80,51 +93,43 @@ struct adlak_mem_pool_info {
     struct adlak_mm_pool_priv bitmap_area;
 };
 
-struct adlak_mem_smmu {
-    size_t                    size;
-    struct adlak_mm_pool_priv bitmap_area;
+struct adlak_mem_exclude {
+    size_t start;
+    size_t size;
 };
 
 /**
  *  statistics of memory usage
  */
 struct adlak_mem_usage {
-    size_t  used_umd;
-    size_t  used_kmd;
-    size_t  pool_size;
-    size_t  mem_alloced_umd;
-    size_t  mem_alloced_kmd;
-    ssize_t mem_pools_size;
+    size_t pool_size;
+    size_t alloced_umd;
+    size_t alloced_kmd;
+    size_t share_buf_size;
 };
 
-struct adlak_smmu_ops {
-    int (*smmu_tlb_init)(struct adlak_mem *mm);
-    int (*smmu_tlb_deinit)(struct adlak_mem *mm);
-    int (*smmu_tlb_flush_cache)(struct adlak_mem *mm);
-    int (*smmu_tlb_invalidate)(struct adlak_mem *mm);
-};
-
-struct adlak_mem_req_info {
+struct adlak_mem_inner_req_info {
     enum adlak_mem_type_inner mem_type;       // cacheable,contiguous
     enum adlak_mem_direction  mem_direction;  // rd&wr,rd,wr
     size_t                    bytes;          // align with 4096
 };
 
 struct adlak_mem_handle {
-    struct adlak_mem_req_info req;
-    int                       nr_pages;
-    void *                    cpu_addr;
-    void *                    cpu_addr_user;
-    phys_addr_t               phys_addr;
-    dma_addr_t                iova_addr;
-    dma_addr_t                dma_addr;
-    void *                    sgt;
-    void *                    pages;
-    phys_addr_t *             phys_addrs;
-    enum dma_data_direction   direction;
-    enum adlak_mem_src        mem_src;
-    uint32_t                  mem_type;  // the mem_type may not same as request info
-    uint32_t                  from_pool;
+    struct adlak_mem_inner_req_info req;
+    int                             nr_pages;
+    void *                          cpu_addr;
+    void *                          cpu_addr_user;
+    phys_addr_t                     phys_addr;
+    dma_addr_t                      iova_addr;
+    dma_addr_t                      dma_addr;
+    void *                          sgt;
+    void *                          pages;
+    phys_addr_t *                   phys_addrs;
+    enum dma_data_direction         direction;
+    enum adlak_mem_src              mem_src;
+    uint32_t                        mem_type;  // the mem_type may not same as request info
+    uint32_t                        from_pool;
+    uint64_t                        uid;
 };
 
 /*Share swap memory between different models to avoid dram size usage,
@@ -140,23 +145,6 @@ struct adlak_share_swap_buf {
     dma_addr_t   share_buf_dma_addr;
 };
 
-struct adlak_mem {
-    int                         use_smmu;
-    int                         use_mbp;
-    int                         has_mem_pool;
-    struct adlak_mem_usage      usage;
-    struct adlak_device *       padlak;
-    struct adlak_smmu_ops *     smmu_ops;
-    struct adlak_mem_smmu *     smmu;
-    struct adlak_mem_pool_info *mem_pool;
-    struct device_node *        res_mem_dev;
-    struct device *             dev;
-
-    /*Share swap memory between different models to avoid dram size usage,
-    but sacrifices performance when executing multiple models simultaneously*/
-    struct adlak_share_swap_buf share_buf;
-};
-
 struct adlak_sync_cache_ext_info {
     /*If the value of is_partial is 0, the values of offset and size will be ignored*/
     int          is_partial;
@@ -164,44 +152,86 @@ struct adlak_sync_cache_ext_info {
     size_t       size;
 };
 
-#ifndef ADLAK_MM_POOL_PAGE_SHIFT
-#define ADLAK_MM_POOL_PAGE_SHIFT (12)
+struct adlak_mem_operator {
+    struct adlak_mem_handle *(*alloc)(struct adlak_context_smmu_attr *ctx_smmu_attr,
+                                      struct adlak_buf_req *          pbuf_req);
+    void (*free)(struct adlak_context_smmu_attr *ctx_smmu_attr, struct adlak_mem_handle *mm_info);
+    /**
+     * bind external memory from user space
+     * @param ctx_smmu_attr
+     * @param pbuf_req
+     * @return
+     */
+    struct adlak_mem_handle *(*attach)(struct adlak_context_smmu_attr *ctx_smmu_attr,
+                                       struct adlak_extern_buf_info *  pbuf_req);
+
+    /**
+     * unbind external memory from user space
+     * @param ctx_smmu_attr
+     * @param mm_info
+     */
+    void (*dettach)(struct adlak_context_smmu_attr *ctx_smmu_attr,
+                    struct adlak_mem_handle *       mm_info);
+
+    int (*mmap)(struct adlak_mem_handle *mm_info, void *const vma);
+    int (*unmap)(struct adlak_mem_handle *mm_info);
+    int (*mmap_userspace)(struct adlak_mem_handle *mm_info);
+    void (*unmap_userspace)(struct adlak_mem_handle *mm_info);
+    void *(*vmap)(struct adlak_mem_handle *mm_info);
+    void (*vunmap)(struct adlak_mem_handle *mm_info);
+    int (*cache_flush)(struct adlak_mem_handle *         mm_info,
+                       struct adlak_sync_cache_ext_info *sync_cache_ext_info);
+    int (*cache_invalid)(struct adlak_mem_handle *         mm_info,
+                         struct adlak_sync_cache_ext_info *sync_cache_ext_info);
+    void (*smmu_init)(void *, uint8_t);
+    void (*smmu_deinit)(void *, uint8_t);
+    void (*smmu_tlb_invalidate)(struct adlak_context_smmu_attr *ctx_smmu_attr);
+    void (*get_usage)(struct adlak_mem_usage *usage);
+    uint64_t (*get_smmu_entry)(struct adlak_context_smmu_attr *ctx_smmu_attr, uint8_t type);
+    void (*smmu_tlb_dump)(struct adlak_context_smmu_attr *ctx_smmu_attr);
+};
+
+struct adlak_mem {
+#ifndef CONFIG_ADLA_FREERTOS
+    struct device *dev;
+#else
+    void *rsv;
 #endif
-#define ADLAK_MM_POOL_PAGE_SIZE (1UL << ADLAK_MM_POOL_PAGE_SHIFT)
-#define ADLAK_MM_POOL_PAGE_MASK (~(ADLAK_MM_POOL_PAGE_SHIFT - 1))
+};
+
+struct adlak_mem_obj {
+    struct adlak_mem_operator ops;
+    uint8_t                   use_smmu;
+    uint8_t                   use_mbd;
+};
+
 /************************** Function Prototypes ******************************/
 
-int adlak_mm_init(struct adlak_device *padlak);
-
-void adlak_mm_deinit(struct adlak_device *padlak);
-
-int  adlak_bitmap_pool_init(struct adlak_mm_pool_priv *pool, size_t pool_size);
+int  adlak_bitmap_pool_init(struct adlak_mm_pool_priv *pool, size_t pool_size,
+                            struct adlak_mem_exclude *exclude_area);
 void adlak_bitmap_pool_deinit(struct adlak_mm_pool_priv *pool);
 
 unsigned long adlak_alloc_from_bitmap_pool(struct adlak_mm_pool_priv *pool, size_t size);
+unsigned long adlak_alloc_from_bitmap_pool_reverse(struct adlak_mm_pool_priv *pool, size_t size);
 
 void adlak_free_to_bitmap_pool(struct adlak_mm_pool_priv *pool, dma_addr_t start, size_t size);
 
-int adlak_flush_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
-                      struct adlak_sync_cache_ext_info *sync_cache_ext_info);
+void adlak_set_bitmap_pool(struct adlak_mm_pool_priv *pool, dma_addr_t start, size_t size);
 
-int adlak_invalid_cache(struct adlak_device *padlak, struct adlak_mem_handle *mm_info,
-                        struct adlak_sync_cache_ext_info *sync_cache_ext_info);
+void adlak_bitmap_dump(struct adlak_mm_pool_priv *pool);
 
-void adlak_mm_free(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+int adlak_mem_uid_init(void);
 
-struct adlak_mem_handle *adlak_mm_alloc(struct adlak_mem *mm, struct adlak_buf_req *pbuf_req);
+void adlak_mem_uid_deinit(void);
 
-void adlak_mm_dettach(struct adlak_mem *mm, struct adlak_mem_handle *mm_info);
+uint64_t adlak_mem_uid_alloc(void);
 
-struct adlak_mem_handle *adlak_mm_attach(struct adlak_mem *            mm,
-                                         struct adlak_extern_buf_info *pbuf_req);
+void adlak_mem_uid_free(uint64_t uid);
 
-int adlak_mm_mmap(struct adlak_mem *mm, struct adlak_mem_handle *mm_info, void *const vma);
-
-void *adlak_mm_vmap(struct adlak_mem_handle *mm_info);
-
-void adlak_mm_vunmap(struct adlak_mem_handle *mm_info);
+int  adlak_simple_bitmap_pool_init(struct adlak_simple_bitmap *p_bitmap);
+void adlak_simple_bitmap_pool_deinit(struct adlak_simple_bitmap *p_bitmap);
+int  adlak_simple_bitmap_alloc(struct adlak_simple_bitmap *p_bitmap);
+void adlak_simple_bitmap_free(struct adlak_simple_bitmap *p_bitmap, int id);
 
 #ifdef __cplusplus
 }

@@ -40,6 +40,11 @@ void *adlak_os_malloc(size_t size, uint32_t flag) {
 #if ADLAK_DEBUG
     void *addr = NULL;
     dbg_mem_alloc_count_kmd += 1;
+    if (size >= MAX_ORDER_NR_PAGES * ADLAK_PAGE_SIZE) {
+        AML_LOG_ERR("alloc size %lX > %lX\n", (uintptr_t)size,
+                    (uintptr_t)MAX_ORDER_NR_PAGES * ADLAK_PAGE_SIZE);
+        ASSERT(size < MAX_ORDER_NR_PAGES * ADLAK_PAGE_SIZE);
+    }
     addr = kmalloc(size, flag | ADLAK_GFP_KERNEL);
     AML_LOG_DEBUG("alloc: dbg_mem_alloc_count_kmd = %d, addr = %p\n", dbg_mem_alloc_count_kmd,
                   addr);
@@ -52,6 +57,11 @@ void *adlak_os_zalloc(size_t size, uint32_t flag) {
 #if ADLAK_DEBUG
     void *addr = NULL;
     dbg_mem_alloc_count_kmd += 1;
+    if (size >= MAX_ORDER_NR_PAGES * ADLAK_PAGE_SIZE) {
+        AML_LOG_ERR("alloc size %lX > %lX\n", (uintptr_t)size,
+                    (uintptr_t)MAX_ORDER_NR_PAGES * ADLAK_PAGE_SIZE);
+        ASSERT(size < MAX_ORDER_NR_PAGES * ADLAK_PAGE_SIZE);
+    }
     addr = kzalloc(size, flag | ADLAK_GFP_KERNEL);
     AML_LOG_DEBUG("alloc: dbg_mem_alloc_count_kmd = %d, addr = %p\n", dbg_mem_alloc_count_kmd,
                   addr);

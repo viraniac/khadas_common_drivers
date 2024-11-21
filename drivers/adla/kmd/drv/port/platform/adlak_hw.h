@@ -56,7 +56,6 @@ struct adlak_hw_info {
         uint32_t mask_normal;
     } irq_cfg;
 
-    uint64_t          smmu_entry;
     int               reg_lst[REG_ADLAK_NUM_MAX];
     struct io_region *region;
 };
@@ -82,6 +81,8 @@ struct adlak_hw_stat {
     uint32_t                smmu_err_dft_pa;
     uint32_t                smmu_err_mdl_id;
     uint32_t                smmu_err_iova;
+    uint32_t                ps_module_stat;
+    uint32_t                ps_dbg_id;
     uint32_t                regs_stat[REG_ADLAK_NUM_MAX];
     struct adlak_irq_status irq_status;
     struct adlak_hw_info *  hw_info;
@@ -162,6 +163,7 @@ int adlak_hal_check_preempt_is_done(void *data);
 
 void     adlak_hal_set_preempt(void *data);
 uint32_t adlak_hal_get_reg(void *data, uint32_t offset);
+int      adlak_hal_set_mmu(void *data, bool enable, uint64_t smmu_entry);
 
 #ifdef __cplusplus
 }

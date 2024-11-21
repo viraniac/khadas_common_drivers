@@ -63,7 +63,7 @@ int adlak_profile_start(struct adlak_device *padlak, struct adlak_context *conte
 int adlak_profile_stop(struct adlak_device *padlak, struct adlak_context *context, struct adlak_pm_cfg *pm_cfg,
                        struct adlak_pm_state *pm_stat, struct adlak_profile *profile_data,
                        int32_t layer_end) {
-    uint32_t               time_elapsed_us = 0;
+    uint32_t time_elapsed_us = 0;
     AML_LOG_DEBUG("%s", __func__);
     ASSERT(padlak);
     ASSERT(pm_cfg);

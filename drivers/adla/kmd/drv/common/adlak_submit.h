@@ -172,6 +172,12 @@ struct adlak_submit_addr_fixup {
     uint64_t addr;
 };
 
+struct adla_context_cmq_offset {
+    uint32_t read_point;
+    uint32_t write_point;
+    uint32_t config_offset;
+};
+
 struct adla_submit_cmd_config {
     uint32_t common_offset;
     uint32_t common_size;
@@ -230,8 +236,9 @@ struct adlak_model_attr {
     struct adlak_submit_addr_fixup *submit_addr_fixups;
     uint32_t                        hw_timeout_ms;
 
-    int32_t               hw_layer_first;  // indicate the first layer of hardware
-    int32_t               hw_layer_last;   // indicate the last layer of hardware
+    int32_t  hw_layer_first;                     // indicate the first layer of hardware
+    int32_t  hw_layer_last;                      // indicate the last layer of hardware
+    uint32_t hw_layer_last_in_first_smmu_table;  // the last hardware layer in the first smmu table
     struct adlak_pm_cfg   pm_cfg;
     struct adlak_pm_state pm_stat;
     int32_t               invoke_count;
@@ -239,8 +246,8 @@ struct adlak_model_attr {
     struct adlak_task
         *invoke_attr_rsv;  // In order to avoid continuous application and release of task memory
 
-    void *                   cmq_priv;
-    int32_t                  cmq_buffer_type;
+    struct adla_context_cmq_offset *cmq_offsets;  // Point to rsv_pool_base+offset
+    int32_t                         cmq_buffer_type;
     uint32_t                 cmq_size_expected;  // the buffer size required to store the command
     uint32_t                 size_max_in_layer;
     struct adlak_cmq_buffer *cmq_buffer;
@@ -254,6 +261,7 @@ struct adlak_task {
     struct adlak_context *context;
     int32_t               invoke_start_idx;
     int32_t               invoke_end_idx;
+    int32_t               invoke_partial;
     //
     uint32_t             cmd_offset_start;
     uint32_t             cmd_offset_end;
@@ -306,6 +314,9 @@ void adlak_prepare_command_queue_private(struct adlak_model_attr *  pmodel_attr,
                                          struct adlak_network_desc *psubmit_desc);
 
 int adlak_parser_preempt(struct adlak_device *padlak, struct adlak_task *ptask);
+
+int adlak_set_context_attribute(struct adlak_context *          context,
+                                struct adlak_context_attribute *context_attr);
 
 #if CONFIG_ADLAK_EMU_EN
 uint32_t adlak_emu_update_rpt(void);

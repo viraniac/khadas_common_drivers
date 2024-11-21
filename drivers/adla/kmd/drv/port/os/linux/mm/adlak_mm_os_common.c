@@ -54,98 +54,32 @@ int adlak_cma_init(struct device *dev) {
     return 0;
 }
 
-#if CONFIG_ADLAK_MEM_POOL_EN
-void adlak_free_cma_region_nocache(struct adlak_mem *mm) {
-    if (ADLAK_IS_ERR_OR_NULL(mm->mem_pool)) {
-        return;
-    }
-    if (mm->mem_pool->cpu_addr_base) {
-        dma_free_coherent(mm->dev, mm->mem_pool->size, mm->mem_pool->cpu_addr_base,
-                          mm->mem_pool->dma_addr_base);
-    }
-    adlak_os_free(mm->mem_pool);
-    mm->mem_pool = NULL;
-}
-
-int adlak_alloc_cma_region_nocache(struct adlak_mem *mm) {
-    int ret;
-
-    dma_addr_t dma_hd = 0;
-    uint64_t   size;
-    void *     vaddr = NULL;
-    int        try;
-    size_t     size_dec;
-    AML_LOG_DEBUG("%s", __func__);
-    //
-    ret = adlak_platform_get_rsv_mem_size(mm->dev, &size);
-    if (ret) {
-        goto err;
-    }
-    try      = 10;
-    size_dec = size / 16;
-    while (try--) {
-        vaddr = dma_alloc_coherent(mm->dev, (size_t)size, &dma_hd, ADLAK_GFP_KERNEL);
-        if (!vaddr) {
-            AML_LOG_ERR("DMA alloc coherent failed: pa 0x%lX, size = %lu\n", (uintptr_t)dma_hd,
-                        (uintptr_t)size);
-            size = size - size_dec;
-        } else {
-            break;
-        }
-    }
-    if (!vaddr) {
-        goto err;
-    }
-
-    mm->mem_pool = adlak_os_zalloc(sizeof(struct adlak_mem_pool_info), ADLAK_GFP_KERNEL);
-    if (ADLAK_IS_ERR_OR_NULL(mm->mem_pool)) {
-        goto err_alloc;
-    }
-
-    mm->mem_pool->cpu_addr_base  = vaddr;
-    mm->mem_pool->phys_addr_base = dma_to_phys(mm->dev, dma_hd);
-    mm->mem_pool->dma_addr_base  = dma_hd;
-    mm->mem_pool->size           = (size_t)size;
-    mm->mem_pool->mem_src        = ADLAK_ENUM_MEMSRC_CMA;
-    mm->mem_pool->cacheable      = false;
-
-    AML_LOG_INFO("cma memory info: dma_addr= 0x%lX,  phys_addr= 0x%lX,size=%lu MByte\n",
-                 (uintptr_t)mm->mem_pool->dma_addr_base, (uintptr_t)mm->mem_pool->phys_addr_base,
-                 (uintptr_t)(mm->mem_pool->size / (1024 * 1024)));
-
-    return 0;
-err_alloc:
-    dma_free_coherent(mm->dev, size, vaddr, dma_hd);
-err:
-    adlak_free_cma_region_nocache(mm);
-    return (ERR(ENOMEM));
-}
-
-#endif
-
 #if (CONFIG_ADLAK_MEM_POOL_EN && defined(CONFIG_ADLAK_USE_RESERVED_MEMORY))
 
-void adlak_unmap_region_nocache(struct adlak_mem *mm) {
-    if (ADLAK_IS_ERR_OR_NULL(mm->mem_pool)) {
+void adlak_unmap_region_nocache(struct adlak_mem_pool_info **ptr) {
+    struct adlak_mem_pool_info *mem_pool = *ptr;
+    if (ADLAK_IS_ERR_OR_NULL(mem_pool)) {
         return;
     }
-    if (mm->mem_pool->cpu_addr_base) {
-        memunmap(mm->mem_pool->cpu_addr_base);
+    if (mem_pool->cpu_addr_base) {
+        memunmap(mem_pool->cpu_addr_base);
     }
-    adlak_os_free(mm->mem_pool);
-    mm->mem_pool = NULL;
+    adlak_os_free(mem_pool);
+    *ptr = NULL;
 }
 
-inline int adlak_remap_region_nocache(struct adlak_mem *mm) {
-    phys_addr_t physical;
-    size_t      size;
-    void *      vaddr = NULL;
+inline int adlak_remap_region_nocache(struct adlak_device *        padlak,
+                                      struct adlak_mem_pool_info **ptr) {
+    phys_addr_t                 physical;
+    size_t                      size;
+    void *                      vaddr    = NULL;
+    struct adlak_mem_pool_info *mem_pool = *ptr;
 #ifdef CONFIG_OF
 #error "No support reserved-memory currently when the device-tree enabled."
 #endif
 
-    physical = mm->padlak->hw_res.adlak_resmem_pa;
-    size     = mm->padlak->hw_res.adlak_resmem_size;
+    physical = padlak->hw_res.adlak_resmem_pa;
+    size     = padlak->hw_res.adlak_resmem_size;
     if (0 == size) {
         goto err;
     }
@@ -163,21 +97,21 @@ inline int adlak_remap_region_nocache(struct adlak_mem *mm) {
         goto err;
     }
 
-    mm->mem_pool = adlak_os_zalloc(sizeof(struct adlak_mem_pool_info), ADLAK_GFP_KERNEL);
-    if (ADLAK_IS_ERR_OR_NULL(mm->mem_pool)) {
+    mem_pool = adlak_os_zalloc(sizeof(struct adlak_mem_pool_info), ADLAK_GFP_KERNEL);
+    if (ADLAK_IS_ERR_OR_NULL(mem_pool)) {
         goto err_alloc;
     }
 
-    mm->mem_pool->cpu_addr_base  = vaddr;
-    mm->mem_pool->phys_addr_base = physical;
-    mm->mem_pool->dma_addr_base  = physical;
-    mm->mem_pool->size           = size;
-    mm->mem_pool->mem_src        = ADLAK_ENUM_MEMSRC_RESERVED;
-    mm->mem_pool->cacheable      = false;
-
+    mem_pool->cpu_addr_base  = vaddr;
+    mem_pool->phys_addr_base = physical;
+    mem_pool->dma_addr_base  = physical;
+    mem_pool->size           = size;
+    mem_pool->mem_src        = ADLAK_ENUM_MEMSRC_RESERVED;
+    mem_pool->cacheable      = false;
+    *ptr                     = mem_pool;
     AML_LOG_INFO("Reserved memory info: dma_addr= 0x%lX,  phys_addr= 0x%lX,size=%lu MByte\n",
-                 (uintptr_t)mm->mem_pool->dma_addr_base, (uintptr_t)mm->mem_pool->phys_addr_base,
-                 (uintptr_t)(mm->mem_pool->size / (1024 * 1024)));
+                 (uintptr_t)mem_pool->dma_addr_base, (uintptr_t)mem_pool->phys_addr_base,
+                 (uintptr_t)(mem_pool->size / (1024 * 1024)));
 
     return 0;
 err_alloc:
@@ -187,7 +121,6 @@ err:
 }
 
 #endif
-
 static void adlak_os_free_pages(struct page *pages[], int nr_pages) {
     int i;
     AML_LOG_DEBUG("%s", __func__);
@@ -452,8 +385,8 @@ err_alloc_pages:
     return ERR(ENOMEM);
 }
 
-int adlak_os_attach_ext_mem_phys(struct adlak_mem *mm, struct adlak_mem_handle *mm_info,
-                                 uint64_t phys_addr) {
+int adlak_os_attach_ext_mem(struct adlak_mem *mm, struct adlak_mem_handle *mm_info,
+                            uint64_t phys_addr) {
     phys_addr_t *phys_addrs    = NULL;
     void *       cpu_addr      = NULL;
     struct page *page_continue = NULL;
@@ -490,7 +423,7 @@ err_alloc_phys_addrs:
     return ERR(ENOMEM);
 }
 
-void adlak_os_dettach_ext_mem_phys(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
+void adlak_os_dettach_ext_mem(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
     AML_LOG_DEBUG("%s", __func__);
     if (mm_info->phys_addrs) {
         adlak_dma_unmap_of_contiguous(mm, mm_info);
@@ -656,63 +589,6 @@ void adlak_os_invalid_cache(struct adlak_mem *mm, struct adlak_mem_handle *mm_in
                                       sync_cache_ext_info->size, DMA_FROM_DEVICE);
         }
     }
-}
-
-void adlak_free_share_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    if (mm_info->cpu_addr) {
-        mm->share_buf.ref_cnt--;
-        adlak_os_printf(
-            "%s: dma_addr= 0x%lX,  phys_addr= "
-            "0x%lX,ref_cnt=%lu\n",
-            __FUNCTION__, (uintptr_t)mm_info->dma_addr, (uintptr_t)mm_info->phys_addr,
-            (uintptr_t)(mm->share_buf.ref_cnt));
-        if (0 == mm->share_buf.ref_cnt) {
-            adlak_os_printf("dma_free_coherent: cpu_addr= 0x%lX\n", (uintptr_t)mm_info->cpu_addr);
-            dma_free_coherent(mm->dev, mm_info->req.bytes, mm_info->cpu_addr, mm_info->dma_addr);
-            mm->share_buf.share_buf_cpu_addr  = 0;
-            mm->share_buf.share_buf_dma_addr  = 0;
-            mm->share_buf.share_buf_phys_addr = 0;
-        }
-        mm_info->cpu_addr = NULL;
-    }
-}
-
-int adlak_malloc_share_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {
-    gfp_t gfp = 0;
-    if (!mm->share_buf.share_buf_cpu_addr) {
-        gfp |= (GFP_DMA | GFP_USER | __GFP_ZERO);
-        if (ADLAK_ENUM_MEMTYPE_INNER_PA_WITHIN_4G & mm_info->req.mem_type) {
-            gfp |= (GFP_DMA32);
-        }
-        mm_info->req.bytes = (size_t)mm->share_buf.share_buf_size;
-        mm_info->cpu_addr =
-            dma_alloc_coherent(mm->dev, (size_t)mm_info->req.bytes, &mm_info->dma_addr, gfp);
-        if (!mm_info->cpu_addr) {
-            AML_LOG_ERR("failed to dma_alloc %lu bytes\n", (uintptr_t)mm_info->req.bytes);
-            return ERR(ENOMEM);
-        }
-        mm_info->phys_addr = dma_to_phys(mm->dev, mm_info->dma_addr);
-
-        mm->share_buf.share_buf_cpu_addr  = mm_info->cpu_addr;
-        mm->share_buf.share_buf_dma_addr  = mm_info->dma_addr;
-        mm->share_buf.share_buf_phys_addr = mm_info->phys_addr;
-    }
-
-    mm_info->req.bytes = (size_t)mm->share_buf.share_buf_size;
-    mm_info->cpu_addr  = mm->share_buf.share_buf_cpu_addr;
-    mm_info->dma_addr  = mm->share_buf.share_buf_dma_addr;
-    mm_info->phys_addr = mm->share_buf.share_buf_phys_addr;
-
-    mm_info->mem_src   = ADLAK_ENUM_MEMSRC_CMA;
-    mm_info->iova_addr = mm_info->phys_addr;
-    mm->share_buf.ref_cnt++;
-    adlak_os_printf(
-        "%s: dma_addr= 0x%lX,  phys_addr= "
-        "0x%lX,size=%lu KByte, ref_cnt=%lu\n",
-        __FUNCTION__, (uintptr_t)mm_info->dma_addr, (uintptr_t)mm_info->phys_addr,
-        (uintptr_t)(mm_info->req.bytes / 1024), (uintptr_t)(mm->share_buf.ref_cnt));
-
-    return ERR(NONE);
 }
 
 void adlak_free_through_dma(struct adlak_mem *mm, struct adlak_mem_handle *mm_info) {

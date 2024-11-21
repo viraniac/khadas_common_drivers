@@ -40,7 +40,6 @@ extern "C" {
 struct adlak_dev_inference {
     adlak_os_spinlock_t spinlock;
     adlak_os_sema_t     sem_irq;
-    adlak_os_sema_t     sem_dpm;
     adlak_os_timer_t    emu_timer;
     adlak_os_timer_t    dpm_timer;
     adlak_os_thread_t   thrd_inference;
@@ -51,11 +50,12 @@ struct adlak_dev_inference {
     uint32_t            cnt_busy;
 };
 struct adlak_workqueue {
-    adlak_os_mutex_t wq_mutex;
-    adlak_os_sema_t  wk_update;
-    struct list_head pending_list;  // invoke list
-    struct list_head scheduled_list;
-    struct list_head finished_list;
+    struct adlak_device *padlak;
+    adlak_os_mutex_t     wq_mutex;
+    adlak_os_sema_t      wk_update;
+    struct list_head     pending_list;  // invoke list
+    struct list_head     scheduled_list;
+    struct list_head     finished_list;
 
     int   sched_num;
     int   sched_num_max;

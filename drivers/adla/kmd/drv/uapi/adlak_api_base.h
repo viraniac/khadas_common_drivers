@@ -33,11 +33,18 @@ extern "C" {
 
 /**************************Type Definition and Structure**********************/
 
+enum adlak_smmu_tlb_type {
+    ADLAK_ENUM_SMMU_TLB_TYPE_PUBLIC_ONLY = 0,  // default setting
+    ADLAK_ENUM_SMMU_TLB_TYPE_PRIVATE_ONLY,
+    ADLAK_ENUM_SMMU_TLB_TYPE_PRIVATE_AND_PUBLIC,
+} __packed;
+
 struct adlak_buf_desc {
     uint64_t iova_addr; /* virtual address in smmu*/
     uint64_t va_user;   /* virtual address in user mode*/
     uint64_t phys_addr; /* physical base address if mem_type is contiguous*/
     uint64_t bytes;     /*return real size*/
+    uint64_t uid;
 } __packed;
 
 enum adlak_mem_type {
@@ -45,7 +52,10 @@ enum adlak_mem_type {
     ADLAK_ENUM_MEMTYPE_CONTIGUOUS   = (1 << 1),
     ADLAK_ENUM_MEMTYPE_INNER        = (1 << 2),  // For ADLA use only if value is true.
     ADLAK_ENUM_MEMTYPE_PA_WITHIN_4G = (1 << 4),  // physical address less than 4Gbytes
-    ADLAK_ENUM_MEMTYPE_SHARE        = (1 << 5)   // share between different models
+    ADLAK_ENUM_MEMTYPE_SHARE        = (1 << 5),  // share between different models
+    ADLAK_ENUM_MEMTYPE_SMMU_TLB_DEF = (1 << 6),  //
+    ADLAK_ENUM_MEMTYPE_SMMU_TLB_ID1 = (1 << 7),  //
+    ADLAK_ENUM_MEMTYPE_SMMU_PRIV    = (1 << 8)   //
 } __packed;
 
 enum adlak_mem_direction {
@@ -67,8 +77,8 @@ struct adlak_buf_req {
 } __packed;
 
 struct adlak_extern_buf_info {
-    uint64_t              mem_handle;    /* return memory info handle in kernel */
     uint64_t              buf_handle;    /* buf handle */
+    uint64_t              mem_handle;    /* return memory info handle in kernel */
     uint64_t              bytes;         /* bytes of buffer */
     uint32_t              buf_type;      /* type of buf handle */
     uint32_t              mem_type;      /*request info*/
@@ -127,6 +137,7 @@ struct adlak_network_desc {
     int32_t  cmq_buffer_type;
     uint32_t priority;          // submit priority
     int32_t  net_register_idx;  // return from kmd
+    int32_t  hw_last_layer_in_first_smmu;
     int64_t  macc_count;
     struct adlak_cmd_buf_attr cmd_buf_attr;
 
@@ -186,12 +197,20 @@ struct adlak_test_desc {
 } __packed;
 
 struct adlak_caps_desc {
-    uint32_t hw_ver;        /* adlak hardware version*/
-    uint64_t axi_freq_max;  /* adlak axi clock frequency maximum */
-    uint64_t core_freq_max; /* adlak core clock frequency maximum */
-    uint32_t cmq_size;      /* cmq buffer size*/
-    uint64_t sram_base;     /* axi sram base addr*/
-    uint32_t sram_size;     /* axi sram buffer size*/
+    uint32_t hw_ver;           /* adlak hardware version*/
+    uint64_t axi_freq_max;     /* adlak axi clock frequency maximum */
+    uint64_t core_freq_max;    /* adlak core clock frequency maximum */
+    uint32_t cmq_size;         /* cmq buffer size*/
+    uint64_t sram_base;        /* axi sram base addr*/
+    uint32_t sram_size;        /* axi sram buffer size*/
+    uint64_t hw_iova_max_size; /* tha maximum vaddr value allowed by the hardware*/
+    uint64_t iova_max_size;    /* tha maximum vaddr of smmu*/
+    uint64_t iova_free_size;   /* tha free size of vaddr*/
+} __packed;
+
+struct adlak_context_attribute {
+    uint32_t smmu_tlb_type : 8;
+    uint32_t rsv : 24;
 } __packed;
 
 /************************** Function Prototypes ******************************/
