@@ -212,6 +212,7 @@ enum hdmi_vic {
 	HDMIV_27_2560x1440p60hz,
 	HDMIV_28_1440x1440p60hz,
 	HDMIV_29_2880x1440p60hz,
+	HDMIV_30_400x1280p60hz,
 	/*not supported in timing*/
 	HDMIV_2560x1080p60hz,
 	HDMIV_1280x600p60hz,
@@ -252,6 +253,7 @@ enum hdmi_vic {
 #define HDMIV_2560x1440p60hz	HDMIV_27_2560x1440p60hz
 #define HDMIV_1440x1440p60hz    HDMIV_28_1440x1440p60hz
 #define HDMIV_2880x1440p60hz    HDMIV_29_2880x1440p60hz
+#define HDMIV_400x1280p60hz    HDMIV_30_400x1280p60hz
 
 /* CEA TIMING STRUCT DEFINITION */
 struct hdmi_timing {
